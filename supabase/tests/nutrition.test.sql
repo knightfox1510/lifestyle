@@ -71,6 +71,20 @@ do $$ begin
   assert (select count(*) from public.custom_foods) = 0, 'stranger: no foods';
 end $$;
 
+-- Water reminder settings: own row only, sane ranges.
+select set_config('request.jwt.claim.sub', :s, false);
+insert into public.notification_prefs (user_id, water, water_target_ml, water_interval_min, water_start, water_end)
+values (:s, true, 2500, 90, '07:30', '19:00');
+do $$ begin
+  update public.notification_prefs set water_interval_min = 5 where user_id = auth.uid();
+  raise exception 'SHOULD_FAIL: interval too short';
+exception when check_violation then null;
+end $$;
+select set_config('request.jwt.claim.sub', :t, false);
+do $$ begin
+  assert (select count(*) from public.notification_prefs where water) = 0, 'partner cannot see my water prefs';
+end $$;
+
 reset role;
 \o
 \echo 'ALL NUTRITION TESTS PASSED'

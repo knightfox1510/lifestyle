@@ -3,7 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notifyUser } from "@/lib/push";
-import { addDays, dayOfWeek, localDate, localTime } from "@/lib/dates";
+import { addDays, dayOfWeek, localDate, localTime, startOfLocalDayIso } from "@/lib/dates";
 import { isScheduledOn } from "@/modules/medicines/logic";
 import { nextOccurrence } from "@/modules/occasions/logic";
 import type { Occasion } from "@/lib/types";
@@ -11,7 +11,7 @@ import { daysUntil } from "@/modules/pantry/match";
 import { generateDigest, weekStart } from "@/lib/digest";
 import { serviceSession } from "@/lib/service-session";
 import type { FitnessClass, Medicine, NotificationPrefs, Profile } from "@/lib/types";
-import { WINDOW_MINUTES, inQuietHours, inWindow, shouldRemind, toMinutes } from "@/modules/notifications/timing";
+import { WINDOW_MINUTES, dueWaterSlot, inQuietHours, inWindow, shouldRemind, toMinutes } from "@/modules/notifications/timing";
 
 const DEFAULT_PREFS: Omit<NotificationPrefs, "user_id"> = {
   medicines: true,
@@ -23,6 +23,11 @@ const DEFAULT_PREFS: Omit<NotificationPrefs, "user_id"> = {
   digest: true,
   occasions: true,
   travel: true,
+  water: false,
+  water_target_ml: null,
+  water_interval_min: 120,
+  water_start: "08:00",
+  water_end: "19:30",
   daily_hour: 9,
   quiet_start: null,
   quiet_end: null,
@@ -108,6 +113,38 @@ async function remindUser(
       if (inWindow(time, remindAt)) {
         await send("fitness", `fit:${c.id}:${classDay}`, `🏋️ ${c.name} at ${c.start_time}`, `${c.duration_minutes} min${c.location ? ` · ${c.location}` : ""}`, "/fitness");
       }
+    }
+  }
+
+  // Water: at each slot between start and end, only if behind pace.
+  if (prefs.water) {
+    const [{ data: drinks }, { data: goal }] = await Promise.all([
+      admin.from("fluid_intake").select("volume_ml, occurred_at, drink").eq("owner_id", profile.id).gte("occurred_at", startOfLocalDayIso(today)),
+      prefs.water_target_ml ? Promise.resolve({ data: null }) : admin.from("nutrition_goals").select("water_ml").eq("owner_id", profile.id).maybeSingle(),
+    ]);
+    const todays = ((drinks ?? []) as { volume_ml: number; occurred_at: string; drink: string }[]).filter((d) => localDate(d.occurred_at, tz) === today && d.drink !== "alcohol");
+    const drunkMl = todays.reduce((a, d) => a + d.volume_ml, 0);
+    const last = todays.reduce((a, d) => Math.max(a, new Date(d.occurred_at).getTime()), 0);
+    const target = prefs.water_target_ml ?? (goal as { water_ml: number | null } | null)?.water_ml ?? 2000;
+    const due = dueWaterSlot({
+      now: time,
+      start: prefs.water_start,
+      end: prefs.water_end,
+      interval: prefs.water_interval_min,
+      target,
+      drunkMl,
+      minutesSinceLastDrink: last ? (now.getTime() - last) / 60000 : null,
+    });
+    if (due) {
+      const behind = due.expected - drunkMl;
+      if ((await notifyUser(admin, profile.id, {
+        kind: "water",
+        refKey: `water:${today}:${due.slot}`,
+        title: "💧 Time for a glass of water",
+        body: `${drunkMl} / ${target} ml so far — about ${Math.max(150, Math.round(behind / 50) * 50)} ml to catch up.`,
+        url: "/food?water=1",
+        actions: [{ action: "water-250", title: "+250 ml" }],
+      })) === "sent") result.sent += 1;
     }
   }
 

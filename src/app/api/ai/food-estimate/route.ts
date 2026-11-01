@@ -5,6 +5,7 @@ import { aiHandler, imagePart, runJson } from "@/lib/ai/run";
 import { mealCalcSchema } from "@/lib/ai/phase2-schemas";
 import { householdFoods, matchIngredient } from "@/lib/nutrition/resolve";
 import { MEASURE_HINTS, STAPLES } from "@/modules/nutrition/staples";
+import { DISHES, DISH_BY_KEY, dishNutrition } from "@/modules/nutrition/dishes";
 import { computeItem, type CalcItem } from "@/modules/nutrition/compute";
 import { cleanIrritants } from "@/modules/nutrition/irritants";
 import type { Nutrients } from "@/modules/nutrition/nutrients";
@@ -30,6 +31,7 @@ export async function POST(request: Request) {
       `Built-in staples (key: name): ${STAPLES.map((s) => `${s.key}: ${s.name}`).join("; ")}`,
       hh.foods.length ? `Household's own foods: ${hh.foods.map((f) => f.name).join("; ")}` : "",
       hh.recipes.length ? `Household's saved recipes (calculated nutrition): ${hh.recipes.map((r) => r.title).join("; ")}` : "",
+      `Built-in Indian dishes (key: name — standard serving): ${DISHES.map((d) => `${d.key}: ${d.name} — ${d.serving}`).join("; ")}`,
       MEASURE_HINTS,
     ]
       .filter(Boolean)
@@ -37,6 +39,7 @@ export async function POST(request: Request) {
 
     const system = `You break meals into parts so nutrition can be CALCULATED from food data. This is mostly Indian home cooking.
 For each item: if it matches one of the household's saved recipes, set recipe_title and recipe_servings and leave components empty.
+Else if it is one of the built-in Indian dishes (match regional names, e.g. "matki chi bhaji" = matki_usal, "pohe" = kanda_poha), set dish_key and dish_servings (relative to that dish's standard serving) and leave components empty — unless the person describes a clearly different recipe, then break it down.
 Otherwise list its ingredients with grams for the amount eaten (raw/dry weight for grains, flours and pulses; include cooking oil/ghee, typically 5–10 g per katori of sabzi or dal tadka). Prefer staple_key, then custom_food, else a plain English 'search' term.
 Also give your own overall estimate for the item. Mark bladder irritants honestly (e.g. chilli-hot curry = spicy, tomato gravy = tomato, chai/coffee = caffeine).
 
@@ -53,7 +56,8 @@ ${context}`;
     const items = await Promise.all(
       result.items.map(async (it) => {
         const recipe = it.recipe_title ? hh.recipes.find((r) => r.title.toLowerCase() === it.recipe_title!.toLowerCase()) : undefined;
-        const components = recipe
+        const dish = !recipe && it.dish_key ? DISH_BY_KEY[it.dish_key] : undefined;
+        const components = recipe || dish
           ? []
           : await Promise.all(
               it.components.map(async (c) => {
@@ -72,11 +76,14 @@ ${context}`;
                   servings: it.recipe_servings ?? 1,
                   perServing: recipe.nutrition as Nutrients,
                   servingG: recipe.total_weight_g ? Number(recipe.total_weight_g) / recipe.servings : null,
+                  kind: "recipe",
                 }
-              : null,
+              : dish
+                ? { id: dish.key, title: dish.name, servings: it.dish_servings ?? 1, perServing: dishNutrition(dish), servingG: dish.servingG, kind: "dish" }
+                : null,
           components,
           estimate: it.estimate,
-          irritants: [...new Set([...cleanIrritants(it.irritants), ...cleanIrritants(recipe?.irritants), ...components.flatMap((c) => c.irritants)])],
+          irritants: [...new Set([...cleanIrritants(it.irritants), ...cleanIrritants(recipe?.irritants), ...(dish?.irritants ?? []), ...components.flatMap((c) => c.irritants)])],
         };
         return { ...calc, ...computeItem(calc) };
       }),

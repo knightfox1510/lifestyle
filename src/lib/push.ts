@@ -14,7 +14,8 @@ function configure() {
   return true;
 }
 
-export type PushMessage = { kind: string; refKey: string; title: string; body?: string; url?: string };
+/** `actions` become notification buttons (Android/desktop Chrome; iOS ignores them). */
+export type PushMessage = { kind: string; refKey: string; title: string; body?: string; url?: string; actions?: { action: string; title: string }[] };
 
 /**
  * Sends a notification to every device of a user, at most once per refKey
@@ -32,7 +33,7 @@ export async function notifyUser(admin: SupabaseClient, userId: string, msg: Pus
     .insert({ user_id: userId, kind: msg.kind, ref_key: msg.refKey, title: msg.title, body: msg.body ?? null, url: msg.url ?? null });
   if (dupe) return "duplicate";
 
-  const payload = JSON.stringify({ title: msg.title, body: msg.body ?? "", url: msg.url ?? "/", tag: msg.refKey });
+  const payload = JSON.stringify({ title: msg.title, body: msg.body ?? "", url: msg.url ?? "/", tag: msg.refKey, actions: msg.actions ?? [] });
   await Promise.all(
     subs.map(async (s) => {
       try {

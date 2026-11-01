@@ -164,7 +164,7 @@ Then redeploy.
 
 - **Code changes** deploy automatically when they're pushed to the production branch on GitHub.
 - **Database changes** come as a new file in `supabase/migrations/`. Open that one new file on GitHub → Raw → copy → Supabase SQL Editor → Run. **Don't** re-run `all-in-one.sql` on a live database; it's only for brand-new projects.
-  - Example: if you set up before these features were added, paste each once, in order: `20261106000001_menus.sql` (restaurant menus), then `20261107000001_nutrition.sql` (ingredient nutrition, micronutrients, leftovers). New setups already include them via `all-in-one.sql`.
+  - Example: if you set up before these features were added, paste each once, in order: `20261106000001_menus.sql` (restaurant menus), then `20261107000001_nutrition.sql` (ingredient nutrition, micronutrients, leftovers), then `20261108000001_water.sql` (water reminders). New setups already include them via `all-in-one.sql`.
 
 ## If something goes wrong
 

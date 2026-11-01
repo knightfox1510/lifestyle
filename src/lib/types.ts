@@ -420,7 +420,8 @@ export type FoodRef =
   | { kind: "staple"; key: string }
   | { kind: "custom"; id: string }
   | { kind: "usda"; id: string }
-  | { kind: "recipe"; id: string };
+  | { kind: "recipe"; id: string }
+  | { kind: "dish"; key: string };
 
 export type RecipeIngredient = {
   name: string;
@@ -602,6 +603,11 @@ export type NotificationPrefs = {
   digest: boolean;
   occasions: boolean;
   travel: boolean;
+  water: boolean;
+  water_target_ml: number | null;
+  water_interval_min: number;
+  water_start: string;
+  water_end: string;
   daily_hour: number;
   quiet_start: string | null;
   quiet_end: string | null;

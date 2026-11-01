@@ -10,6 +10,8 @@ import { normalizeName } from "@/modules/pantry/match";
 import { logFoodForPeople } from "@/app/(app)/food/actions";
 import { forGrams, scale, sum, type Nutrients } from "@/modules/nutrition/nutrients";
 import { cleanIrritants } from "@/modules/nutrition/irritants";
+import { DISH_BY_KEY, dishNutrition } from "@/modules/nutrition/dishes";
+import { STAPLE_BY_KEY } from "@/modules/nutrition/staples";
 import { addDays, todayIn } from "@/lib/dates";
 
 const ingredient = z.object({
@@ -331,4 +333,50 @@ export async function cookedRecipe(recipeId: string, input: unknown): Promise<Ac
     return { ok: true, message: `${logMsg} ${left} portion${left === 1 ? "" : "s"} saved to the fridge.`.trim() };
   }
   return { ok: true, message: logMsg || "Done." };
+}
+
+// ------------------------------------------------------ built-in Indian dishes --
+
+/**
+ * Copies a built-in dish into the household's recipes (2 servings) with
+ * ingredient grams already matched, so it can be tweaked to how you cook it.
+ */
+export async function copyDishToRecipes(dishKey: string): Promise<ActionResult & { id?: string }> {
+  const d = DISH_BY_KEY[dishKey];
+  if (!d) return { error: "Unknown dish." };
+  try {
+    const session = await requireModule("recipes");
+    const servings = 2;
+    const ingredients = d.ingredients.map(([key, g]) => {
+      const s = STAPLE_BY_KEY[key];
+      return { name: s.name, quantity: `${g * servings} g`, category: guessCategory(s.name), grams: g * servings, ref: { kind: "staple", key }, match_name: s.name, per100: s.per100 };
+    });
+    const perServing = dishNutrition(d);
+    const { data, error } = await session.supabase
+      .from("recipes")
+      .insert({
+        household_id: session.household.id,
+        created_by: session.userId,
+        title: d.name,
+        description: `Standard home recipe (${d.serving} per serving). Adjust grams to how you make it.`,
+        servings,
+        ingredients,
+        steps: [],
+        tags: ["indian", d.region.toLowerCase()],
+        nutrition: perServing,
+        total_weight_g: d.servingG * servings,
+        irritants: d.irritants ?? [],
+        calories_per_serving: Math.round(perServing.calories ?? 0),
+        protein_g: perServing.protein_g ?? null,
+        carbs_g: perServing.carbs_g ?? null,
+        fat_g: perServing.fat_g ?? null,
+      })
+      .select("id")
+      .single();
+    if (error || !data) return { error: "Couldn't copy the dish." };
+    refreshModule("/recipes");
+    return { ok: true, id: data.id, message: "Copied to your recipes." };
+  } catch (e) {
+    return { error: errorMessage(e) };
+  }
 }

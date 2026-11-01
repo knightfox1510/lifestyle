@@ -4,7 +4,7 @@
  *   then to /offline. Pages are cached per device and wiped on sign-out.
  * - API, auth and Supabase calls are never cached.
  */
-const VERSION = "v4";
+const VERSION = "v5";
 const SHELL_CACHE = `shell-${VERSION}`;
 const PAGE_CACHE = `pages-${VERSION}`;
 // Files shared into the app (Android share sheet), picked up by /dining/share.
@@ -101,13 +101,30 @@ self.addEventListener("push", (event) => {
       icon: "/icons/icon-192.png",
       badge: "/icons/icon-192.png",
       tag: data.tag,
+      actions: Array.isArray(data.actions) ? data.actions.slice(0, 2) : [],
       data: { url: data.url || "/" },
     }),
   );
 });
 
+// "+250 ml" on a water reminder: log it without opening the app.
+async function logWaterFromNotification(ml) {
+  try {
+    const res = await fetch("/api/water/log", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ ml }) });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || "failed");
+    await self.registration.showNotification("💧 Logged " + ml + " ml", { body: body.message || "", icon: "/icons/icon-192.png", badge: "/icons/icon-192.png", tag: "water-logged", data: { url: "/food" } });
+  } catch {
+    await self.clients.openWindow("/food?water=1");
+  }
+}
+
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
+  if (event.action === "water-250") {
+    event.waitUntil(logWaterFromNotification(250));
+    return;
+  }
   const url = new URL((event.notification.data && event.notification.data.url) || "/", self.location.origin).href;
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {

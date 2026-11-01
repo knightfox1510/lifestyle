@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { WaterButtons } from "@/components/water-buttons";
 import { getSession } from "@/lib/session";
 import { addDays, localDate, localTime, shortDate, startOfLocalDayIso, todayIn } from "@/lib/dates";
 import { Card, buttonClass, cx } from "@/components/ui";
@@ -26,7 +27,8 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
   const date = typeof dParam === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dParam) && dParam <= today ? dParam : today;
   const canWrite = session.accessTo("food_diary", ownerId) === "write";
   const isOwner = ownerId === session.userId;
-  const fluidsVisible = session.isModuleEnabled("bladder_diary") && session.accessTo("bladder_diary", ownerId) !== "none";
+  // Your own drinks always show (water reminders); a partner's only with bladder-diary access.
+  const fluidsVisible = ownerId === session.userId || (session.isModuleEnabled("bladder_diary") && session.accessTo("bladder_diary", ownerId) !== "none");
 
   const diningOn = session.isModuleEnabled("dining");
   const [{ data: e }, { data: g }, { data: recent }, fl, rp, rd] = await Promise.all([
@@ -106,6 +108,7 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
             </div>
           );
         })}
+        {isOwner && date === today ? <WaterButtons /> : null}
         {!goals?.calories ? (
           <p className="text-xs text-fg-muted">
             <Link href="/food/goals" className="text-accent underline">Set your goals</Link> (AI can suggest them from your weight, activity and health).
@@ -130,6 +133,7 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
           <div className="flex flex-wrap gap-x-6 gap-y-2">
             <ManualFoodForm ownerId={ownerId} />
             <Link href="/food/product" className="text-sm text-fg-muted hover:text-fg">▥ Scan a packaged food</Link>
+            <Link href="/food/dishes" className="text-sm text-fg-muted hover:text-fg">🍛 Indian dishes</Link>
             {restaurantPlaces.length ? <RestaurantPicker ownerId={ownerId} places={restaurantPlaces} dishes={restaurantDishes} /> : null}
           </div>
         </>

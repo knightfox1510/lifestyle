@@ -66,18 +66,24 @@ const prefsSchema = z.object({
   digest: z.boolean(),
   occasions: z.boolean(),
   travel: z.boolean(),
+  water: z.boolean(),
+  water_target_ml: z.preprocess((v) => (v === "" || v == null ? null : v), z.coerce.number().int().min(500).max(6000).nullable()),
+  water_interval_min: z.coerce.number().int().min(30).max(360),
+  water_start: z.string().regex(/^\d{2}:\d{2}$/),
+  water_end: z.string().regex(/^\d{2}:\d{2}$/),
   daily_hour: z.coerce.number().int().min(0).max(23),
   quiet_start: time,
   quiet_end: time,
 });
 
 export async function saveNotificationPrefs(_: ActionResult | null, form: FormData): Promise<ActionResult> {
-  const flags = ["medicines", "fitness", "expiries", "renewals", "maintenance", "child", "digest", "occasions", "travel"];
+  const flags = ["medicines", "fitness", "expiries", "renewals", "maintenance", "child", "digest", "occasions", "travel", "water"];
   const parsed = prefsSchema.safeParse({
     ...Object.fromEntries(form),
     ...Object.fromEntries(flags.map((f) => [f, form.get(f) === "on"])),
   });
-  if (!parsed.success) return { error: "Check the times." };
+  if (!parsed.success) return { error: "Check the times and water settings." };
+  if (parsed.data.water_start >= parsed.data.water_end) return { error: "Water reminders must start before they end." };
   const session = await getSession();
   const { error } = await session.supabase.from("notification_prefs").upsert({ ...parsed.data, user_id: session.userId }, { onConflict: "user_id" });
   if (error) return { error: "Couldn't save." };

@@ -9,10 +9,11 @@ export const metadata = { title: "Notifications" };
 
 export default async function NotificationsPage() {
   const session = await getSession();
-  const [{ data: prefs }, { data: devices }, { data: log }] = await Promise.all([
+  const [{ data: prefs }, { data: devices }, { data: log }, { data: goal }] = await Promise.all([
     session.supabase.from("notification_prefs").select("*").eq("user_id", session.userId).maybeSingle(),
     session.supabase.from("push_subscriptions").select("id, user_agent, created_at, last_success_at").eq("user_id", session.userId).order("created_at"),
     session.supabase.from("notification_log").select("title, body, sent_at, kind").eq("user_id", session.userId).order("sent_at", { ascending: false }).limit(15),
+    session.supabase.from("nutrition_goals").select("water_ml").eq("owner_id", session.userId).maybeSingle(),
   ]);
   const tz = session.profile.timezone;
 
@@ -41,7 +42,7 @@ export default async function NotificationsPage() {
         </Card>
 
         <Card>
-          <PrefsForm prefs={prefs as NotificationPrefs | null} />
+          <PrefsForm prefs={prefs as NotificationPrefs | null} waterGoal={(goal as { water_ml: number | null } | null)?.water_ml ?? null} />
         </Card>
 
         {log?.length ? (

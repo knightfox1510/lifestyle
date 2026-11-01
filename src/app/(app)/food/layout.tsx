@@ -9,6 +9,7 @@ export default function FoodLayout({ children }: LayoutProps<"/food">) {
         { href: "/food", label: "Diary" },
         { href: "/food/report", label: "Weekly report" },
         { href: "/food/foods", label: "My foods" },
+        { href: "/food/dishes", label: "Indian dishes" },
         { href: "/food/ideas", label: "Meal ideas" },
         { href: "/food/goals", label: "Goals" },
       ]}

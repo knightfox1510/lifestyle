@@ -69,8 +69,8 @@ export function FoodAiAdd({ ownerId, people }: { ownerId: string; people: Person
             nutrients: c.nutrients as Record<string, number>,
             accuracy: c.accuracy,
             irritants: i.irritants,
-            recipe_id: i.recipe?.id ?? null,
-            source: photo ? ("photo" as const) : i.recipe ? ("recipe" as const) : ("ai_estimate" as const),
+            recipe_id: i.recipe && i.recipe.kind !== "dish" ? i.recipe.id : null,
+            source: photo ? ("photo" as const) : i.recipe && i.recipe.kind !== "dish" ? ("recipe" as const) : ("ai_estimate" as const),
           };
         });
       const res = await logFoodForPeople(chosen, meal, payload);
@@ -145,7 +145,7 @@ export function FoodAiAdd({ ownerId, people }: { ownerId: string; people: Person
                   ) : null}
                   {it.recipe ? (
                     <div className="mt-1 flex items-center gap-2 text-xs">
-                      From your recipe <strong>{it.recipe.title}</strong> ·
+                      {it.recipe.kind === "dish" ? "Indian dish" : "From your recipe"} <strong>{it.recipe.title}</strong> ·
                       <Input
                         type="number"
                         min={0.25}

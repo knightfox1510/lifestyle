@@ -3,6 +3,7 @@ import "server-only";
 import type { AppSession } from "@/lib/session";
 import type { CustomFood, FoodRef, Recipe } from "@/lib/types";
 import { STAPLE_BY_KEY, searchStaples } from "@/modules/nutrition/staples";
+import { DISH_BY_KEY, dishNutrition, dishPer100, searchDishes, type Dish } from "@/modules/nutrition/dishes";
 import { parseFdcFood, type FdcSearchFood } from "@/modules/nutrition/sources";
 import { NUTRIENT_KEYS, type Nutrients } from "@/modules/nutrition/nutrients";
 import { cleanIrritants, type Irritant } from "@/modules/nutrition/irritants";
@@ -11,7 +12,7 @@ import { cleanIrritants, type Irritant } from "@/modules/nutrition/irritants";
 export type ResolvedFood = {
   ref: FoodRef;
   name: string;
-  source: "Built-in" | "Your foods" | "USDA" | "Recipe";
+  source: "Built-in" | "Your foods" | "USDA" | "Recipe" | "Indian dish";
   per100: Nutrients | null;
   perServing?: Nutrients | null;
   servingG?: number | null;
@@ -41,6 +42,10 @@ function fromRecipe(r: Recipe): ResolvedFood | null {
   const servingG = r.total_weight_g ? Number(r.total_weight_g) / r.servings : null;
   const per100 = servingG ? Object.fromEntries(Object.entries(perServing).map(([k, v]) => [k, (Number(v) * 100) / servingG])) : null;
   return { ref: { kind: "recipe", id: r.id }, name: r.title, source: "Recipe", per100: per100 as Nutrients | null, perServing, servingG, irritants: cleanIrritants(r.irritants) };
+}
+
+export function fromDish(d: Dish): ResolvedFood {
+  return { ref: { kind: "dish", key: d.key }, name: d.name, source: "Indian dish", per100: dishPer100(d), perServing: dishNutrition(d), servingG: d.servingG, irritants: d.irritants ?? [] };
 }
 
 async function fdcFetch(path: string, timeoutMs = 5000): Promise<unknown | null> {
@@ -97,6 +102,10 @@ export async function resolveRef(session: AppSession, ref: FoodRef, cache?: Awai
     const s = STAPLE_BY_KEY[ref.key];
     return s ? { ref, name: s.name, source: "Built-in", per100: s.per100, irritants: s.irritants } : null;
   }
+  if (ref.kind === "dish") {
+    const d = DISH_BY_KEY[ref.key];
+    return d ? fromDish(d) : null;
+  }
   if (ref.kind === "usda") return usdaById(ref.id);
   const hh = cache ?? (await householdFoods(session));
   if (ref.kind === "custom") {
@@ -107,16 +116,17 @@ export async function resolveRef(session: AppSession, ref: FoodRef, cache?: Awai
   return r ? fromRecipe(r) : null;
 }
 
-/** Search across your foods, recipes, built-in staples and (optionally) USDA. */
+/** Search across your foods, recipes, Indian dishes, built-in staples and (optionally) USDA. */
 export async function searchFoods(session: AppSession, query: string, opts: { usda?: boolean } = {}): Promise<ResolvedFood[]> {
   const q = query.trim().toLowerCase();
   if (!q) return [];
   const hh = await householdFoods(session);
   const mine = hh.foods.filter((f) => `${f.name} ${f.brand ?? ""}`.toLowerCase().includes(q)).slice(0, 6).map(fromCustom);
   const recipes = hh.recipes.filter((r) => r.title.toLowerCase().includes(q)).slice(0, 4).map(fromRecipe).filter(Boolean) as ResolvedFood[];
+  const dishes = searchDishes(q, 5).map(fromDish);
   const staples = searchStaples(q, 6).map((s) => ({ ref: { kind: "staple" as const, key: s.key }, name: s.name, source: "Built-in" as const, per100: s.per100, irritants: s.irritants }));
   const usda = opts.usda === false ? [] : await usdaSearch(query, 6);
-  return [...mine, ...recipes, ...staples, ...usda];
+  return [...mine, ...recipes, ...dishes, ...staples, ...usda];
 }
 
 /**

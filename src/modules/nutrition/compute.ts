@@ -6,7 +6,8 @@ export type CalcComponent = { name: string; grams: number; per100: Nutrients | n
 export type CalcItem = {
   description: string;
   quantity: string | null;
-  recipe?: { id: string; title: string; servings: number; perServing: Nutrients; servingG?: number | null } | null;
+  /** A saved recipe, or (kind "dish") a built-in Indian dish — both counted in servings. */
+  recipe?: { id: string; title: string; servings: number; perServing: Nutrients; servingG?: number | null; kind?: "recipe" | "dish" } | null;
   components: CalcComponent[];
   estimate: { calories: number; protein_g: number; carbs_g: number; fat_g: number; fiber_g: number };
   irritants: string[];

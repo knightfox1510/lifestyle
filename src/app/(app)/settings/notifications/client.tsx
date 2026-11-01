@@ -97,9 +97,9 @@ export function PushToggle({ vapidKey }: { vapidKey: string }) {
   );
 }
 
-export function PrefsForm({ prefs }: { prefs: NotificationPrefs | null }) {
+export function PrefsForm({ prefs, waterGoal }: { prefs: NotificationPrefs | null; waterGoal: number | null }) {
   const [state, action] = useActionState(saveNotificationPrefs, null);
-  const p = prefs ?? { medicines: true, fitness: true, expiries: true, renewals: true, maintenance: true, child: true, digest: true, occasions: true, travel: true, daily_hour: 9, quiet_start: null, quiet_end: null };
+  const p = prefs ?? { medicines: true, fitness: true, expiries: true, renewals: true, maintenance: true, child: true, digest: true, occasions: true, travel: true, water: false, water_target_ml: null, water_interval_min: 120, water_start: "08:00", water_end: "19:30", daily_hour: 9, quiet_start: null, quiet_end: null };
   const rows: [keyof typeof p, string, string][] = [
     ["medicines", "Medicine doses", "At each scheduled dose time"],
     ["fitness", "Classes & workouts", "Before each scheduled class"],
@@ -134,6 +134,27 @@ export function PrefsForm({ prefs }: { prefs: NotificationPrefs | null }) {
           <Input type="time" name="quiet_end" defaultValue={p.quiet_end?.slice(0, 5) ?? ""} />
         </Field>
       </div>
+      <fieldset className="space-y-3 rounded-xl border border-border p-3">
+        <Checkbox name="water" defaultChecked={p.water} label="💧 Water reminders" hint="Only when you're behind for the time of day, and not if you drank in the last 45 minutes. Tap “+250 ml” on the notification to log it." />
+        <div className="grid gap-3 sm:grid-cols-4">
+          <Field label="Daily target (ml)" hint={waterGoal ? `Your food goal: ${waterGoal} ml` : "Blank = 2000 ml"}>
+            <Input type="number" name="water_target_ml" min={500} max={6000} step={100} defaultValue={p.water_target_ml ?? ""} placeholder={String(waterGoal ?? 2000)} />
+          </Field>
+          <Field label="Every">
+            <Select name="water_interval_min" defaultValue={String(p.water_interval_min)}>
+              {[45, 60, 90, 120, 150, 180].map((m) => (
+                <option key={m} value={m}>{m < 60 ? `${m} min` : `${m / 60} h`.replace(".5 h", "½ h")}</option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="From">
+            <Input type="time" name="water_start" defaultValue={p.water_start.slice(0, 5)} required />
+          </Field>
+          <Field label="Last reminder" hint="Earlier evenings mean fewer night-time bathroom trips">
+            <Input type="time" name="water_end" defaultValue={p.water_end.slice(0, 5)} required />
+          </Field>
+        </div>
+      </fieldset>
       <ActionMessage state={state} />
       <SubmitButton>Save</SubmitButton>
     </form>
