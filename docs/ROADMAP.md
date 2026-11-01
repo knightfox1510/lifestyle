@@ -1,7 +1,7 @@
 # Household Lifestyle PWA: Review, Extra Ideas and Roadmap
 
 ## Context
-You want a mobile and laptop PWA that a couple, and later other households, can use to track health, food, groceries, family logistics and leisure. It would have Gemini-powered suggestions, partner sharing with per-module visibility, modules that can be turned on or off, and home-screen widgets. The `knightfox1510/lifestyle` repo is empty (branch `claude/blissful-hawking-v4uppl`, no commits). Decisions so far: Next.js + Supabase; the Gemini key stays on the server, with an optional bring-your-own key per household; the MVP is health-first.
+You want a mobile and laptop PWA that a couple, and later other households, can use to track health, food, groceries, family logistics and leisure. It would have Gemini-powered suggestions, partner sharing with per-module visibility, modules that can be turned on or off, and home-screen widgets. Decisions so far: Next.js + Supabase; the Gemini key stays on the server, with an optional bring-your-own key per household; the MVP is health-first.
 
 
 ---
@@ -95,4 +95,4 @@ Each module is then mostly config + a form + a widget. This keeps 20+ modules ma
 - Later: `supabase/migrations/*` (core schema + RLS helper), `src/modules/registry.ts` (module definitions), `src/lib/ai/*` (Gemini client + schemas), `src/lib/offline/*` (Dexie + outbox), `app/api/ai/*`, `app/api/ingest/wearable/route.ts`
 
 ## 6. Verification
-- Each phase will each have their own plan, with tests: RLS policy tests via `supabase test db`, and Playwright for the offline grocery list and install flow.
+- Each phase gets its own plan, with tests: RLS policy tests via `supabase test db`, and Playwright for the offline grocery list and install flow.
