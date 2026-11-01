@@ -11,6 +11,7 @@ import { daysUntil } from "@/modules/pantry/match";
 import { generateDigest, weekStart } from "@/lib/digest";
 import { serviceSession } from "@/lib/service-session";
 import type { FitnessClass, Medicine, NotificationPrefs, Profile } from "@/lib/types";
+import { makeT, isLang } from "@/lib/i18n/core";
 import { WINDOW_MINUTES, dueWaterSlot, inQuietHours, inWindow, shouldRemind, toMinutes } from "@/modules/notifications/timing";
 
 const DEFAULT_PREFS: Omit<NotificationPrefs, "user_id"> = {
@@ -81,6 +82,8 @@ async function remindUser(
   const time = localTime(now, tz);
   const quiet = inQuietHours(time, prefs.quiet_start, prefs.quiet_end);
   const result = { sent: 0, digests: 0 };
+  // Notification text in the person's app language.
+  const tr = makeT(isLang(profile.language) ? profile.language : "en");
   const send = async (kind: string, refKey: string, title: string, body: string, url: string) => {
     if ((await notifyUser(admin, profile.id, { kind, refKey, title, body, url })) === "sent") result.sent += 1;
   };
@@ -95,7 +98,7 @@ async function remindUser(
       isScheduledOn(m, today) ? m.times.filter((t) => inWindow(time, toMinutes(t)) && !(doses ?? []).some((d: { medicine_id: string; scheduled_time: string | null }) => d.medicine_id === m.id && d.scheduled_time === t)).map((t) => ({ m, t })) : [],
     );
     for (const { m, t } of due) {
-      await send("medicine", `med:${m.id}:${today}:${t}`, `💊 Time for ${m.name}`, `${m.dose_amount} ${m.dose_unit}${m.instructions ? ` · ${m.instructions}` : ""} (${t})`, "/medicines");
+      await send("medicine", `med:${m.id}:${today}:${t}`, `💊 ${tr("Time for {name}", { name: m.name })}`, `${m.dose_amount} ${m.dose_unit}${m.instructions ? ` · ${m.instructions}` : ""} (${t})`, "/medicines");
     }
   }
 
@@ -111,7 +114,7 @@ async function remindUser(
       const classDay = remindAt < 0 ? addDays(today, 1) : today;
       if (!c.days_of_week.includes(dayOfWeek(classDay))) continue;
       if (inWindow(time, remindAt)) {
-        await send("fitness", `fit:${c.id}:${classDay}`, `🏋️ ${c.name} at ${c.start_time}`, `${c.duration_minutes} min${c.location ? ` · ${c.location}` : ""}`, "/fitness");
+        await send("fitness", `fit:${c.id}:${classDay}`, `🏋️ ${tr("{name} at {time}", { name: c.name, time: c.start_time.slice(0, 5) })}`, `${c.duration_minutes} min${c.location ? ` · ${c.location}` : ""}`, "/fitness");
       }
     }
   }
@@ -140,10 +143,10 @@ async function remindUser(
       if ((await notifyUser(admin, profile.id, {
         kind: "water",
         refKey: `water:${today}:${due.slot}`,
-        title: "💧 Time for a glass of water",
-        body: `${drunkMl} / ${target} ml so far — about ${Math.max(150, Math.round(behind / 50) * 50)} ml to catch up.`,
+        title: `💧 ${tr("Time for a glass of water")}`,
+        body: tr("{drunk} / {target} ml so far — about {more} ml to catch up.", { drunk: drunkMl, target, more: Math.max(150, Math.round(behind / 50) * 50) }),
         url: "/food?water=1",
-        actions: [{ action: "water-250", title: "+250 ml" }],
+        actions: [{ action: "water-250", title: tr("+250 ml") }],
       })) === "sent") result.sent += 1;
     }
   }
@@ -154,7 +157,7 @@ async function remindUser(
     if (prefs.expiries && on("pantry")) {
       const { data } = await admin.from("pantry_items").select("name, expires_on").eq("household_id", hid).is("used_up_at", null).lte("expires_on", addDays(today, 1)).gte("expires_on", today);
       if (data?.length) {
-        await send("pantry", `pantry:${hid}:${today}`, `⏳ ${data.length} item${data.length === 1 ? "" : "s"} expiring`, data.map((p: { name: string }) => p.name).slice(0, 6).join(", "), "/pantry");
+        await send("pantry", `pantry:${hid}:${today}`, `⏳ ${tr("{n} item(s) expiring", { n: data.length })}`, data.map((p: { name: string }) => p.name).slice(0, 6).join(", "), "/pantry");
       }
     }
     if (prefs.renewals && on("documents")) {
@@ -163,7 +166,7 @@ async function remindUser(
         if (d.scope !== "household" && d.owner_id !== profile.id) continue;
         const left = daysUntil(d.expires_on, today)!;
         if (shouldRemind(left, d.remind_days_before)) {
-          await send("document", `doc:${d.id}:${d.expires_on}:${left}`, left < 0 ? `🛂 ${d.title} has expired` : `🛂 ${d.title} expires in ${left} day${left === 1 ? "" : "s"}`, `Expiry ${d.expires_on}. Start the renewal.`, "/documents");
+          await send("document", `doc:${d.id}:${d.expires_on}:${left}`, left < 0 ? `🛂 ${tr("{title} has expired", { title: d.title })}` : `🛂 ${tr("{title} expires in {n} day(s)", { title: d.title, n: left })}`, tr("Expiry {date}. Start the renewal.", { date: d.expires_on }), "/documents");
         }
       }
     }
@@ -172,7 +175,7 @@ async function remindUser(
       for (const s of (data ?? []) as { id: string; name: string; next_renewal_on: string; cost: number | null; currency: string }[]) {
         const left = daysUntil(s.next_renewal_on, today)!;
         if (left === 3 || left === 0) {
-          await send("subscription", `sub:${s.id}:${s.next_renewal_on}:${left}`, `🔁 ${s.name} renews ${left === 0 ? "today" : "in 3 days"}`, s.cost != null ? `${s.currency} ${s.cost}` : "Cancel it if you don't need it.", "/subscriptions");
+          await send("subscription", `sub:${s.id}:${s.next_renewal_on}:${left}`, `🔁 ${left === 0 ? tr("{name} renews today", { name: s.name }) : tr("{name} renews in 3 days", { name: s.name })}`, s.cost != null ? `${s.currency} ${s.cost}` : tr("Cancel it if you don't need it."), "/subscriptions");
         }
       }
     }
@@ -181,7 +184,7 @@ async function remindUser(
       for (const t of (data ?? []) as { id: string; title: string; next_due_on: string; remind_days_before: number }[]) {
         const left = daysUntil(t.next_due_on, today)!;
         if (left === t.remind_days_before || left === 0 || left === -1) {
-          await send("maintenance", `maint:${t.id}:${t.next_due_on}:${left}`, `🛠️ ${t.title} ${left < 0 ? "is overdue" : left === 0 ? "is due today" : `is due in ${left} days`}`, "Mark it done in Hearth when it's finished.", "/maintenance");
+          await send("maintenance", `maint:${t.id}:${t.next_due_on}:${left}`, `🛠️ ${left < 0 ? tr("{title} is overdue", { title: t.title }) : left === 0 ? tr("{title} is due today", { title: t.title }) : tr("{title} is due in {n} days", { title: t.title, n: left })}`, tr("Mark it done in Hearth when it's finished."), "/maintenance");
         }
       }
     }
@@ -190,7 +193,7 @@ async function remindUser(
       for (const v of (data ?? []) as { id: string; vaccine: string; due_on: string }[]) {
         const left = daysUntil(v.due_on, today)!;
         if (left === 7 || left === 1 || left === 0) {
-          await send("vaccination", `vac:${v.id}:${left}`, `💉 ${v.vaccine} due ${left === 0 ? "today" : left === 1 ? "tomorrow" : "in a week"}`, "Book the paediatrician visit.", "/child/health");
+          await send("vaccination", `vac:${v.id}:${left}`, `💉 ${left === 0 ? tr("{name} due today", { name: v.vaccine }) : left === 1 ? tr("{name} due tomorrow", { name: v.vaccine }) : tr("{name} due in a week", { name: v.vaccine })}`, tr("Book the paediatrician visit."), "/child/health");
         }
       }
     }
@@ -203,7 +206,7 @@ async function remindUser(
       if (!next) continue;
       const left = daysUntil(next, today)!;
       if (left === o.remind_days_before || left === 1 || left === 0) {
-        await send("occasion", `occ:${o.id}:${next}:${left}`, left === 0 ? `🎉 ${o.title} is today` : `🎁 ${o.title} in ${left} day${left === 1 ? "" : "s"}`, left === 0 ? "Don't forget to celebrate!" : "Check your gift ideas in Hearth.", "/occasions");
+        await send("occasion", `occ:${o.id}:${next}:${left}`, left === 0 ? `🎉 ${tr("{title} is today", { title: o.title })}` : `🎁 ${tr("{title} in {n} day(s)", { title: o.title, n: left })}`, left === 0 ? tr("Don't forget to celebrate!") : tr("Check your gift ideas in Hearth."), "/occasions");
       }
     }
   }
@@ -213,7 +216,7 @@ async function remindUser(
       const left = daysUntil(t.start_date, today)!;
       if (left === 7 || left === 2) {
         const { count } = await admin.from("trip_packing").select("id", { count: "exact", head: true }).eq("trip_id", t.id).eq("packed", false);
-        await send("travel", `trip:${t.id}:${left}`, `✈️ ${t.title} in ${left} days`, count ? `${count} item${count === 1 ? "" : "s"} still to pack.` : "Time to start packing.", `/travel/${t.id}`);
+        await send("travel", `trip:${t.id}:${left}`, `✈️ ${tr("{title} in {n} day(s)", { title: t.title, n: left })}`, count ? tr("{n} item(s) still to pack.", { n: count }) : tr("Time to start packing."), `/travel/${t.id}`);
       }
     }
   }
@@ -228,7 +231,7 @@ async function remindUser(
         try {
           await generateDigest(session);
           result.digests += 1;
-          await send("digest", `digest:${ws}`, "📬 Your weekly summary is ready", "Wins, things to watch and what's coming up.", "/digest");
+          await send("digest", `digest:${ws}`, `📬 ${tr("Your weekly summary is ready")}`, tr("Wins, things to watch and what's coming up."), "/digest");
         } catch (err) {
           console.warn("digest failed", profile.id, (err as Error).message);
         }

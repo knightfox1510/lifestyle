@@ -6,6 +6,18 @@ No terminal, no desktop apps. Everything below happens on websites, and a phone 
 
 You'll collect a handful of values along the way. Paste them into a private note as you go and delete the note at the end.
 
+**What you'll need:** a GitHub account (you already have one), an email address, and a Google account for the AI key.
+
+**The order:** Supabase (database) → Google AI key → Vercel (website) → generate the last keys → link Supabase back to the site → turn on reminders → sign in. Each part lists exactly what to tap.
+
+| Your note should end up with | From |
+|---|---|
+| Supabase database password | B1 |
+| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | B3 |
+| `GEMINI_API_KEY` (and optionally `FDC_API_KEY`) | C |
+| YOUR-URL (e.g. `hearth-home.vercel.app`) | D1 |
+| `CRON_SECRET` | D2 |
+
 ---
 
 ## Part A · Check the code is on GitHub
@@ -40,13 +52,15 @@ Open **github.com/knightfox1510/lifestyle**. The app lives on the branch `claude
 > Run this file **only once**. If it fails halfway (e.g. the paste was cut off), the simplest fix is to delete the project (Settings → General → Delete project) and start B1 again.
 
 ### B3. Copy the three keys
-Open **Project Settings** (gear icon) → **API Keys** (on some projects it's **API** or **Data API**). Copy these into your note:
+The quickest way: tap **Connect** at the top of the project. It shows the **Project URL** and the **publishable key**. For the secret key, open **Project Settings** (gear icon) → **API Keys**.
+
+Use the new-style keys (`sb_publishable_…` and `sb_secret_…`). Supabase is retiring the old "anon" and "service_role" keys in late 2026. If the API Keys page only shows a **Legacy API keys** tab and a **Create new API keys** button, tap that button first.
 
 | Note it as | Where it is |
 |---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | **Project URL**, like `https://abcd1234.supabase.co` (Settings → Data API, or the top of the API page) |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | the **anon / public** key, or the **publishable** key (`sb_publishable_…`) |
-| `SUPABASE_SERVICE_ROLE_KEY` | the **service_role** key, or a **secret** key (`sb_secret_…`). Tap *Reveal*. **Never share this one.** |
+| `NEXT_PUBLIC_SUPABASE_URL` | **Project URL**, like `https://abcd1234.supabase.co` (Connect dialog, or Settings → Data API) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | the **publishable** key (`sb_publishable_…`). Yes, it goes in the variable named "ANON". |
+| `SUPABASE_SERVICE_ROLE_KEY` | a **secret** key (`sb_secret_…`) under **Secret keys**. Tap the eye icon to reveal it, then copy it. **Never share this one.** |
 
 ---
 
@@ -131,6 +145,7 @@ Sign-in emails work straight away with Supabase's built-in email, which is limit
 
 1. On your phone, open **`https://YOUR-URL`** → enter your email → open the sign-in link from your inbox **on the same phone**.
 2. Enter your name, name the household and pick the features you want → **Create household**.
+   - **हिन्दी / मराठी:** go to **Settings → You → App language** and choose Hindi or Marathi → **Save**. Menus, reminders and AI answers switch language. Each person picks their own.
 3. Install it:
    - **iPhone:** in Safari tap **Share → Add to Home Screen**, then open Hearth **from the new icon**.
    - **Android:** Chrome menu **⋮ → Install app** (or tap the *Install* banner).
@@ -138,6 +153,10 @@ Sign-in emails work straight away with Supabase's built-in email, which is limit
 5. Invite your partner: **Settings → Household → + Invite partner → Share**. They open the link, sign in with their own email and join.
 6. Each of you chooses what the other can see in **Settings → Sharing** (everything personal starts private).
 7. Follow the **Getting started** card on Home.
+8. Worth doing early:
+   - **Medical records → Health profile** and add any **allergies** to the timeline. The medicine safety checks and the doctor visit summary use them.
+   - **Medicines → Medicines**: add what you take, then open **Safety checks**.
+   - **Settings → Notifications → 💧 Water reminders**, if you want them.
 
 🎉 You're live.
 
@@ -164,7 +183,8 @@ Then redeploy.
 
 - **Code changes** deploy automatically when they're pushed to the production branch on GitHub.
 - **Database changes** come as a new file in `supabase/migrations/`. Open that one new file on GitHub → Raw → copy → Supabase SQL Editor → Run. **Don't** re-run `all-in-one.sql` on a live database; it's only for brand-new projects.
-  - Example: if you set up before these features were added, paste each once, in order: `20261106000001_menus.sql` (restaurant menus), then `20261107000001_nutrition.sql` (ingredient nutrition, micronutrients, leftovers), then `20261108000001_water.sql` (water reminders). New setups already include them via `all-in-one.sql`.
+  - **Setting up for the first time? Skip this.** `all-in-one.sql` (Part B2) already includes every change so far.
+  - For reference, the most recent ones are, in order: `20261106000001_menus.sql` (restaurant menus), `20261107000001_nutrition.sql` (ingredient nutrition, micronutrients, leftovers), `20261108000001_water.sql` (water reminders) and `20261109000001_language.sql` (Hindi/Marathi). If you set up before any of these, paste each missing one once, in that order.
 
 ## If something goes wrong
 
@@ -178,4 +198,6 @@ Then redeploy.
 | "Push isn't configured on the server" | The VAPID values are missing. Re-check D2 and redeploy. |
 | Test notification works but reminders never arrive | Part F not done, or the CRON_SECRET doesn't match (check the query in F5). |
 | Vercel build failed | Deployments → open the failed one → **Build Logs**. A missing environment variable is the usual cause. |
+| "Invalid API key" on the sign-in page | The Supabase keys in Vercel are wrong or swapped: the **publishable** key goes in `NEXT_PUBLIC_SUPABASE_ANON_KEY` and the **secret** key in `SUPABASE_SERVICE_ROLE_KEY`. Fix and redeploy. |
+| Saving the language setting says "Couldn't save." | The database is missing the language change. Paste `20261109000001_language.sql` (see above). |
 | Anything else | Vercel → your project → **Logs** shows server errors as they happen. |

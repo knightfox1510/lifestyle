@@ -5,6 +5,8 @@ import { Badge, Card, EmptyState, Notice } from "@/components/ui";
 import type { Medicine, MedicineDose } from "@/lib/types";
 import { doseLabel, refillInfo, slotsForDay } from "@/modules/medicines/logic";
 import { DoseButtons, AsNeededButton } from "./dose-buttons";
+import { getT } from "@/lib/i18n/server";
+import { medicineChecksFor } from "@/lib/medicine-checks";
 
 export const metadata = { title: "Medicines" };
 
@@ -14,6 +16,7 @@ export default async function MedicinesTodayPage() {
   const tz = session.profile.timezone;
   const today = todayIn(tz);
   const canWrite = session.accessTo("medicines", ownerId) === "write";
+  const t = await getT(session);
 
   const [{ data: medData }, { data: doseData }] = await Promise.all([
     session.supabase.from("medicines").select("*").eq("owner_id", ownerId).eq("active", true).order("name"),
@@ -26,39 +29,46 @@ export default async function MedicinesTodayPage() {
   const lowStock = meds.map((m) => ({ m, r: refillInfo(m) })).filter((x) => x.r?.low);
   const now = localTime(new Date(), tz);
   const done = slots.filter((s) => s.dose).length;
+  const serious = meds.length ? (await medicineChecksFor(session, ownerId)).findings.filter((f) => f.severity === "high") : [];
 
   if (meds.length === 0) {
     return (
-      <EmptyState title="No medicines yet">
-        <Link href="/medicines/manage" className="text-accent underline">Add a prescription or course</Link> to get a daily schedule.
+      <EmptyState title={t("No medicines yet")}>
+        <Link href="/medicines/manage" className="text-accent underline">{t("Add a prescription or course")}</Link> {t("to get a daily schedule.")}
       </EmptyState>
     );
   }
 
   return (
     <div className="space-y-4">
+      {serious.length ? (
+        <Notice tone="danger">
+          ⚠️ {t("{n} medicine safety check(s) to discuss with your doctor:", { n: serious.length })} {serious.map((f) => f.title).join("; ")}.{" "}
+          <Link href="/medicines/checks" className="font-medium underline">{t("See checks")}</Link>
+        </Notice>
+      ) : null}
       {lowStock.length ? (
         <Notice tone="danger">
-          ⚠️ Running low:{" "}
+          ⚠️ {t("Running low:")}{" "}
           {lowStock.map(({ m, r }, i) => (
             <span key={m.id}>
               {i ? ", " : ""}
               <strong>{m.name}</strong> ({r!.stock} left{r!.daysLeft !== null ? `, ~${r!.daysLeft} days` : ""})
             </span>
           ))}
-          . Restock from the Medicines tab.
+          . {t("Restock from the Medicines tab.")}
         </Notice>
       ) : null}
 
       <Card>
         <div className="mb-3 flex items-baseline justify-between">
-          <h2 className="font-semibold">Today&apos;s doses</h2>
+          <h2 className="font-semibold">{t("Today's doses")}</h2>
           <span className="text-sm text-fg-muted">
-            {done}/{slots.length} done
+            {t("{done}/{total} done", { done, total: slots.length })}
           </span>
         </div>
         {slots.length === 0 ? (
-          <p className="text-sm text-fg-muted">Nothing scheduled today.</p>
+          <p className="text-sm text-fg-muted">{t("Nothing scheduled today.")}</p>
         ) : (
           <ul className="divide-y divide-border">
             {slots.map((s) => {
@@ -81,7 +91,7 @@ export default async function MedicinesTodayPage() {
                         {s.dose.status === "taken" ? `✓ taken ${localTime(s.dose.taken_at, tz)}` : "skipped"}
                       </Badge>
                     ) : overdue ? (
-                      <Badge tone="danger">due</Badge>
+                      <Badge tone="danger">{t("due")}</Badge>
                     ) : null}
                     {canWrite ? (
                       <DoseButtons medicineId={s.medicine.id} ownerId={ownerId} date={today} time={s.time} doseId={s.dose?.id ?? null} />
@@ -96,7 +106,7 @@ export default async function MedicinesTodayPage() {
 
       {asNeeded.length ? (
         <Card>
-          <h2 className="mb-2 font-semibold">As needed</h2>
+          <h2 className="mb-2 font-semibold">{t("As needed")}</h2>
           <ul className="divide-y divide-border">
             {asNeeded.map((m) => {
               const taken = doses.filter((d) => d.medicine_id === m.id && d.status === "taken");

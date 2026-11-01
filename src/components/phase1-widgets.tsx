@@ -8,14 +8,16 @@ import type { ActionResult } from "@/lib/types";
 import { quickLog } from "@/app/(app)/bladder/actions";
 import { quickAddGrocery } from "@/app/(app)/groceries/actions";
 import { logBodyMetric } from "@/app/(app)/body/actions";
+import { useT } from "@/lib/i18n/client";
 
 export function BladderQuickButtons({ ownerId, counts }: { ownerId: string; counts: { leaks: number; voids: number; fluidMl: number } }) {
   const [pending, start] = useTransition();
+  const t = useT();
   const [state, run] = useActionState(async (_: ActionResult | null, what: "leak" | "urge" | "void" | "water") => quickLog(ownerId, what), null);
   const buttons = [
-    { what: "leak", label: "💧 Leak" },
-    { what: "urge", label: "⚡ Urge" },
-    { what: "void", label: "🚻 Bathroom" },
+    { what: "leak", label: `💧 ${t("Leak")}` },
+    { what: "urge", label: `⚡ ${t("Urge")}` },
+    { what: "void", label: `🚻 ${t("Bathroom")}` },
     { what: "water", label: "🥤 +250 ml" },
   ] as const;
   return (
@@ -28,8 +30,8 @@ export function BladderQuickButtons({ ownerId, counts }: { ownerId: string; coun
         ))}
       </div>
       <p className="text-xs text-fg-muted">
-        Today: {counts.leaks} leak{counts.leaks === 1 ? "" : "s"} · {counts.voids} bathroom · {counts.fluidMl} ml.{" "}
-        <Link href="/bladder" className="text-accent hover:underline">Add details</Link>
+        {t("Today: {leaks} leaks · {voids} bathroom · {ml} ml.", { leaks: counts.leaks, voids: counts.voids, ml: counts.fluidMl })}{" "}
+        <Link href="/bladder" className="text-accent hover:underline">{t("Add details")}</Link>
       </p>
       {state?.error ? <Notice tone="danger">{state.error}</Notice> : <ActionMessage state={state} />}
     </div>
@@ -38,11 +40,12 @@ export function BladderQuickButtons({ ownerId, counts }: { ownerId: string; coun
 
 export function GroceryQuickAdd() {
   const [state, action] = useActionState(quickAddGrocery, null);
+  const t = useT();
   return (
     <form action={action} className="space-y-1.5">
       <div className="flex gap-2">
-        <Input name="name" placeholder="Add to list…" aria-label="Grocery item" maxLength={120} required />
-        <SubmitButton pendingText="…">Add</SubmitButton>
+        <Input name="name" placeholder={t("Add to list…")} aria-label="Grocery item" maxLength={120} required />
+        <SubmitButton pendingText="…">{t("Add")}</SubmitButton>
       </div>
       <ActionMessage state={state} />
     </form>

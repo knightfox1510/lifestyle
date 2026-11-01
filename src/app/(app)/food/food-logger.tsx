@@ -7,6 +7,7 @@ import type { Meal } from "@/lib/types";
 import { MEAL_META, MEAL_ORDER, mealForHour } from "@/modules/food/meta";
 import { forGrams, type Nutrients } from "@/modules/nutrition/nutrients";
 import { logFoodForPeople } from "./actions";
+import { useT } from "@/lib/i18n/client";
 
 /** Log an amount of a food with per-100 g data (packaged product, own food). */
 export function FoodAmountLogger({
@@ -34,25 +35,26 @@ export function FoodAmountLogger({
   const [who, setWho] = useState<Record<string, number>>({ [me]: 1 });
   const [msg, setMsg] = useState<{ tone: "accent" | "danger"; text: string } | null>(null);
   const [pending, start] = useTransition();
+  const t = useT();
   const grams = unit === "g" ? amount : amount * (servingG ?? 0);
   const n = forGrams(per100, grams);
 
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-end gap-2">
-        <Field label="Amount" className="w-24">
+        <Field label={t("Amount")} className="w-24">
           <Input type="number" min={0} step={unit === "g" ? 5 : 0.5} value={amount} onChange={(e) => setAmount(Math.max(0, Number(e.target.value) || 0))} />
         </Field>
-        <Field label="Unit" className="w-36">
+        <Field label={t("Unit")} className="w-36">
           <Select value={unit} onChange={(e) => { const u = e.target.value as "g" | "serving"; setUnit(u); setAmount(u === "g" ? 100 : 1); }}>
-            <option value="g">grams / ml</option>
-            {servingG ? <option value="serving">servings ({servingLabel || `${servingG} g`})</option> : null}
+            <option value="g">{t("grams / ml")}</option>
+            {servingG ? <option value="serving">{t("servings")} ({servingLabel || `${servingG} g`})</option> : null}
           </Select>
         </Field>
-        <Field label="Meal" className="w-32">
+        <Field label={t("Meal")} className="w-32">
           <Select value={meal} onChange={(e) => setMeal(e.target.value as Meal)}>
             {MEAL_ORDER.map((m) => (
-              <option key={m} value={m}>{MEAL_META[m].label}</option>
+              <option key={m} value={m}>{t(MEAL_META[m].label)}</option>
             ))}
           </Select>
         </Field>
@@ -77,7 +79,7 @@ export function FoodAmountLogger({
           })
         }
       >
-        Log it
+        {t("Log it")}
       </Button>
     </div>
   );

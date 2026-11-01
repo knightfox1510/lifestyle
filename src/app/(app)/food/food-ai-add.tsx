@@ -10,6 +10,7 @@ import { MEAL_META, MEAL_ORDER, mealForHour } from "@/modules/food/meta";
 import { computeItem, type CalcItem } from "@/modules/nutrition/compute";
 import { IRRITANT_META, type Irritant } from "@/modules/nutrition/irritants";
 import { logFoodForPeople } from "./actions";
+import { useT } from "@/lib/i18n/client";
 
 type Item = CalcItem & { keep: boolean; open: boolean };
 
@@ -28,6 +29,7 @@ export function FoodAiAdd({ ownerId, people }: { ownerId: string; people: Person
   const [who, setWho] = useState<Record<string, number>>({ [ownerId]: 1 });
   const [msg, setMsg] = useState<{ tone: "danger" | "accent"; text: string } | null>(null);
   const [saving, start] = useTransition();
+  const t = useT();
 
   async function estimate() {
     setLoading(true);
@@ -90,7 +92,7 @@ export function FoodAiAdd({ ownerId, people }: { ownerId: string; people: Person
         <Textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="What did you eat? e.g. “2 rotis with ghee, a katori of toor dal, bhindi sabzi and a cup of chai”"
+          placeholder={t("What did you eat? e.g. “2 rotis with ghee, a katori of toor dal, bhindi sabzi and a cup of chai”")}
           className="min-h-12 flex-1"
           maxLength={1000}
         />
@@ -108,18 +110,18 @@ export function FoodAiAdd({ ownerId, people }: { ownerId: string; people: Person
         </p>
       ) : null}
       <Button onClick={estimate} disabled={loading || (!text.trim() && !photo)}>
-        {loading ? "Working it out…" : "✨ Calculate"}
+        {loading ? t("Working it out…") : `✨ ${t("Calculate")}`}
       </Button>
-      <p className="text-xs text-fg-muted">Uses your saved recipes and foods first, then ingredients by weight. You can fix any grams before logging.</p>
+      <p className="text-xs text-fg-muted">{t("Uses your saved recipes and foods first, then ingredients by weight. You can fix any grams before logging.")}</p>
       {msg ? <Notice tone={msg.tone}>{msg.text}</Notice> : null}
 
       {items ? (
         <div className="space-y-3 rounded-xl border border-border p-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-medium">Check and log</p>
+            <p className="text-sm font-medium">{t("Check and log")}</p>
             <Select value={meal} onChange={(e) => setMeal(e.target.value as Meal)} className="w-36" aria-label="Meal">
               {MEAL_ORDER.map((m) => (
-                <option key={m} value={m}>{MEAL_META[m].label}</option>
+                <option key={m} value={m}>{t(MEAL_META[m].label)}</option>
               ))}
             </Select>
           </div>
@@ -193,9 +195,9 @@ export function FoodAiAdd({ ownerId, people }: { ownerId: string; people: Person
           <PeoplePortions people={people} value={who} onChange={setWho} />
           <div className="flex gap-2">
             <Button size="sm" onClick={save} disabled={saving || !items.some((i) => i.keep) || !Object.values(who).some((v) => v > 0)}>
-              {saving ? "Adding…" : `Add to ${MEAL_META[meal].label.toLowerCase()}`}
+              {saving ? t("Adding…") : `${t("Add to")} ${t(MEAL_META[meal].label)}`}
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setItems(null)}>Discard</Button>
+            <Button size="sm" variant="ghost" onClick={() => setItems(null)}>{t("Discard")}</Button>
           </div>
         </div>
       ) : null}

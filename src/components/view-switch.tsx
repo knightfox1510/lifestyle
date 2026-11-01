@@ -4,6 +4,7 @@ import { useTransition } from "react";
 import Link from "next/link";
 import { cx } from "@/components/ui";
 import { setViewMode } from "@/app/(app)/view-actions";
+import { useT } from "@/lib/i18n/client";
 
 /** Personal vs Partner toggle. Partner view shows only what the partner shared. */
 export function ViewSwitch({
@@ -16,11 +17,12 @@ export function ViewSwitch({
   partnerName: string | null;
 }) {
   const [pending, start] = useTransition();
+  const t = useT();
 
   if (!partnerName) {
     return (
       <Link href="/settings/household" className="rounded-full border border-border px-3 py-1.5 text-xs text-fg-muted hover:bg-surface-2">
-        + Invite partner
+        {t("+ Invite partner")}
       </Link>
     );
   }
@@ -28,12 +30,12 @@ export function ViewSwitch({
   return (
     <div
       role="radiogroup"
-      aria-label="Whose data to show"
+      aria-label={t("Whose data to show")}
       className={cx("grid grid-cols-2 rounded-full bg-surface-2 p-0.5 text-xs", pending && "opacity-60")}
     >
       {(
         [
-          ["me", `Personal`, meName],
+          ["me", t("Personal"), meName],
           ["partner", partnerName, partnerName],
         ] as const
       ).map(([value, label, title]) => (

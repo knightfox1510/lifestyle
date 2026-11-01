@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession } from "@/lib/session";
 import { insertWater, waterTarget, waterToday } from "@/lib/water";
+import { getT } from "@/lib/i18n/server";
 
 /**
  * Logs water from a notification button (called by the service worker with
@@ -20,5 +21,6 @@ export async function POST(request: Request) {
   }
   if (!(await insertWater(session, parsed.data.ml))) return NextResponse.json({ error: "Couldn't save" }, { status: 500 });
   const [{ ml }, target] = await Promise.all([waterToday(session), waterTarget(session)]);
-  return NextResponse.json({ ok: true, message: `${ml} / ${target} ml today` });
+  const t = await getT(session);
+  return NextResponse.json({ ok: true, title: `💧 ${t("+{ml} ml logged", { ml: parsed.data.ml })}`, message: t("{ml} / {target} ml today", { ml, target }) });
 }

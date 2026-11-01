@@ -4,6 +4,7 @@ import { getSession, logPartnerView } from "@/lib/session";
 import { MODULE_BY_KEY } from "@/modules/registry";
 import { EmptyState, PageHeader } from "@/components/ui";
 import { SubNav } from "@/components/sub-nav";
+import { getT } from "@/lib/i18n/server";
 
 /**
  * Shared wrapper for a module's screens: checks the module is on, handles the
@@ -24,13 +25,16 @@ export async function ModuleShell({
   const session = await getSession();
   const def = MODULE_BY_KEY[moduleKey];
   if (!def || !session.isModuleEnabled(moduleKey)) notFound();
+  const t = await getT(session);
+  const name = t(def.name);
+  if (subtitle) subtitle = t(subtitle);
 
-  const header = <>{tabs ? <SubNav items={tabs} /> : null}</>;
+  const header = <>{tabs ? <SubNav items={tabs.map((x) => ({ ...x, label: t(x.label) }))} /> : null}</>;
 
   if (def.scope === "household") {
     return (
       <>
-        <PageHeader title={def.name} subtitle={subtitle} />
+        <PageHeader title={name} subtitle={subtitle} />
         {header}
         {children}
       </>
@@ -43,9 +47,9 @@ export async function ModuleShell({
   if (access === "none") {
     return (
       <>
-        <PageHeader title={def.name} />
-        <EmptyState title={`${subject.display_name} hasn't shared ${def.name.toLowerCase()} with you`}>
-          They can share it from Settings → Sharing. Switch back to Personal to see your own.
+        <PageHeader title={name} />
+        <EmptyState title={t("{person} hasn't shared {module} with you", { person: subject.display_name, module: name })}>
+          {t("They can share it from Settings → Sharing. Switch back to Personal to see your own.")}
         </EmptyState>
       </>
     );
@@ -55,8 +59,8 @@ export async function ModuleShell({
   return (
     <>
       <PageHeader
-        title={isSelf ? def.name : `${subject.display_name} · ${def.name}`}
-        subtitle={isSelf ? subtitle : access === "write" ? "Shared with you: you can view and add entries." : "Shared with you: view only."}
+        title={isSelf ? name : `${subject.display_name} · ${name}`}
+        subtitle={isSelf ? subtitle : access === "write" ? t("Shared with you: you can view and add entries.") : t("Shared with you: view only.")}
       />
       {header}
       {children}

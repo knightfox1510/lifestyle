@@ -1,5 +1,6 @@
 import Link from "next/link";
-import type { AppSession } from "@/lib/session";
+import { getSession, type AppSession } from "@/lib/session";
+import { getT } from "@/lib/i18n/server";
 import type { MedicalEvent, WidgetSize } from "@/lib/types";
 import { Card, cx } from "@/components/ui";
 import { CATEGORY_META, formatRange } from "@/modules/medical/meta";
@@ -35,14 +36,16 @@ const span: Record<WidgetSize, string> = {
   lg: "col-span-2 md:col-span-4",
 };
 
-export function WidgetFrame({ size, title, href, children }: { size: WidgetSize; title: string; href?: string; children: React.ReactNode }) {
+export async function WidgetFrame({ size, title, href, children }: { size: WidgetSize; title: string; href?: string; children: React.ReactNode }) {
+  const t = await getT(await getSession());
+  title = t(title);
   return (
     <Card className={cx(span[size], "flex min-w-0 flex-col gap-3")}>
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-sm font-semibold">{title}</h2>
         {href ? (
           <Link href={href} className="text-xs text-accent hover:underline">
-            Open
+            {t("Open")}
           </Link>
         ) : null}
       </div>
@@ -57,12 +60,13 @@ export async function Widget({ widgetKey, size, session }: { widgetKey: string; 
   if (def.module && !session.isModuleEnabled(def.module)) return null;
   const subject = session.subject;
   const isSelf = subject.user_id === session.userId;
+  const t = await getT(session);
 
   switch (widgetKey) {
     case "core.today": {
       const now = new Date();
       const hour = Number(new Intl.DateTimeFormat("en-GB", { hour: "numeric", hourCycle: "h23", timeZone: session.profile.timezone }).format(now));
-      const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+      const greeting = t(hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening");
       return (
         <WidgetFrame size={size} title="Today">
           <div>
@@ -70,8 +74,8 @@ export async function Widget({ widgetKey, size, session }: { widgetKey: string; 
               {greeting}, {session.me.display_name}
             </p>
             <p className="text-sm text-fg-muted">
-              {now.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", timeZone: session.profile.timezone })}
-              {!isSelf ? ` · viewing ${subject.display_name}'s shared data` : ""}
+              {now.toLocaleDateString(`${(session.profile.language ?? "en")}-IN`, { weekday: "long", day: "numeric", month: "long", timeZone: session.profile.timezone })}
+              {!isSelf ? ` · ${t("viewing {person}'s shared data", { person: subject.display_name })}` : ""}
             </p>
           </div>
         </WidgetFrame>
@@ -141,7 +145,7 @@ export async function Widget({ widgetKey, size, session }: { widgetKey: string; 
     case "medical_records.quick_log": {
       const canWrite = session.accessTo("medical_records", subject.user_id) === "write";
       return (
-        <WidgetFrame size={size} title={isSelf ? "Quick health log" : `Log for ${subject.display_name}`}>
+        <WidgetFrame size={size} title={isSelf ? "Quick health log" : `${t("Log for")} ${subject.display_name}`}>
           {canWrite ? (
             <QuickHealthLog ownerId={subject.user_id} />
           ) : (
@@ -164,11 +168,11 @@ export async function Widget({ widgetKey, size, session }: { widgetKey: string; 
       const open = slots.filter((x) => !x.dose);
       const now = localTime(new Date(), tz);
       return (
-        <WidgetFrame size={size} title={isSelf ? "Medicines due" : `${subject.display_name}'s medicines`} href="/medicines">
+        <WidgetFrame size={size} title={isSelf ? "Medicines due" : `${subject.display_name} · ${t("Medicines")}`} href="/medicines">
           {slots.length === 0 ? (
-            <p className="text-sm text-fg-muted">Nothing scheduled today.</p>
+            <p className="text-sm text-fg-muted">{t("Nothing scheduled today.")}</p>
           ) : open.length === 0 ? (
-            <p className="text-sm">✓ All {slots.length} doses done today.</p>
+            <p className="text-sm">✓ {t("All {n} doses done today.", { n: slots.length })}</p>
           ) : (
             <ul className="space-y-2">
               {open.slice(0, 4).map((x) => (
@@ -312,7 +316,7 @@ export async function Widget({ widgetKey, size, session }: { widgetKey: string; 
         .limit(50);
       const items = (data ?? []) as GroceryItem[];
       return (
-        <WidgetFrame size={size} title={`Grocery list · ${items.length}`} href="/groceries">
+        <WidgetFrame size={size} title={`${t("Grocery list")} · ${items.length}`} href="/groceries">
           {items.length ? (
             <p className="line-clamp-2 text-sm">{items.map((i) => i.name).join(", ")}</p>
           ) : (
@@ -327,7 +331,7 @@ export async function Widget({ widgetKey, size, session }: { widgetKey: string; 
       const canSomething = ["food_diary", "bladder_diary", "body_recomp"].some((k) => session.isModuleEnabled(k) && session.accessTo(k, subject.user_id) === "write");
       if (!canSomething) return null;
       return (
-        <WidgetFrame size={size} title={isSelf ? "✨ Quick log" : `✨ Log for ${subject.display_name}`} href="/log">
+        <WidgetFrame size={size} title={isSelf ? "✨ Quick log" : `✨ ${t("Log for")} ${subject.display_name}`} href="/log">
           <QuickLogBox ownerId={subject.user_id} compact />
         </WidgetFrame>
       );
@@ -360,24 +364,24 @@ export async function Widget({ widgetKey, size, session }: { widgetKey: string; 
         session.supabase.from("food_entries").select("eaten_at, calories, protein_g, carbs_g, fat_g, fiber_g").eq("owner_id", subject.user_id).gte("eaten_at", startOfLocalDayIso(today)),
         session.supabase.from("nutrition_goals").select("*").eq("owner_id", subject.user_id).maybeSingle(),
       ]);
-      const t = totals(((f ?? []) as FoodEntry[]).filter((x) => localDate(x.eaten_at, tz) === today));
+      const tot = totals(((f ?? []) as FoodEntry[]).filter((x) => localDate(x.eaten_at, tz) === today));
       const goals = g as NutritionGoals | null;
-      const pct = goals?.calories ? Math.min(100, (t.calories / goals.calories) * 100) : 0;
+      const pct = goals?.calories ? Math.min(100, (tot.calories / goals.calories) * 100) : 0;
       return (
         <WidgetFrame size={size} title="Calories today" href="/food">
           <p className="text-2xl font-semibold tabular-nums">
-            {t.calories.toLocaleString("en-IN")}
+            {tot.calories.toLocaleString("en-IN")}
             <span className="text-sm font-normal text-fg-muted">{goals?.calories ? ` / ${goals.calories.toLocaleString("en-IN")} kcal` : " kcal"}</span>
           </p>
           {goals?.calories ? (
             <div className="h-2 overflow-hidden rounded-full bg-surface-2">
-              <div className={cx("h-full rounded-full", t.calories > goals.calories * 1.05 ? "bg-danger" : "bg-series-1")} style={{ width: `${pct}%` }} />
+              <div className={cx("h-full rounded-full", tot.calories > goals.calories * 1.05 ? "bg-danger" : "bg-series-1")} style={{ width: `${pct}%` }} />
             </div>
           ) : null}
           <p className="text-xs text-fg-muted">
-            Protein {t.protein_g}{goals?.protein_g ? `/${goals.protein_g}` : ""} g · Carbs {t.carbs_g} g · Fat {t.fat_g} g
+            {t("Protein")} {tot.protein_g}{goals?.protein_g ? `/${goals.protein_g}` : ""} g · {t("Carbs")} {tot.carbs_g} g · {t("Fat")} {tot.fat_g} g
           </p>
-          {access === "write" ? <Link href="/food" className="text-sm font-medium text-accent hover:underline">+ Add food</Link> : null}
+          {access === "write" ? <Link href="/food" className="text-sm font-medium text-accent hover:underline">+ {t("Add food")}</Link> : null}
         </WidgetFrame>
       );
     }
@@ -600,17 +604,17 @@ export async function Widget({ widgetKey, size, session }: { widgetKey: string; 
         session.supabase.from("medicines").select("id", { count: "exact", head: true }).eq("owner_id", session.userId),
       ]);
       const steps = [
-        { done: session.members.length > 1, label: "Invite your partner", href: "/settings/household" },
-        { done: (devices ?? 0) > 0, label: "Turn on notifications on this device", href: "/settings/notifications" },
-        { done: Boolean(mp.data), label: "Fill in your health profile (helps AI suggestions)", href: "/medical/profile" },
-        { done: !session.isModuleEnabled("food_diary") || Boolean((ng.data as { calories: number | null } | null)?.calories), label: "Set your nutrition goals", href: "/food/goals" },
-        { done: !session.isModuleEnabled("medicines") || (meds ?? 0) > 0, label: "Add your medicines or supplements", href: "/medicines/manage" },
-        { done: session.shares.some((x) => x.owner_id === session.userId) || session.members.length < 2, label: "Choose what your partner can see", href: "/settings/sharing" },
+        { done: session.members.length > 1, label: t("Invite your partner"), href: "/settings/household" },
+        { done: (devices ?? 0) > 0, label: t("Turn on notifications on this device"), href: "/settings/notifications" },
+        { done: Boolean(mp.data), label: t("Fill in your health profile (helps AI suggestions)"), href: "/medical/profile" },
+        { done: !session.isModuleEnabled("food_diary") || Boolean((ng.data as { calories: number | null } | null)?.calories), label: t("Set your nutrition goals"), href: "/food/goals" },
+        { done: !session.isModuleEnabled("medicines") || (meds ?? 0) > 0, label: t("Add your medicines or supplements"), href: "/medicines/manage" },
+        { done: session.shares.some((x) => x.owner_id === session.userId) || session.members.length < 2, label: t("Choose what your partner can see"), href: "/settings/sharing" },
       ];
       const left = steps.filter((x) => !x.done);
       if (!left.length) return null;
       return (
-        <WidgetFrame size={size} title={`Getting started · ${steps.length - left.length}/${steps.length}`} href="/customize">
+        <WidgetFrame size={size} title={`${t("Getting started")} · ${steps.length - left.length}/${steps.length}`} href="/customize">
           <ul className="grid gap-1.5 sm:grid-cols-2">
             {steps.map((x) => (
               <li key={x.label} className="text-sm">
@@ -618,7 +622,7 @@ export async function Widget({ widgetKey, size, session }: { widgetKey: string; 
               </li>
             ))}
           </ul>
-          <p className="text-xs text-fg-muted">Remove this card anytime from Customize.</p>
+          <p className="text-xs text-fg-muted">{t("Remove this card anytime from Customize.")}</p>
         </WidgetFrame>
       );
     }
@@ -744,10 +748,11 @@ export async function Widget({ widgetKey, size, session }: { widgetKey: string; 
   }
 }
 
-function NotShared({ size, title, name }: { size: WidgetSize; title: string; name: string }) {
+async function NotShared({ size, title, name }: { size: WidgetSize; title: string; name: string }) {
+  const t = await getT(await getSession());
   return (
     <WidgetFrame size={size} title={title}>
-      <p className="text-sm text-fg-muted">{name} hasn&apos;t shared this with you.</p>
+      <p className="text-sm text-fg-muted">{t("{person} hasn't shared this with you.", { person: name })}</p>
     </WidgetFrame>
   );
 }

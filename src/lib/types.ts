@@ -5,6 +5,7 @@ export type Profile = {
   units: "metric" | "imperial";
   ai_use_medical_history: boolean;
   active_household_id: string | null;
+  language: "en" | "hi" | "mr";
 };
 
 export type Household = {

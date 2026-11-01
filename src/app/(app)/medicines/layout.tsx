@@ -9,6 +9,7 @@ export default function MedicinesLayout({ children }: LayoutProps<"/medicines">)
         { href: "/medicines", label: "Today" },
         { href: "/medicines/manage", label: "Medicines" },
         { href: "/medicines/history", label: "History" },
+        { href: "/medicines/checks", label: "Safety checks" },
       ]}
     >
       {children}

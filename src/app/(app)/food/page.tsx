@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { WaterButtons } from "@/components/water-buttons";
+import { getT } from "@/lib/i18n/server";
 import { getSession } from "@/lib/session";
 import { addDays, localDate, localTime, shortDate, startOfLocalDayIso, todayIn } from "@/lib/dates";
 import { Card, buttonClass, cx } from "@/components/ui";
@@ -20,6 +21,7 @@ export const metadata = { title: "Food diary" };
 
 export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">) {
   const session = await getSession();
+  const t = await getT(session);
   const ownerId = session.subject.user_id;
   const tz = session.profile.timezone;
   const today = todayIn(tz);
@@ -50,7 +52,7 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
   const restaurantDishes = (rd.data ?? []) as { id: string; name: string; place_id: string; calories: number | null; section: string | null }[];
   const entries = ((e ?? []) as FoodEntry[]).filter((x) => localDate(x.eaten_at, tz) === date);
   const goals = g as NutritionGoals | null;
-  const t = totals(entries);
+  const tot = totals(entries);
   const dayNutrients = sum(entries.map((x) => fromEntry({ ...x, micros: x.micros ?? {} })));
   const targets = dailyTargets((mp as { sex: "female" | "male" | "other" | null } | null)?.sex ?? null, goals?.calories ?? null);
   const labLinks = labNutrientLinks((labRows ?? []) as Pick<LabResult, "marker" | "value" | "unit" | "flag" | "test_date">[]);
@@ -68,11 +70,11 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
   }).slice(0, 8);
 
   const bars: { label: string; value: number; goal: number | null; unit: string }[] = [
-    { label: "Calories", value: t.calories, goal: goals?.calories ?? null, unit: "kcal" },
-    { label: "Protein", value: t.protein_g, goal: goals?.protein_g ?? null, unit: "g" },
-    { label: "Carbs", value: t.carbs_g, goal: goals?.carbs_g ?? null, unit: "g" },
-    { label: "Fat", value: t.fat_g, goal: goals?.fat_g ?? null, unit: "g" },
-    { label: "Fibre", value: t.fiber_g, goal: goals?.fiber_g ?? null, unit: "g" },
+    { label: "Calories", value: tot.calories, goal: goals?.calories ?? null, unit: "kcal" },
+    { label: "Protein", value: tot.protein_g, goal: goals?.protein_g ?? null, unit: "g" },
+    { label: "Carbs", value: tot.carbs_g, goal: goals?.carbs_g ?? null, unit: "g" },
+    { label: "Fat", value: tot.fat_g, goal: goals?.fat_g ?? null, unit: "g" },
+    { label: "Fibre", value: tot.fiber_g, goal: goals?.fiber_g ?? null, unit: "g" },
     ...(fluidsVisible ? [{ label: "Water & drinks", value: water, goal: goals?.water_ml ?? null, unit: "ml" }] : []),
   ];
 
@@ -80,7 +82,7 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <Link href={`/food?date=${addDays(date, -1)}`} className={buttonClass("ghost", "sm")}>← {shortDate(addDays(date, -1))}</Link>
-        <p className="font-semibold">{date === today ? "Today" : shortDate(date)}</p>
+        <p className="font-semibold">{date === today ? t("Today") : shortDate(date)}</p>
         {date < today ? (
           <Link href={date === addDays(today, -1) ? "/food" : `/food?date=${addDays(date, 1)}`} className={buttonClass("ghost", "sm")}>{shortDate(addDays(date, 1))} →</Link>
         ) : (
@@ -95,11 +97,11 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
           return (
             <div key={b.label}>
               <div className="mb-1 flex justify-between text-sm">
-                <span className="font-medium">{b.label}</span>
+                <span className="font-medium">{t(b.label)}</span>
                 <span className="tabular-nums text-fg-muted">
                   <span className={cx("text-fg", over && b.label === "Calories" && "text-danger")}>{b.value.toLocaleString("en-IN")}</span>
                   {b.goal ? ` / ${b.goal.toLocaleString("en-IN")}` : ""} {b.unit}
-                  {b.goal && b.label === "Calories" ? ` · ${b.goal - b.value >= 0 ? `${(b.goal - b.value).toLocaleString("en-IN")} left` : `${(b.value - b.goal).toLocaleString("en-IN")} over`}` : ""}
+                  {b.goal && b.label === "Calories" ? ` · ${b.goal - b.value >= 0 ? t("{n} left", { n: (b.goal - b.value).toLocaleString("en-IN") }) : t("{n} over", { n: (b.value - b.goal).toLocaleString("en-IN") })}` : ""}
                 </span>
               </div>
               <div className="h-2 overflow-hidden rounded-full bg-surface-2">
@@ -111,7 +113,7 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
         {isOwner && date === today ? <WaterButtons /> : null}
         {!goals?.calories ? (
           <p className="text-xs text-fg-muted">
-            <Link href="/food/goals" className="text-accent underline">Set your goals</Link> (AI can suggest them from your weight, activity and health).
+            <Link href="/food/goals" className="text-accent underline">{t("Set your goals")}</Link> {t("(AI can suggest them from your weight, activity and health).")}
           </p>
         ) : null}
       </Card>
@@ -119,7 +121,7 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
       {entries.length ? (
         <Card>
           <details open={labLinks.size > 0}>
-            <summary className="cursor-pointer text-sm font-semibold">Vitamins & minerals {labLinks.size ? <span className="text-xs font-normal text-danger">· linked to your blood work</span> : null}</summary>
+            <summary className="cursor-pointer text-sm font-semibold">{t("Vitamins & minerals")} {labLinks.size ? <span className="text-xs font-normal text-danger">· {t("linked to your blood work")}</span> : null}</summary>
             <div className="mt-3">
               <MicroPanel totals={dayNutrients} targets={targets} labLinks={labLinks} coverage={{ withData, total: entries.length }} />
             </div>
@@ -132,8 +134,8 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
           <FoodAiAdd ownerId={ownerId} people={session.members.filter((m) => session.accessTo("food_diary", m.user_id) === "write").map((m) => ({ id: m.user_id, name: m.user_id === session.userId ? "Me" : m.display_name }))} />
           <div className="flex flex-wrap gap-x-6 gap-y-2">
             <ManualFoodForm ownerId={ownerId} />
-            <Link href="/food/product" className="text-sm text-fg-muted hover:text-fg">▥ Scan a packaged food</Link>
-            <Link href="/food/dishes" className="text-sm text-fg-muted hover:text-fg">🍛 Indian dishes</Link>
+            <Link href="/food/product" className="text-sm text-fg-muted hover:text-fg">▥ {t("Scan a packaged food")}</Link>
+            <Link href="/food/dishes" className="text-sm text-fg-muted hover:text-fg">🍛 {t("Indian dishes")}</Link>
             {restaurantPlaces.length ? <RestaurantPicker ownerId={ownerId} places={restaurantPlaces} dishes={restaurantDishes} /> : null}
           </div>
         </>

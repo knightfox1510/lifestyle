@@ -3,11 +3,13 @@
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui";
 import { logWater } from "@/lib/water-actions";
+import { useT } from "@/lib/i18n/client";
 
 /** One-tap water logging for yourself. */
 export function WaterButtons({ amounts = [250, 500] }: { amounts?: number[] }) {
   const [msg, setMsg] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const t = useT();
   return (
     <div className="space-y-1">
       <div className="flex flex-wrap gap-2">
@@ -20,7 +22,7 @@ export function WaterButtons({ amounts = [250, 500] }: { amounts?: number[] }) {
             onClick={() =>
               start(async () => {
                 const r = await logWater(ml);
-                setMsg(r.error ?? r.message ?? null);
+                setMsg(r.error ? t(r.error) : (r.message ?? null));
               })
             }
           >

@@ -6,6 +6,7 @@ import type { z } from "zod";
 import type { AppSession } from "@/lib/session";
 import { AiError, DEFAULT_MODEL, assertQuota, getGemini, recordUsage } from "@/lib/ai/gemini";
 import { toGeminiSchema } from "@/lib/ai/schemas";
+import { aiLanguageLine } from "@/lib/i18n/server";
 
 /** Calls Gemini for structured JSON, enforces the household quota, logs usage and validates the result. */
 export async function runJson<S extends z.ZodType>(
@@ -25,7 +26,7 @@ export async function runJson<S extends z.ZodType>(
     model: DEFAULT_MODEL,
     contents: [{ role: "user", parts: opts.parts }],
     config: {
-      systemInstruction: opts.system,
+      systemInstruction: [opts.system, aiLanguageLine(session)].filter(Boolean).join("\n\n") || undefined,
       responseMimeType: "application/json",
       responseJsonSchema: toGeminiSchema(opts.schema),
       temperature: opts.temperature ?? 0.4,

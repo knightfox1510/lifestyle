@@ -2,6 +2,7 @@
 
 import { useRef, useState, useSyncExternalStore } from "react";
 import { cx } from "@/components/ui";
+import { useSpeechLang } from "@/lib/i18n/client";
 
 type Recognition = {
   lang: string;
@@ -15,7 +16,8 @@ type Recognition = {
 };
 
 /** Mic button using the browser's speech recognition (Chrome/Edge/Safari). Hidden where unsupported. */
-export function VoiceButton({ onText, lang = "en-IN" }: { onText: (text: string) => void; lang?: string }) {
+export function VoiceButton({ onText, lang }: { onText: (text: string) => void; lang?: string }) {
+  const appLang = useSpeechLang();
   const [listening, setListening] = useState(false);
   const rec = useRef<Recognition | null>(null);
   // Server render says "unsupported"; the browser value is read after hydration.
@@ -34,7 +36,7 @@ export function VoiceButton({ onText, lang = "en-IN" }: { onText: (text: string)
     const w = window as unknown as Record<string, new () => Recognition>;
     const Ctor = w.SpeechRecognition ?? w.webkitSpeechRecognition;
     const r = new Ctor();
-    r.lang = lang;
+    r.lang = lang ?? appLang;
     r.interimResults = false;
     r.continuous = false;
     r.onresult = (e) => {

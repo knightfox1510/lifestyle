@@ -71,6 +71,15 @@ do $$ begin
   assert (select count(*) from public.custom_foods) = 0, 'stranger: no foods';
 end $$;
 
+-- App language: en / hi / mr only.
+select set_config('request.jwt.claim.sub', :s, false);
+update public.profiles set language = 'mr' where id = auth.uid();
+do $$ begin
+  update public.profiles set language = 'fr' where id = auth.uid();
+  raise exception 'SHOULD_FAIL: unsupported language';
+exception when check_violation then null;
+end $$;
+
 -- Water reminder settings: own row only, sane ranges.
 select set_config('request.jwt.claim.sub', :s, false);
 insert into public.notification_prefs (user_id, water, water_target_ml, water_interval_min, water_start, water_end)

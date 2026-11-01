@@ -113,7 +113,7 @@ async function logWaterFromNotification(ml) {
     const res = await fetch("/api/water/log", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ ml }) });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body.error || "failed");
-    await self.registration.showNotification("💧 Logged " + ml + " ml", { body: body.message || "", icon: "/icons/icon-192.png", badge: "/icons/icon-192.png", tag: "water-logged", data: { url: "/food" } });
+    await self.registration.showNotification(body.title || "💧 +" + ml + " ml", { body: body.message || "", icon: "/icons/icon-192.png", badge: "/icons/icon-192.png", tag: "water-logged", data: { url: "/food" } });
   } catch {
     await self.clients.openWindow("/food?water=1");
   }

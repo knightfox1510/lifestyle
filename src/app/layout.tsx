@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
+import { cookies } from "next/headers";
 import { ServiceWorker } from "@/components/service-worker";
+import { isLang, LANG_COOKIE } from "@/lib/i18n/core";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -34,9 +36,10 @@ export const viewport: Viewport = {
   ],
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const c = (await cookies()).get(LANG_COOKIE)?.value;
   return (
-    <html lang="en" className="h-full antialiased">
+    <html lang={isLang(c) ? c : "en"} className="h-full antialiased">
       <body className="min-h-full font-sans">
         {children}
         <ServiceWorker />

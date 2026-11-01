@@ -7,6 +7,8 @@ import { getSession } from "@/lib/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { encryptSecret } from "@/lib/crypto";
 import { MODULE_BY_KEY } from "@/modules/registry";
+import { cookies } from "next/headers";
+import { LANGS, LANG_COOKIE } from "@/lib/i18n/core";
 import type { ActionResult } from "@/lib/types";
 
 function refreshAll() {
@@ -26,6 +28,7 @@ const profileSchema = z.object({
     }
   }, "Unknown timezone"),
   units: z.enum(["metric", "imperial"]),
+  language: z.enum(LANGS),
   ai_use_medical_history: z.boolean(),
 });
 
@@ -36,6 +39,8 @@ export async function saveProfile(_: ActionResult | null, form: FormData): Promi
   const session = await getSession();
   const { error } = await session.supabase.from("profiles").update(parsed.data).eq("id", session.userId);
   if (error) return { error: "Couldn't save." };
+  // Remembered on this device too, so sign-in pages use the same language.
+  (await cookies()).set(LANG_COOKIE, parsed.data.language, { path: "/", maxAge: 60 * 60 * 24 * 400, sameSite: "lax" });
   refreshAll();
   return { ok: true, message: "Saved." };
 }

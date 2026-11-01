@@ -2228,3 +2228,12 @@ alter table public.notification_prefs
   -- Last reminder of the day; default stops in the evening so drinking late
   -- doesn't add night-time bathroom trips or leaks.
   add column water_end time not null default '19:30';
+
+-- ============================================================
+-- 20261109000001_language.sql
+-- ============================================================
+
+-- App language per person: English, Hindi or Marathi. Also used for AI
+-- replies and notification text.
+alter table public.profiles
+  add column language text not null default 'en' check (language in ('en', 'hi', 'mr'));

@@ -99,8 +99,8 @@ Each module is then mostly config + a form + a widget. This keeps 20+ modules ma
 
 ## Later / optional
 
-- **Shipped after Phase 4:** restaurant menus, accurate home-cooked nutrition, the built-in Indian dish library and water reminders.
-- **Ideas not built yet:** period/cycle tracking correlated with leaks and energy; vrat/fasting mode (Navratri, Ekadashi) for meal ideas and calorie targets; a one-page doctor-visit summary PDF; medicine interaction and duplicate checks; an emergency health card; chore rotation; a child tiffin planner; Hindi/Marathi interface; Android Health Connect sync; sleep vs leak correlation; grocery price tracking.
+- **Shipped after Phase 4:** restaurant menus, accurate home-cooked nutrition, the Indian dish library (174 dishes), water reminders, medicine safety checks, the doctor visit summary and Hindi/Marathi (frame, daily screens, reminders, AI).
+- **Ideas not built yet:** period/cycle tracking correlated with leaks and energy; vrat/fasting mode (Navratri, Ekadashi) for meal ideas and calorie targets; an emergency health card; chore rotation; a child tiffin planner; finishing Hindi/Marathi on the remaining screens (and Devanagari dish search); Android Health Connect sync; sleep vs leak correlation; grocery price tracking.
 
 - **Swiggy Builders (MCP) integration.** Live restaurant and menu search, and possibly ordering inside Hearth, with each person signing in with their own Swiggy account (OAuth). Needs an application to Swiggy's Builders program (video demo, staging integration, then production approval). Menus there have prices but no nutrition, so Hearth's estimates would still apply. Until then, menus are imported from screenshots, photos or text (built).
 - Zomato has no public consumer API (its old public API was shut down), and scraping breaks its terms, so it's not an option.
