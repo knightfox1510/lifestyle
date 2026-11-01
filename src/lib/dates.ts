@@ -48,3 +48,17 @@ export function shortDay(date: string): string {
 export function shortDate(date: string): string {
   return new Date(`${date}T12:00:00Z`).toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "UTC" });
 }
+
+/** ISO timestamp for a local wall-clock date + "HH:MM" in a timezone (handles DST/offsets). */
+export function zonedIso(date: string, time: string, tz: string): string {
+  const [y, mo, d] = date.split("-").map(Number);
+  const [h, mi] = time.split(":").map(Number);
+  const guess = Date.UTC(y, mo - 1, d, h, mi);
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
+      .formatToParts(new Date(guess))
+      .map((p) => [p.type, p.value]),
+  );
+  const asUtc = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day), Number(parts.hour), Number(parts.minute));
+  return new Date(guess - (asUtc - guess)).toISOString();
+}

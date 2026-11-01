@@ -3,7 +3,7 @@ import { getSession } from "@/lib/session";
 import { localDate, localTime, shortDate } from "@/lib/dates";
 import { Card, EmptyState, cx } from "@/components/ui";
 import { dailyStats, physicalShare, triggerCounts, trend } from "@/modules/bladder/analysis";
-import { loadDiary } from "@/modules/bladder/load";
+import { loadDiary, loadDiaryEvents } from "@/modules/bladder/load";
 import { AMOUNT_LABEL, DRINK_META, KIND_META, TRIGGER_LABEL } from "@/modules/bladder/meta";
 import type { Medicine } from "@/lib/types";
 import { PrintButton } from "./print-button";
@@ -17,7 +17,7 @@ export default async function BladderReportPage({ searchParams }: PageProps<"/bl
   const { days: dParam } = await searchParams;
   const period = PERIODS.includes(Number(dParam)) ? Number(dParam) : 7;
   const subject = session.subject;
-  const d = await loadDiary(session, subject.user_id, period);
+  const [d, health] = await Promise.all([loadDiary(session, subject.user_id, period), loadDiaryEvents(session, subject.user_id, "1900-01-01")]);
   const stats = dailyStats(d.days, d.events, d.fluids, d.tz, d.sessions, d.workouts, d.foods);
   const logged = stats.filter((s) => s.leaks + s.urges + s.voids + s.fluidMl > 0);
   const n = Math.max(logged.length, 1);
@@ -60,6 +60,21 @@ export default async function BladderReportPage({ searchParams }: PageProps<"/bl
               {shortDate(d.days[0])} – {shortDate(d.today)} · {logged.length} of {period} days logged · generated {shortDate(d.today)}
             </p>
           </header>
+
+          {health.length ? (
+            <section>
+              <h3 className="mb-2 font-semibold">Health events</h3>
+              <ul className="space-y-0.5">
+                {[...health].reverse().map((h) => (
+                  <li key={h.id}>
+                    <span className="mr-2 tabular-nums text-fg-muted">{shortDate(h.start_date)}</span>
+                    {h.title}
+                    {h.details ? <span className="text-fg-muted"> · {h.details}</span> : null}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
 
           <section>
             <h3 className="mb-2 font-semibold">Summary (averages per logged day)</h3>

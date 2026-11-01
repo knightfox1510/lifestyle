@@ -9,6 +9,7 @@ export default function BladderLayout({ children }: LayoutProps<"/bladder">) {
         { href: "/bladder", label: "Diary" },
         { href: "/bladder/trends", label: "Trends & triggers" },
         { href: "/bladder/report", label: "Doctor report" },
+        { href: "/bladder/import", label: "Import" },
       ]}
     >
       {children}

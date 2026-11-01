@@ -4,7 +4,9 @@ import { shortDate } from "@/lib/dates";
 import { Card, EmptyState, cx } from "@/components/ui";
 import { BarList, ColumnChart, rollingAverage } from "@/components/charts";
 import { comparisons, dailyStats, hourHistogram, leaksAfterCaffeine, physicalShare, trend, triggerCounts } from "@/modules/bladder/analysis";
-import { loadDiary } from "@/modules/bladder/load";
+import { loadDiary, loadDiaryEvents } from "@/modules/bladder/load";
+import { beforeAfter, daysBetween } from "@/modules/bladder/events";
+import { getT } from "@/lib/i18n/server";
 
 export const metadata = { title: "Bladder trends" };
 
@@ -15,7 +17,7 @@ export default async function BladderTrendsPage({ searchParams }: PageProps<"/bl
   const { days: dParam } = await searchParams;
   const period = PERIODS.includes(Number(dParam)) ? Number(dParam) : 30;
   const ownerId = session.subject.user_id;
-  const d = await loadDiary(session, ownerId, period);
+  const [d, health, tr] = await Promise.all([loadDiary(session, ownerId, period), loadDiaryEvents(session, ownerId, "1900-01-01"), getT(session)]);
 
   const stats = dailyStats(d.days, d.events, d.fluids, d.tz, d.sessions, d.workouts, d.foods);
   const loggedDays = stats.filter((s) => s.leaks + s.urges + s.voids + s.fluidMl > 0).length;
@@ -32,6 +34,15 @@ export default async function BladderTrendsPage({ searchParams }: PageProps<"/bl
   const avgFluid = Math.round(stats.reduce((a, s) => a + s.fluidMl, 0) / Math.max(loggedDays, 1));
   const avgVoids = Math.round((stats.reduce((a, s) => a + s.voids, 0) / Math.max(loggedDays, 1)) * 10) / 10;
   const dayLabel = (date: string) => shortDate(date);
+  const inRange = health.filter((h) => h.start_date >= d.days[0]);
+  const markers = inRange.map((h) => ({ key: h.start_date, label: h.title }));
+  const surgery = health.find((h) => h.category === "surgery");
+  // Before vs after the latest event that has a week of diary on both sides (or the latest one).
+  const logged = stats.map((s) => ({ date: s.date, leaks: s.leaks, logged: s.leaks + s.urges + s.voids + s.fluidMl > 0 }));
+  const compared = inRange
+    .filter((h) => h.category !== "surgery" || inRange.length === 1)
+    .map((h) => ({ h, r: beforeAfter(logged, h.start_date) }))
+    .filter((x) => x.r.before != null || x.r.after != null);
 
   return (
     <div className="space-y-4">
@@ -67,8 +78,33 @@ export default async function BladderTrendsPage({ searchParams }: PageProps<"/bl
         <Stat label="Fluids / day" value={`${(avgFluid / 1000).toFixed(1)} L`} sub="on logged days" />
       </div>
 
+      {surgery || compared.length ? (
+        <Card className="space-y-2">
+          {surgery ? (
+            <p className="text-sm">
+              <strong>{tr("Day {n} after surgery", { n: daysBetween(surgery.start_date, d.today) })}</strong>
+              <span className="text-fg-muted"> · {surgery.title} · {shortDate(surgery.start_date)}</span>
+            </p>
+          ) : null}
+          {compared.slice(0, 3).map(({ h, r }) => (
+            <p key={h.id} className="text-sm">
+              <span className="font-medium">{h.title}</span> <span className="text-fg-muted">({shortDate(h.start_date)})</span>:{" "}
+              {tr("{a} leaks/day in the week before, {b} in the week after", { a: r.before ?? "–", b: r.after ?? "–" })}
+              {r.change != null ? (
+                <span className={cx("ml-1 font-medium", r.change < 0 ? "text-accent" : r.change > 0 ? "text-danger" : "")}>
+                  ({r.change > 0 ? "+" : ""}
+                  {r.change}%)
+                </span>
+              ) : null}
+              <span className="text-xs text-fg-muted"> · {tr("{b} and {a} days logged", { b: r.beforeDays, a: r.afterDays })}</span>
+            </p>
+          ))}
+        </Card>
+      ) : null}
+
       <Card>
         <ColumnChart
+          markers={markers}
           title="Leaks per day"
           subtitle={`Last ${period} days`}
           data={stats.map((s) => ({ key: s.date, label: dayLabel(s.date), value: s.leaks, tooltip: `${dayLabel(s.date)}: ${s.leaks} leak${s.leaks === 1 ? "" : "s"}, ${s.fluidMl} ml fluids${s.kegel ? ", Kegel ✓" : ""}${s.workouts.length ? `, ${s.workouts.join("+")}` : ""}` }))}

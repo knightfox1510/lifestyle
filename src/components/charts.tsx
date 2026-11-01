@@ -29,6 +29,7 @@ export function ColumnChart({
   barLabel,
   height = 160,
   labelEvery,
+  markers,
 }: {
   title: string;
   subtitle?: ReactNode;
@@ -39,6 +40,8 @@ export function ColumnChart({
   barLabel?: string;
   height?: number;
   labelEvery?: number;
+  /** Dashed rules on given columns, e.g. "Surgery" on that day. */
+  markers?: { key: string; label: string }[];
 }) {
   const max = niceMax(Math.max(...data.map((d) => d.value), ...(line ?? []).map((v) => v ?? 0)));
   const ticks = [0, max / 2, max];
@@ -92,6 +95,17 @@ export function ColumnChart({
                 <polyline points={points} fill="none" stroke="var(--series-2)" strokeWidth={2} vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
               </svg>
             ) : null}
+            {markers?.map((m, j) => {
+              const i = data.findIndex((d) => d.key === m.key);
+              if (i < 0) return null;
+              return (
+                <div key={`${m.key}-${j}`} className="pointer-events-none absolute inset-y-0 border-l border-dashed border-fg/60" style={{ left: `${((i + 0.5) / n) * 100}%` }}>
+                  <span className="absolute -top-1 left-1 max-w-28 truncate rounded bg-bg/85 px-1 text-[10px] font-medium leading-4 text-fg" style={{ top: j * 16 }}>
+                    {m.label}
+                  </span>
+                </div>
+              );
+            })}
           </div>
           <div className="mt-1 flex text-[11px] text-fg-muted">
             {data.map((d, i) => (

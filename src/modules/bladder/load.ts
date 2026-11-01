@@ -2,6 +2,7 @@ import "server-only";
 
 import type { AppSession } from "@/lib/session";
 import { addDays, lastNDays, startOfLocalDayIso, todayIn } from "@/lib/dates";
+import { DIARY_EVENT_CATEGORIES, type DiaryEvent } from "@/modules/bladder/events";
 import type { BladderEvent, DailyCheckin, FluidIntake, PelvicFloorSession } from "@/lib/types";
 
 /** Loads a person's diary for the last `days` days (including today). */
@@ -43,4 +44,18 @@ export async function loadDiary(session: AppSession, ownerId: string, days: numb
     workouts: (wo.data ?? []) as { performed_on: string; kind: string; status: string }[],
     foods: (fd.data ?? []) as { eaten_at: string; irritants: string[] | null }[],
   };
+}
+
+/** Surgery, procedures and medicine changes to show on the diary (empty when medical records aren't visible). */
+export async function loadDiaryEvents(session: AppSession, ownerId: string, sinceDate: string): Promise<DiaryEvent[]> {
+  if (session.accessTo("medical_records", ownerId) === "none") return [];
+  const { data } = await session.supabase
+    .from("medical_events")
+    .select("id, title, category, start_date, details")
+    .eq("owner_id", ownerId)
+    .in("category", DIARY_EVENT_CATEGORIES)
+    .gte("start_date", sinceDate)
+    .order("start_date", { ascending: false })
+    .limit(50);
+  return (data ?? []) as DiaryEvent[];
 }

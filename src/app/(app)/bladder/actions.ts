@@ -5,6 +5,10 @@ import { errorMessage, refreshModule, requireWrite } from "@/lib/guards";
 import { getSession } from "@/lib/session";
 import { BLADDER_KINDS, BLADDER_TRIGGERS, DRINKS, LEAK_AMOUNTS, type ActionResult } from "@/lib/types";
 import { DRINK_META } from "@/modules/bladder/meta";
+import { DIARY_EVENT_META, DIARY_EVENT_TYPES, diaryEventTitle } from "@/modules/bladder/events";
+import { leakKey } from "@/modules/bladder/whatsapp";
+import { todayIn } from "@/lib/dates";
+import { revalidatePath } from "next/cache";
 
 const MODULE = "bladder_diary";
 const blank = (v: unknown) => (v === "" || v === undefined ? null : v);
@@ -102,4 +106,103 @@ export async function deleteFluid(id: string) {
   const session = await getSession();
   await session.supabase.from("fluid_intake").delete().eq("id", id).eq("owner_id", session.userId);
   refreshModule("/bladder");
+}
+
+// ------------------------------------------------------------- import ----
+
+const importRow = z.object({
+  at: z.iso.datetime({ offset: true }),
+  amount: z.enum(LEAK_AMOUNTS),
+  triggers: z.array(z.enum(BLADDER_TRIGGERS)).max(15),
+  notes: z.string().max(1000),
+});
+
+export type ImportResult = { ok?: boolean; error?: string; added?: number; existing?: number; from?: string; to?: string };
+
+/** Adds leaks parsed from a pasted WhatsApp log; rows already in the diary (same minute and note) are skipped. */
+export async function importBladderEvents(ownerId: string, input: unknown[]): Promise<ImportResult> {
+  const parsed = z.object({ ownerId: z.uuid(), rows: z.array(importRow).min(1, "Nothing to import").max(5000, "Import at most 5,000 rows at a time") }).safeParse({ ownerId, rows: input });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const rows = [...parsed.data.rows].sort((a, b) => a.at.localeCompare(b.at));
+  if (new Date(rows.at(-1)!.at).getTime() > Date.now() + 5 * 60_000) return { error: "That time is in the future" };
+  try {
+    const session = await requireWrite(MODULE, ownerId);
+    const from = new Date(new Date(rows[0].at).getTime() - 60_000).toISOString();
+    const to = new Date(new Date(rows.at(-1)!.at).getTime() + 60_000).toISOString();
+    const existing = new Set<string>();
+    for (let page = 0; ; page++) {
+      const { data, error } = await session.supabase
+        .from("bladder_events")
+        .select("occurred_at, notes")
+        .eq("owner_id", ownerId)
+        .gte("occurred_at", from)
+        .lte("occurred_at", to)
+        .order("occurred_at")
+        .range(page * 1000, page * 1000 + 999);
+      if (error) return { error: "Couldn't check the diary." };
+      for (const r of data ?? []) existing.add(leakKey({ at: r.occurred_at, notes: r.notes }));
+      if ((data ?? []).length < 1000) break;
+    }
+    const fresh = rows.filter((r) => !existing.has(leakKey(r)));
+    const base = { owner_id: ownerId, created_by: session.userId, household_id: session.household.id, kind: "leak" as const };
+    for (let i = 0; i < fresh.length; i += 500) {
+      const { error } = await session.supabase
+        .from("bladder_events")
+        .insert(fresh.slice(i, i + 500).map((r) => ({ ...base, occurred_at: r.at, amount: r.amount, triggers: r.triggers, notes: r.notes })));
+      if (error) return { error: i ? "Imported part of the log, then failed. Import again to add the rest." : "Couldn't save." };
+    }
+    refreshModule("/bladder");
+    return { ok: true, added: fresh.length, existing: rows.length - fresh.length, from: rows[0].at, to: rows.at(-1)!.at };
+  } catch (e) {
+    return { error: errorMessage(e) };
+  }
+}
+
+// ------------------------------------------------------------- events ----
+
+const diaryEventSchema = z.object({
+  ownerId: z.uuid(),
+  type: z.enum(DIARY_EVENT_TYPES),
+  title: z.string().trim().max(200).optional().default(""),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a date"),
+  details: z.preprocess(blank, z.string().trim().max(2000).nullable()),
+});
+
+/** Surgery, stent removal, a medicine started… saved as a medical event so it also shows in records and visit summaries. */
+export async function addDiaryEvent(_: ActionResult | null, form: FormData): Promise<ActionResult> {
+  const parsed = diaryEventSchema.safeParse(Object.fromEntries(form));
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const { ownerId, type, title, date, details } = parsed.data;
+  const meta = DIARY_EVENT_META[type];
+  if (meta.needsTitle && !title) return { error: type === "medicine_started" || type === "medicine_stopped" ? "Add the medicine name" : "Add a title" };
+  try {
+    const session = await getSession();
+    if (date > todayIn(session.profile.timezone)) return { error: "That date is in the future" };
+    if (ownerId !== session.userId && session.accessTo("medical_records", ownerId) !== "write") {
+      return { error: "Ask them to share Medical records with edit access (Settings → Sharing) to add events for them." };
+    }
+    const { error } = await session.supabase.from("medical_events").insert({
+      owner_id: ownerId,
+      created_by: session.userId,
+      household_id: session.household.id,
+      category: meta.category,
+      title: diaryEventTitle(type, title),
+      details,
+      start_date: date,
+      ongoing: type === "medicine_started",
+    });
+    if (error) return { error: "Couldn't save the event." };
+  } catch (e) {
+    return { error: errorMessage(e) };
+  }
+  refreshModule("/bladder");
+  revalidatePath("/medical", "layout");
+  return { ok: true, message: type === "medicine_started" ? "Event added. Add it to Medicines too for reminders." : "Event added." };
+}
+
+export async function deleteDiaryEvent(id: string) {
+  const session = await getSession();
+  await session.supabase.from("medical_events").delete().eq("id", id).eq("owner_id", session.userId);
+  refreshModule("/bladder");
+  revalidatePath("/medical", "layout");
 }
