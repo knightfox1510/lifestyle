@@ -1,0 +1,143 @@
+import "server-only";
+
+import { cache } from "react";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { MODULE_BY_KEY } from "@/modules/registry";
+import type {
+  Household,
+  HouseholdMember,
+  HouseholdModule,
+  ModuleShare,
+  Profile,
+  ShareLevel,
+} from "@/lib/types";
+
+export const VIEW_COOKIE = "ls_view";
+export type ViewMode = "me" | "partner";
+export type Access = "none" | ShareLevel;
+
+export type AppSession = {
+  supabase: Awaited<ReturnType<typeof createClient>>;
+  userId: string;
+  email: string | null;
+  profile: Profile;
+  household: Household;
+  members: HouseholdMember[];
+  me: HouseholdMember;
+  partner: HouseholdMember | null;
+  modules: HouseholdModule[];
+  shares: ModuleShare[];
+  viewMode: ViewMode;
+  /** Whose personal data the screens show: me, or my partner in partner view. */
+  subject: HouseholdMember;
+  isModuleEnabled: (key: string) => boolean;
+  /** What I can do with `ownerId`'s personal data in a module. */
+  accessTo: (moduleKey: string, ownerId: string) => Access;
+};
+
+/** Signed-in user + profile, without requiring a household. */
+export const getUser = cache(async () => {
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getClaims();
+  const userId = data?.claims?.sub;
+  if (!userId) redirect("/login");
+
+  const { data: profile } = await supabase.from("profiles").select("*").eq("id", userId).single();
+  return {
+    supabase,
+    userId,
+    email: (data?.claims?.email as string | undefined) ?? null,
+    profile: profile as Profile | null,
+  };
+});
+
+/** Full app context. Redirects to onboarding when the user has no household yet. */
+export const getSession = cache(async (): Promise<AppSession> => {
+  const { supabase, userId, email, profile } = await getUser();
+  if (!profile?.active_household_id) redirect("/onboarding");
+
+  const householdId = profile.active_household_id;
+  const [householdRes, membersRes, modulesRes, sharesRes, cookieStore] = await Promise.all([
+    supabase.from("households").select("*").eq("id", householdId).single(),
+    supabase.from("household_members").select("user_id, role, joined_at").eq("household_id", householdId).order("joined_at"),
+    supabase.from("household_modules").select("module_key, enabled, settings").eq("household_id", householdId),
+    supabase.from("module_shares").select("owner_id, grantee_id, module_key, level"),
+    cookies(),
+  ]);
+
+  if (!householdRes.data) redirect("/onboarding");
+
+  const rawMembers = (membersRes.data ?? []) as Omit<HouseholdMember, "display_name">[];
+  const { data: names } = await supabase
+    .from("profiles")
+    .select("id, display_name")
+    .in("id", rawMembers.map((m) => m.user_id));
+  const nameById = new Map((names ?? []).map((n: { id: string; display_name: string }) => [n.id, n.display_name]));
+  const members: HouseholdMember[] = rawMembers.map((m) => ({
+    ...m,
+    display_name: nameById.get(m.user_id) || "Member",
+  }));
+
+  const me = members.find((m) => m.user_id === userId) ?? {
+    user_id: userId,
+    role: "member" as const,
+    joined_at: new Date().toISOString(),
+    display_name: profile.display_name,
+  };
+  const partner = members.find((m) => m.user_id !== userId) ?? null;
+  const modules = (modulesRes.data ?? []) as HouseholdModule[];
+  const shares = (sharesRes.data ?? []) as ModuleShare[];
+
+  const viewMode: ViewMode = cookieStore.get(VIEW_COOKIE)?.value === "partner" && partner ? "partner" : "me";
+  const subject = viewMode === "partner" && partner ? partner : me;
+
+  const enabled = new Set(modules.filter((m) => m.enabled).map((m) => m.module_key));
+
+  return {
+    supabase,
+    userId,
+    email,
+    profile,
+    household: householdRes.data as Household,
+    members,
+    me,
+    partner,
+    modules,
+    shares,
+    viewMode,
+    subject,
+    isModuleEnabled: (key) => enabled.has(key) && MODULE_BY_KEY[key]?.status === "available",
+    accessTo: (moduleKey, ownerId) => {
+      if (ownerId === userId) return "write";
+      const share = shares.find(
+        (s) => s.owner_id === ownerId && s.grantee_id === userId && s.module_key === moduleKey,
+      );
+      return share?.level ?? "none";
+    },
+  };
+});
+
+/**
+ * Records that the current user looked at someone else's shared data, at most
+ * once every 30 minutes per owner/module, so the owner can see an audit trail.
+ */
+export async function logPartnerView(session: AppSession, moduleKey: string) {
+  if (session.subject.user_id === session.userId) return;
+  const since = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+  const { count } = await session.supabase
+    .from("share_access_log")
+    .select("id", { count: "exact", head: true })
+    .eq("owner_id", session.subject.user_id)
+    .eq("viewer_id", session.userId)
+    .eq("module_key", moduleKey)
+    .gte("viewed_at", since);
+  if (!count) {
+    await session.supabase.from("share_access_log").insert({
+      owner_id: session.subject.user_id,
+      viewer_id: session.userId,
+      module_key: moduleKey,
+    });
+  }
+}

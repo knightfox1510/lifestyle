@@ -1,0 +1,169 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { z } from "zod";
+import { getSession } from "@/lib/session";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { encryptSecret } from "@/lib/crypto";
+import { MODULE_BY_KEY } from "@/modules/registry";
+import type { ActionResult } from "@/lib/types";
+
+function refreshAll() {
+  revalidatePath("/", "layout");
+}
+
+// ---------------------------------------------------------------- profile ----
+
+const profileSchema = z.object({
+  display_name: z.string().trim().min(1, "Name is required").max(60),
+  timezone: z.string().refine((tz) => {
+    try {
+      new Intl.DateTimeFormat("en", { timeZone: tz });
+      return true;
+    } catch {
+      return false;
+    }
+  }, "Unknown timezone"),
+  units: z.enum(["metric", "imperial"]),
+  ai_use_medical_history: z.boolean(),
+});
+
+export async function saveProfile(_: ActionResult | null, form: FormData): Promise<ActionResult> {
+  const raw = Object.fromEntries(form);
+  const parsed = profileSchema.safeParse({ ...raw, ai_use_medical_history: raw.ai_use_medical_history === "on" });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const session = await getSession();
+  const { error } = await session.supabase.from("profiles").update(parsed.data).eq("id", session.userId);
+  if (error) return { error: "Couldn't save." };
+  refreshAll();
+  return { ok: true, message: "Saved." };
+}
+
+// -------------------------------------------------------------- household ----
+
+export async function renameHousehold(_: ActionResult | null, form: FormData): Promise<ActionResult> {
+  const name = z.string().trim().min(1).max(80).safeParse(form.get("name"));
+  if (!name.success) return { error: "Enter a name (max 80 characters)." };
+  const session = await getSession();
+  if (session.me.role !== "owner") return { error: "Only the household owner can rename it." };
+  await session.supabase.from("households").update({ name: name.data }).eq("id", session.household.id);
+  refreshAll();
+  return { ok: true, message: "Renamed." };
+}
+
+export async function createInvite(): Promise<ActionResult & { code?: string }> {
+  const session = await getSession();
+  const { data, error } = await session.supabase.rpc("create_invite", { hid: session.household.id });
+  if (error) return { error: "Couldn't create an invite." };
+  revalidatePath("/settings/household");
+  return { ok: true, code: data as string };
+}
+
+export async function revokeInvite(inviteId: string) {
+  const session = await getSession();
+  await session.supabase.from("invites").delete().eq("id", inviteId).eq("household_id", session.household.id);
+  revalidatePath("/settings/household");
+}
+
+export async function removeMember(userId: string) {
+  const session = await getSession();
+  if (session.me.role !== "owner" || userId === session.userId) return;
+  // Revoke shares in both directions before removing.
+  await session.supabase.from("module_shares").delete().eq("owner_id", session.userId).eq("grantee_id", userId);
+  await session.supabase.from("household_members").delete().eq("household_id", session.household.id).eq("user_id", userId);
+  refreshAll();
+}
+
+export async function leaveHousehold() {
+  const session = await getSession();
+  await session.supabase.rpc("leave_household", { hid: session.household.id });
+  refreshAll();
+  redirect("/onboarding");
+}
+
+export async function setModuleEnabled(moduleKey: string, enabled: boolean) {
+  const def = MODULE_BY_KEY[moduleKey];
+  if (!def || def.status !== "available") return;
+  const session = await getSession();
+  await session.supabase
+    .from("household_modules")
+    .upsert({ household_id: session.household.id, module_key: moduleKey, enabled }, { onConflict: "household_id,module_key" });
+  refreshAll();
+}
+
+// --------------------------------------------------------------------- AI ----
+
+export async function saveAiLimit(_: ActionResult | null, form: FormData): Promise<ActionResult> {
+  const limit = z.coerce.number().int().min(0).max(1000).safeParse(form.get("ai_daily_limit"));
+  if (!limit.success) return { error: "Enter a number between 0 and 1000." };
+  const session = await getSession();
+  if (session.me.role !== "owner") return { error: "Only the household owner can change this." };
+  await session.supabase.from("households").update({ ai_daily_limit: limit.data }).eq("id", session.household.id);
+  refreshAll();
+  return { ok: true, message: "Saved." };
+}
+
+/** Stores the household's own Gemini key, encrypted. Owner only. */
+export async function saveGeminiKey(_: ActionResult | null, form: FormData): Promise<ActionResult> {
+  const key = z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9_\-]{20,200}$/, "That doesn't look like a Gemini API key.")
+    .safeParse(form.get("gemini_key"));
+  if (!key.success) return { error: key.error.issues[0].message };
+  const session = await getSession();
+  if (session.me.role !== "owner") return { error: "Only the household owner can change the AI key." };
+
+  try {
+    const admin = createAdminClient();
+    const { error } = await admin.from("household_secrets").upsert({
+      household_id: session.household.id,
+      gemini_key_ciphertext: encryptSecret(key.data),
+      gemini_key_last4: key.data.slice(-4),
+      updated_at: new Date().toISOString(),
+    });
+    if (error) throw error;
+    await admin.from("households").update({ has_custom_ai_key: true }).eq("id", session.household.id);
+  } catch (e) {
+    console.error("save gemini key failed", e);
+    return { error: "Couldn't store the key. Check the server's encryption settings." };
+  }
+  refreshAll();
+  return { ok: true, message: "Key saved. Your household now uses its own Gemini key." };
+}
+
+export async function removeGeminiKey() {
+  const session = await getSession();
+  if (session.me.role !== "owner") return;
+  const admin = createAdminClient();
+  await admin.from("household_secrets").delete().eq("household_id", session.household.id);
+  await admin.from("households").update({ has_custom_ai_key: false }).eq("id", session.household.id);
+  refreshAll();
+}
+
+// ---------------------------------------------------------------- sharing ----
+
+export async function setShare(granteeId: string, moduleKey: string, level: "none" | "read" | "write") {
+  const def = MODULE_BY_KEY[moduleKey];
+  if (!def || def.scope === "household") return;
+  const session = await getSession();
+  if (!session.members.some((m) => m.user_id === granteeId) || granteeId === session.userId) return;
+
+  if (level === "none") {
+    await session.supabase
+      .from("module_shares")
+      .delete()
+      .eq("owner_id", session.userId)
+      .eq("grantee_id", granteeId)
+      .eq("module_key", moduleKey);
+  } else {
+    await session.supabase
+      .from("module_shares")
+      .upsert(
+        { owner_id: session.userId, grantee_id: granteeId, module_key: moduleKey, level },
+        { onConflict: "owner_id,grantee_id,module_key" },
+      );
+  }
+  refreshAll();
+}
