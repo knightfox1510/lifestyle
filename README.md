@@ -2,7 +2,7 @@
 
 An installable web app (phone and laptop) for tracking household and partner life: health, food, routines and more. Personal data is private by default, and each person chooses which features their partner can see or edit. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the full plan.
 
-**Status: Phase 0 (foundation) + medical records.**
+**Status: Phase 0 (foundation) + medical records + Phase 1 (health-first core).**
 
 ## What's included
 
@@ -16,7 +16,16 @@ An installable web app (phone and laptop) for tracking household and partner lif
   - **Health profile:** DOB, sex, blood group, height, and free-text notes for the AI.
   - **Timeline** of conditions, illnesses, symptoms, injuries, surgeries, procedures, hospital stays, medications (dose, frequency, "taken for"), allergies, vaccinations, tests and visits. Includes summary cards for allergies, ongoing conditions and current medicines.
   - **Hospital papers:** upload a PDF or photo (camera on phones) to a private bucket. **"Read with AI"** summarises it and proposes timeline entries; you tick which ones to add.
-- **AI (Gemini):** the key stays on the server. A household can optionally bring its own key, which is stored AES-256-GCM encrypted. There's a per-household daily request cap and usage logging. **Every AI request gets the person's medical history** (allergies first, then conditions, current medicines, timeline and document summaries), with three levels of override:
+- **Medicines:** prescriptions and courses with daily schedules (times + weekdays, start/end), Take / Skip per dose, as-needed doses, stock that counts down automatically with refill warnings, 7/30-day adherence and a 14-day grid. A new medicine can also be added to the medical timeline.
+- **Supplement stack:** a daily checklist grouped by time of day that starts fresh each morning (history is kept), optional stock, and a 30-day adherence view.
+- **Bladder diary:** one-tap logging of leaks (amount, urgency, what you were doing, pad change), urges, bathroom visits and drinks (type, ml, caffeine), with a day-by-day view.
+  - **Trends & triggers:** leaks per day with a 7-day average, circumstances, time of day, and how much of it looks stress-type vs urge-type. Also simple comparisons (caffeine, Kegel days, fluids, alcohol, sleep), leaks within 2 h of caffeine, and whether it's improving.
+  - **Doctor report:** a printable / Save-as-PDF report for 3, 7 or 30 days in the standard bladder-diary layout, with current medicines.
+- **Pelvic floor trainer:** guided squeeze/relax timer (sets, reps, hold, rest, quick flicks) with vibration and sound cues and the screen kept awake. Shows sessions, streaks and a 4-week calendar.
+- **Daily check-in:** sleep, mood, energy and stress (1–5, one tap each), plus hours slept and notes.
+- **Habits:** weekly targets, tap-to-tick for the last 7 days, streaks.
+- **Grocery list (shared, offline-first):** changes save to the device first and sync when back online. Partners see updates live (Supabase Realtime). Items are grouped by aisle (category guessed from the name), with a "who added / picked up" note and a cart you can clear.
+- **AI (Gemini):** the key stays on the server. A household can optionally bring its own key, which is stored AES-256-GCM encrypted. There's a per-household daily request cap and usage logging. **Every AI request gets the person's health data**: medical history (allergies first, then conditions, current medicines, timeline and document summaries) plus recent tracking (tracked medicines and adherence, supplements, a 14-day bladder diary summary, pelvic floor sessions, check-ins and habits). There are three levels of override:
   1. A default in Settings ("Use my medical history in AI suggestions").
   2. A per-question switch on the Ask AI screen, plus "What will AI see?", which shows the exact context that will be sent.
   3. "Hide from AI" on any single timeline entry, document or the health profile.
@@ -64,6 +73,10 @@ Deploy on Vercel with the same environment variables.
 ## Checks
 
 ```bash
+npm test
+```
+
+```bash
 npm run lint
 ```
 
@@ -75,7 +88,7 @@ npm run typecheck
 npm run build
 ```
 
-`npm run test:db` applies the migrations to a throwaway local PostgreSQL 15+ instance and runs the RLS tests, covering owner, partner and stranger access, read versus write grants, and revocation on leaving.
+`npm test` runs the unit tests (scheduling, adherence, diary analysis, dates, categories). `npm run test:db` applies the migrations to a throwaway local PostgreSQL 15+ instance and runs the RLS tests, covering owner, partner and stranger access, read versus write grants, revocation on leaving, and stock updates when a dose is logged.
 
 ```bash
 npm run test:db

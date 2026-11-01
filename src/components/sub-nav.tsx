@@ -7,7 +7,7 @@ import { cx } from "@/components/ui";
 export function SubNav({ items }: { items: { href: string; label: string }[] }) {
   const path = usePathname();
   return (
-    <nav className="-mx-4 mb-5 flex gap-1 overflow-x-auto px-4 md:mx-0 md:px-0">
+    <nav className="print:hidden -mx-4 mb-5 flex gap-1 overflow-x-auto px-4 md:mx-0 md:px-0">
       {items.map((item) => {
         const active = path === item.href;
         return (

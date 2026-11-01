@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Button, Card, Checkbox, Field, Notice, Select, Textarea } from "@/components/ui";
 
-type Person = { id: string; name: string; medicalShared: boolean };
+type Person = { id: string; name: string };
 
 const SUGGESTIONS = [
   "Suggest a high-protein vegetarian dinner under 600 kcal.",
@@ -15,17 +15,15 @@ export function Assistant({
   people,
   defaultSubject,
   defaultUseMedical,
-  medicalEnabled,
   defaultPrompt,
 }: {
   people: Person[];
   defaultSubject: string;
   defaultUseMedical: boolean;
-  medicalEnabled: boolean;
   defaultPrompt: string;
 }) {
   const [subjectId, setSubjectId] = useState(people.some((p) => p.id === defaultSubject) ? defaultSubject : people[0]?.id);
-  const [useMedical, setUseMedical] = useState(medicalEnabled && defaultUseMedical);
+  const [useMedical, setUseMedical] = useState(defaultUseMedical);
   const [prompt, setPrompt] = useState(defaultPrompt);
   const [answer, setAnswer] = useState<{ text: string; usedMedical: boolean } | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -81,14 +79,14 @@ export function Assistant({
               </button>
             ))}
           </div>
-          {medicalEnabled ? (
+          {(
             <Checkbox
               checked={useMedical}
               onChange={(e) => setUseMedical(e.target.checked)}
-              label="Use medical history for this question"
-              hint="Override for this question only. Change the default in Settings; hide single entries from the Timeline."
+              label="Use my health data for this question"
+              hint="Medical history, medicines, supplements, diaries and check-ins. Override for this question only; change the default in Settings or hide single entries."
             />
-          ) : null}
+          )}
           {error ? <Notice tone="danger">{error}</Notice> : null}
           <div className="flex flex-wrap gap-2">
             <Button type="submit" disabled={loading || !prompt.trim()}>{loading ? "Thinking…" : "Ask"}</Button>
@@ -112,7 +110,7 @@ export function Assistant({
       {answer ? (
         <Card>
           <p className="mb-2 text-xs text-fg-muted">
-            {answer.usedMedical ? "✓ Considered medical history" : "Medical history not used"}
+            {answer.usedMedical ? "✓ Considered health data" : "Health data not used"}
           </p>
           <div className="whitespace-pre-wrap text-sm leading-relaxed">{answer.text}</div>
         </Card>

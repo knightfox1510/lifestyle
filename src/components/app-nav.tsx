@@ -10,14 +10,13 @@ function isActive(path: string, href: string) {
   return href === "/" ? path === "/" : path === href || path.startsWith(`${href}/`);
 }
 
-export function AppNav({ items, householdName }: { items: NavItem[]; householdName: string }) {
+export function AppNav({ items, mobileItems, householdName }: { items: NavItem[]; mobileItems: NavItem[]; householdName: string }) {
   const path = usePathname();
-  // Mobile bottom bar shows at most 5 entries; Settings is always last.
-  const mobile = items.length > 5 ? [...items.slice(0, 4), items[items.length - 1]] : items;
+  const mobile = mobileItems;
 
   return (
     <>
-      <aside className="sticky top-0 hidden h-dvh flex-col gap-1 border-r border-border bg-surface px-3 py-5 md:flex">
+      <aside className="print:!hidden sticky top-0 hidden h-dvh flex-col gap-1 border-r border-border bg-surface px-3 py-5 md:flex">
         <div className="mb-4 flex items-center gap-2 px-2">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/icons/icon.svg" alt="" className="size-8" />
@@ -42,7 +41,7 @@ export function AppNav({ items, householdName }: { items: NavItem[]; householdNa
       </aside>
 
       <nav
-        className="fixed inset-x-0 bottom-0 z-30 grid border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+        className="print:!hidden fixed inset-x-0 bottom-0 z-30 grid border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
         style={{ gridTemplateColumns: `repeat(${mobile.length}, minmax(0, 1fr))` }}
       >
         {mobile.map((item) => (

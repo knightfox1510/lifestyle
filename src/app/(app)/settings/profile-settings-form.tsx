@@ -34,8 +34,8 @@ export function ProfileSettingsForm({ profile }: { profile: Profile }) {
       <Checkbox
         name="ai_use_medical_history"
         defaultChecked={profile.ai_use_medical_history}
-        label="Use my medical history in AI suggestions by default"
-        hint="You can still override this on each question, and hide individual entries or documents."
+        label="Use my health data in AI suggestions by default"
+        hint="Medical history, medicines, supplements, bladder diary, check-ins and habits. You can still override this on each question, and hide individual entries."
       />
       <ActionMessage state={state} />
       <SubmitButton>Save</SubmitButton>

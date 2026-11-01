@@ -13,6 +13,10 @@
   --danger: #b4412f;
   --danger-soft: #f8e4df;
   --warn-soft: #fbf0d6;
+  /* Chart series (validated reference palette, slots 1–2) */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --grid: #e9e7e1;
   color-scheme: light;
 }
 
@@ -30,6 +34,9 @@
     --danger: #ec8a77;
     --danger-soft: #3d221c;
     --warn-soft: #3a3120;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --grid: #2c2b26;
     color-scheme: dark;
   }
 }
@@ -47,6 +54,9 @@
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
   --color-warn-soft: var(--warn-soft);
+  --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
+  --color-grid: var(--grid);
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 

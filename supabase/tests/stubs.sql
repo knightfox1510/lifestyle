@@ -1,3 +1,4 @@
+set client_min_messages = error;
 -- Minimal stand-ins for the Supabase-managed schemas so migrations and RLS
 -- tests can run on a plain PostgreSQL instance (see scripts/test-db.sh).
 -- NOT applied to a real Supabase project.
@@ -43,3 +44,5 @@ grant select, insert, update, delete on storage.objects to authenticated, servic
 grant select on storage.buckets to authenticated, service_role;
 alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
 alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
+
+create publication supabase_realtime;

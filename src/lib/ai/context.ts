@@ -2,6 +2,7 @@ import "server-only";
 
 import type { AppSession } from "@/lib/session";
 import type { MedicalDocument, MedicalEvent, MedicalProfile } from "@/lib/types";
+import { buildTrackingContext } from "@/lib/ai/tracking-context";
 
 /**
  * Builds the personal context that every AI feature receives. Today this is
@@ -157,23 +158,27 @@ export async function buildAiContext(
   ].join("\n");
 
   const empty = { events: 0, documents: 0, profile: false };
-  if (!useMedical || session.accessTo("medical_records", opts.subjectId) === "none") {
-    return { text: `${header}\n\n(Medical history not included for this request.)`, usedMedical: false, stats: empty };
+  if (!useMedical) {
+    return { text: `${header}\n\n(Health data not included for this request.)`, usedMedical: false, stats: empty };
   }
 
-  const medical = await buildMedicalContext(session, opts.subjectId);
-  if (!medical.text) {
-    return { text: `${header}\n\n(No medical history recorded yet.)`, usedMedical: false, stats: medical.stats };
+  const medicalAllowed = session.isModuleEnabled("medical_records") && session.accessTo("medical_records", opts.subjectId) !== "none";
+  const [medical, tracking] = await Promise.all([
+    medicalAllowed ? buildMedicalContext(session, opts.subjectId) : Promise.resolve({ text: "", stats: empty }),
+    buildTrackingContext(session, opts.subjectId),
+  ]);
+  const sections = [
+    medical.text ? `=== MEDICAL HISTORY ===\n${medical.text}` : "",
+    tracking ? `=== RECENT HEALTH TRACKING ===\n${tracking}` : "",
+  ].filter(Boolean);
+  if (!sections.length) {
+    return { text: `${header}\n\n(No health data recorded yet.)`, usedMedical: false, stats: medical.stats };
   }
-  return {
-    text: `${header}\n\n=== MEDICAL HISTORY ===\n${medical.text}`,
-    usedMedical: true,
-    stats: medical.stats,
-  };
+  return { text: `${header}\n\n${sections.join("\n\n")}`, usedMedical: true, stats: medical.stats };
 }
 
 export const SAFETY_INSTRUCTIONS = `You are the household's lifestyle assistant (food, fitness, routines, groceries, wellbeing).
 Rules:
-- Use the person's medical history below when it is relevant: respect allergies absolutely, avoid foods/exercises that conflict with conditions, recent surgeries or current medications, and mention briefly when a suggestion was adjusted because of their history.
+- Use the person's medical history and recent health tracking below when relevant: respect allergies absolutely, avoid foods/exercises that conflict with conditions, recent surgeries or current medications, and mention briefly when a suggestion was adjusted because of their history.
 - You are not a doctor. Do not diagnose or change prescriptions. For red-flag symptoms or medication questions, recommend contacting their doctor.
 - Be concise and practical. Use metric units unless the person prefers imperial.`;

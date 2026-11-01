@@ -16,12 +16,21 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
     { href: "/assistant", label: "Ask AI", icon: "✨" },
     { href: "/settings", label: "Settings", icon: "⚙️" },
   ];
+  // Phones get a fixed five-slot bar; every feature is reachable from "More".
+  const groceries = moduleItems.find((i) => i.href === "/groceries");
+  const mobileItems: NavItem[] = [
+    { href: "/", label: "Home", icon: "🏠" },
+    groceries ?? moduleItems[0],
+    { href: "/assistant", label: "Ask AI", icon: "✨" },
+    { href: "/more", label: "More", icon: "☰" },
+    { href: "/settings", label: "Settings", icon: "⚙️" },
+  ].filter(Boolean) as NavItem[];
 
   return (
-    <div className="min-h-dvh md:grid md:grid-cols-[232px_1fr]">
-      <AppNav items={items} householdName={session.household.name} />
-      <div className="min-w-0 pb-24 md:pb-8">
-        <header className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-border bg-bg/90 px-4 py-3 backdrop-blur md:px-8">
+    <div className="min-h-dvh md:grid md:grid-cols-[232px_1fr] print:block">
+      <AppNav items={items} mobileItems={mobileItems} householdName={session.household.name} />
+      <div className="min-w-0 pb-24 md:pb-8 print:pb-0">
+        <header className="sticky top-0 z-20 print:hidden flex items-center justify-between gap-3 border-b border-border bg-bg/90 px-4 py-3 backdrop-blur md:px-8">
           <div className="min-w-0 md:hidden">
             <p className="truncate text-sm font-semibold">{session.household.name}</p>
           </div>

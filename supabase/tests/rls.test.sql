@@ -163,4 +163,5 @@ do $$ begin
 end $$;
 
 reset role;
+\o
 \echo 'ALL RLS TESTS PASSED'

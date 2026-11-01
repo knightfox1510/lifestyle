@@ -33,4 +33,7 @@ for f in "$ROOT"/supabase/migrations/*.sql; do
   echo "applying $(basename "$f")"
   "${PSQL[@]}" -f "$f"
 done
-"${PSQL[@]}" -f "$ROOT/supabase/tests/rls.test.sql"
+for t in "$ROOT"/supabase/tests/*.test.sql; do
+  echo "running $(basename "$t")"
+  "${PSQL[@]}" -f "$t"
+done
