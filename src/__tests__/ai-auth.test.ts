@@ -75,3 +75,18 @@ describe("stale deployment errors", () => {
     expect(isStaleDeployError(new Error("Cannot read properties of undefined"))).toBe(false);
   });
 });
+
+describe("Gemini keys", () => {
+  it("accepts both AQ. and AIza keys and cleans pasted ones", async () => {
+    const { cleanGeminiKey, isPlausibleGeminiKey, classifyAiError } = await import("@/lib/ai/retry");
+    const aq = "AQ.Ab8RN6Kx_example-Key.with.dots1234567890";
+    expect(isPlausibleGeminiKey(aq)).toBe(true);
+    expect(isPlausibleGeminiKey("AIzaSyA1234567890abcdefghijklmnopqrstu")).toBe(true);
+    expect(isPlausibleGeminiKey("short")).toBe(false);
+    expect(isPlausibleGeminiKey("has spaces in it 1234567890")).toBe(false);
+    expect(cleanGeminiKey(` "${aq}"\n`)).toBe(aq);
+    expect(cleanGeminiKey(undefined)).toBe("");
+    expect(classifyAiError({ message: "ACCESS_TOKEN_TYPE_UNSUPPORTED" }).kind).toBe("key");
+    expect(classifyAiError({ status: 401, message: "UNAUTHENTICATED" }).kind).toBe("key");
+  });
+});

@@ -6,7 +6,7 @@ import { decryptSecret } from "@/lib/crypto";
 import type { AppSession } from "@/lib/session";
 import type { GenerateContentParameters, GenerateContentResponse } from "@google/genai";
 import { aiLanguageLine } from "@/lib/i18n/server";
-import { FAILURE_MESSAGE, classifyAiError, modelChain, withRetry } from "@/lib/ai/retry";
+import { FAILURE_MESSAGE, classifyAiError, cleanGeminiKey, modelChain, withRetry } from "@/lib/ai/retry";
 
 /** Models for this household: Settings → Household → AI model, unless GEMINI_MODEL is set in Vercel. */
 export function modelsFor(session: AppSession) {
@@ -28,9 +28,9 @@ async function resolveApiKey(session: AppSession): Promise<string> {
       .select("gemini_key_ciphertext")
       .eq("household_id", session.household.id)
       .single();
-    if (data?.gemini_key_ciphertext) return decryptSecret(data.gemini_key_ciphertext);
+    if (data?.gemini_key_ciphertext) return cleanGeminiKey(decryptSecret(data.gemini_key_ciphertext));
   }
-  const key = process.env.GEMINI_API_KEY;
+  const key = cleanGeminiKey(process.env.GEMINI_API_KEY);
   if (!key) throw new AiError("AI isn't set up yet. Add a Gemini key in Settings → Household.", 503);
   return key;
 }

@@ -7,6 +7,8 @@ import { getSession } from "@/lib/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { encryptSecret } from "@/lib/crypto";
 import { generate } from "@/lib/ai/gemini";
+import { GoogleGenAI } from "@google/genai";
+import { MODELS, classifyAiError, cleanGeminiKey, isPlausibleGeminiKey } from "@/lib/ai/retry";
 import { MODULE_BY_KEY } from "@/modules/registry";
 import { cookies } from "next/headers";
 import { LANGS, LANG_COOKIE } from "@/lib/i18n/core";
@@ -138,12 +140,27 @@ export async function saveAiLimit(_: ActionResult | null, form: FormData): Promi
 export async function saveGeminiKey(_: ActionResult | null, form: FormData): Promise<ActionResult> {
   const key = z
     .string()
-    .trim()
-    .regex(/^[A-Za-z0-9_\-]{20,200}$/, "That doesn't look like a Gemini API key.")
-    .safeParse(form.get("gemini_key"));
+    .refine(isPlausibleGeminiKey, "That doesn't look like a Gemini API key. Copy the whole key from aistudio.google.com/apikey (it starts with AQ. or AIza).")
+    .safeParse(cleanGeminiKey(form.get("gemini_key")));
   if (!key.success) return { error: key.error.issues[0].message };
   const session = await getSession();
   if (session.me.role !== "owner") return { error: "Only the household owner can change the AI key." };
+
+  // Ask Google before saving, so a bad key is caught here and not on the next scan.
+  try {
+    await new GoogleGenAI({ apiKey: key.data }).models.generateContent({
+      model: MODELS.standard,
+      contents: "Reply with OK.",
+      config: { maxOutputTokens: 5, abortSignal: AbortSignal.timeout(15_000) },
+    });
+  } catch (e) {
+    const kind = classifyAiError(e).kind;
+    if (kind === "key") {
+      const detail = String((e as Error)?.message ?? "").replace(/\s+/g, " ").slice(0, 200);
+      return { error: `Google didn't accept this key${detail ? `: ${detail}` : "."}` };
+    }
+    // Quota, busy or timeout: the key itself may be fine, so save it.
+  }
 
   try {
     const admin = createAdminClient();

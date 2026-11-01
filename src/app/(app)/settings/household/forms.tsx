@@ -77,9 +77,9 @@ export function AiSettings({
           <form action={keyAction} className="space-y-2">
             <Field
               label={hasCustomKey ? "Replace household Gemini key" : "Use your own Gemini key (optional)"}
-              hint="Stored encrypted on the server and never sent to browsers. Get one at aistudio.google.com."
+              hint="Paste the key from aistudio.google.com/apikey (it starts with AQ. or AIza). We check it with Google, then store it encrypted on the server; it is never sent to browsers."
             >
-              <Input name="gemini_key" type="password" autoComplete="off" placeholder="AIza…" />
+              <Input name="gemini_key" type="password" autoComplete="off" placeholder="AQ.… or AIza…" />
             </Field>
             <ActionMessage state={keyState} />
             <div className="flex flex-wrap items-center gap-2">

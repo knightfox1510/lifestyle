@@ -12,6 +12,18 @@ export function modelChain(choice: AiModelChoice | null | undefined, override?: 
   return [...new Set([primary, fallback])];
 }
 
+/** Removes spaces, line breaks and wrapping quotes that sneak in when a key is pasted. */
+export function cleanGeminiKey(raw: unknown): string {
+  return String(raw ?? "")
+    .replace(/\s+/g, "")
+    .replace(/^["'`]+|["'`]+$/g, "");
+}
+
+/** Both Google key formats: the older "AIza…" and AI Studio's newer "AQ.…" keys. */
+export function isPlausibleGeminiKey(key: string): boolean {
+  return /^[A-Za-z0-9._\-]{20,300}$/.test(key);
+}
+
 export type AiFailure = "quota" | "busy" | "key" | "safety" | "bad_request" | "empty" | "unknown";
 
 /** Turns a Gemini SDK error into a kind; only quota/busy/empty/unknown are worth retrying. */
@@ -21,7 +33,16 @@ export function classifyAiError(err: unknown): { kind: AiFailure; retry: boolean
   const msg = String(e?.message ?? "").toLowerCase();
   if (e?.name === "EmptyResponse") return { kind: "empty", retry: true, status };
   if (status === 429 || msg.includes("resource_exhausted") || msg.includes("quota")) return { kind: "quota", retry: true, status };
-  if (status === 401 || status === 403 || msg.includes("api key not valid") || msg.includes("permission_denied")) return { kind: "key", retry: false, status };
+  if (
+    status === 401 ||
+    status === 403 ||
+    msg.includes("api key not valid") ||
+    msg.includes("api_key_invalid") ||
+    msg.includes("permission_denied") ||
+    msg.includes("unauthenticated") ||
+    msg.includes("access_token_type_unsupported")
+  )
+    return { kind: "key", retry: false, status };
   if (msg.includes("safety") || msg.includes("blocked")) return { kind: "safety", retry: false, status };
   if (status === 500 || status === 502 || status === 503 || status === 504 || msg.includes("unavailable") || msg.includes("overloaded") || msg.includes("deadline")) return { kind: "busy", retry: true, status };
   if (status === 404 || status === 400 || msg.includes("invalid_argument") || msg.includes("not found")) return { kind: "bad_request", retry: status === 404, status };
@@ -31,7 +52,7 @@ export function classifyAiError(err: unknown): { kind: AiFailure; retry: boolean
 export const FAILURE_MESSAGE: Record<AiFailure, string> = {
   quota: "Google's free limit for this AI key is used up for now. Try again in a minute, or add your own key in Settings → Household.",
   busy: "Gemini is busy right now (we tried twice). Try again in a minute.",
-  key: "The Gemini key isn't valid. Check it in Settings → Household (or GEMINI_API_KEY in Vercel).",
+  key: "Google didn't accept the Gemini key. Check it in Settings → Household (or GEMINI_API_KEY in Vercel). Keys from AI Studio start with AQ. or AIza.",
   safety: "The AI declined this request. Try rewording it.",
   bad_request: "The AI couldn't process this request. Try a smaller photo or shorter text.",
   empty: "The AI returned an empty answer. Try again.",
