@@ -1,9 +1,10 @@
 import { getSession } from "@/lib/session";
-import { Badge, Card, EmptyState, buttonClass } from "@/components/ui";
+import { Card, EmptyState, buttonClass } from "@/components/ui";
 import type { DiningDish, DiningOrder, DiningPlace } from "@/lib/types";
 import { formatDate } from "@/modules/medical/meta";
 import { AddDishForm, AddPlaceForm, LogOrderForm, WhatToOrder } from "./client";
-import { deleteDish, deletePlace, toggleFavoritePlace } from "./actions";
+import { PlaceMenu } from "./place-menu";
+import { deletePlace, toggleFavoritePlace } from "./actions";
 
 export const metadata = { title: "Takeout & dining" };
 
@@ -11,23 +12,25 @@ export default async function DiningPage() {
   const session = await getSession();
   const [{ data: p }, { data: d }, { data: o }] = await Promise.all([
     session.supabase.from("dining_places").select("*").eq("household_id", session.household.id).order("favorite", { ascending: false }).order("name"),
-    session.supabase.from("dining_dishes").select("*").eq("household_id", session.household.id).order("name"),
+    session.supabase.from("dining_dishes").select("*").eq("household_id", session.household.id).order("section", { ascending: true, nullsFirst: false }).order("name"),
     session.supabase.from("dining_orders").select("*").eq("household_id", session.household.id).order("ordered_on", { ascending: false }).limit(15),
   ]);
   const places = (p ?? []) as DiningPlace[];
   const dishes = (d ?? []) as DiningDish[];
   const orders = (o ?? []) as DiningOrder[];
   const members = session.members.map((m) => ({ id: m.user_id, name: m.display_name }));
-  const nameOf = (id: string) => members.find((m) => m.id === id)?.name ?? "";
+  const canLog = session.isModuleEnabled("food_diary");
+  const placeRefs = places.map((x) => ({ id: x.id, name: x.name }));
+  const dishRefs = dishes.map((x) => ({ id: x.id, name: x.name, place_id: x.place_id }));
 
   return (
     <div className="space-y-4">
       {places.length ? (
-        <WhatToOrder members={members} me={session.userId} defaultUseHealth={session.profile.ai_use_medical_history} canLog={session.isModuleEnabled("food_diary")} />
+        <WhatToOrder members={members} me={session.userId} defaultUseHealth={session.profile.ai_use_medical_history} canLog={canLog} places={placeRefs} dishes={dishRefs} />
       ) : null}
       <AddPlaceForm />
       {places.length === 0 ? (
-        <EmptyState title="No places yet">Add your go-to spots (e.g. Good Flippin&apos; Burgers, Doolally) and the dishes you usually order.</EmptyState>
+        <EmptyState title="No places yet">Add your go-to spots (e.g. Good Flippin&apos; Burgers, Doolally), then import each menu from Zomato/Swiggy screenshots or a photo.</EmptyState>
       ) : (
         <ul className="space-y-3">
           {places.map((pl) => {
@@ -50,28 +53,15 @@ export default async function DiningPage() {
                       </form>
                     </div>
                   </div>
-                  {list.length ? (
-                    <ul className="divide-y divide-border text-sm">
-                      {list.map((x) => (
-                        <li key={x.id} className="flex items-center justify-between gap-2 py-1.5">
-                          <span>
-                            {x.veg === true ? "🟢 " : x.veg === false ? "🔴 " : ""}{x.name}
-                            <span className="text-xs text-fg-muted">
-                              {x.price != null ? ` · ₹${x.price}` : ""}{x.calories ? ` · ~${x.calories} kcal` : ""}
-                            </span>
-                            {x.go_to_for.map((id) => (
-                              <span key={id}> <Badge tone="accent">{nameOf(id)}&apos;s go-to</Badge></span>
-                            ))}
-                          </span>
-                          <form action={deleteDish.bind(null, x.id)}>
-                            <button className="text-xs text-fg-muted hover:text-danger" aria-label={`Delete ${x.name}`}>✕</button>
-                          </form>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
+                  <PlaceMenu placeId={pl.id} placeName={pl.name} dishes={list} members={members} me={session.userId} canLog={canLog} />
                   <details>
-                    <summary className="cursor-pointer text-sm text-fg-muted">+ Add a dish</summary>
+                    <summary className="cursor-pointer text-sm text-accent">✨ Suggest from here</summary>
+                    <div className="mt-2">
+                      <WhatToOrder members={members} me={session.userId} defaultUseHealth={session.profile.ai_use_medical_history} canLog={canLog} places={placeRefs} dishes={dishRefs} placeId={pl.id} />
+                    </div>
+                  </details>
+                  <details>
+                    <summary className="cursor-pointer text-sm text-fg-muted">+ Add a dish by hand</summary>
                     <div className="mt-2"><AddDishForm placeId={pl.id} members={members} /></div>
                   </details>
                 </Card>

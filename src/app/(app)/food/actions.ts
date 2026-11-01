@@ -16,10 +16,12 @@ export async function addFoodItems(
   ownerId: string,
   meal: (typeof MEALS)[number],
   items: unknown,
-  source: "ai_estimate" | "photo" | "recipe" | "manual",
+  source: "ai_estimate" | "photo" | "recipe" | "manual" | "restaurant",
   eatenAt?: string,
   recipeId?: string | null,
+  dishId?: string | null,
 ): Promise<ActionResult> {
+  if (dishId != null && !z.uuid().safeParse(dishId).success) return { error: "Invalid dish." };
   const parsed = z.array(foodItemSchema).min(1).max(20).safeParse(items);
   if (!parsed.success || !MEALS.includes(meal) || !when.safeParse(eatenAt).success) return { error: "Some items are invalid." };
   try {
@@ -30,6 +32,7 @@ export async function addFoodItems(
         meal,
         source,
         recipe_id: recipeId ?? null,
+        dish_id: dishId ?? null,
         eaten_at: eatenAt ?? new Date().toISOString(),
         owner_id: ownerId,
         created_by: session.userId,

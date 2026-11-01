@@ -6,6 +6,7 @@ import type { FluidIntake, FoodEntry, NutritionGoals } from "@/lib/types";
 import { MEAL_META, MEAL_ORDER, totals } from "@/modules/food/meta";
 import { FoodAiAdd } from "./food-ai-add";
 import { ManualFoodForm } from "./manual-food-form";
+import { RestaurantPicker } from "./restaurant-picker";
 import { deleteFood, repeatFood } from "./actions";
 
 export const metadata = { title: "Food diary" };
@@ -21,14 +22,19 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
   const isOwner = ownerId === session.userId;
   const fluidsVisible = session.isModuleEnabled("bladder_diary") && session.accessTo("bladder_diary", ownerId) !== "none";
 
-  const [{ data: e }, { data: g }, { data: recent }, fl] = await Promise.all([
+  const diningOn = session.isModuleEnabled("dining");
+  const [{ data: e }, { data: g }, { data: recent }, fl, rp, rd] = await Promise.all([
     session.supabase.from("food_entries").select("*").eq("owner_id", ownerId).gte("eaten_at", startOfLocalDayIso(date)).lt("eaten_at", startOfLocalDayIso(addDays(date, 3))).order("eaten_at"),
     session.supabase.from("nutrition_goals").select("*").eq("owner_id", ownerId).maybeSingle(),
     session.supabase.from("food_entries").select("*").eq("owner_id", ownerId).order("eaten_at", { ascending: false }).limit(60),
     fluidsVisible
       ? session.supabase.from("fluid_intake").select("volume_ml, occurred_at").eq("owner_id", ownerId).gte("occurred_at", startOfLocalDayIso(date)).lt("occurred_at", startOfLocalDayIso(addDays(date, 3)))
       : Promise.resolve({ data: [] }),
+    diningOn ? session.supabase.from("dining_places").select("id, name").eq("household_id", session.household.id).order("favorite", { ascending: false }).order("name") : Promise.resolve({ data: [] }),
+    diningOn ? session.supabase.from("dining_dishes").select("id, name, place_id, calories, section").eq("household_id", session.household.id).order("name") : Promise.resolve({ data: [] }),
   ]);
+  const restaurantPlaces = (rp.data ?? []) as { id: string; name: string }[];
+  const restaurantDishes = (rd.data ?? []) as { id: string; name: string; place_id: string; calories: number | null; section: string | null }[];
   const entries = ((e ?? []) as FoodEntry[]).filter((x) => localDate(x.eaten_at, tz) === date);
   const goals = g as NutritionGoals | null;
   const t = totals(entries);
@@ -95,7 +101,10 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
       {canWrite && date === today ? (
         <>
           <FoodAiAdd ownerId={ownerId} />
-          <ManualFoodForm ownerId={ownerId} />
+          <div className="flex flex-wrap gap-x-6 gap-y-2">
+            <ManualFoodForm ownerId={ownerId} />
+            {restaurantPlaces.length ? <RestaurantPicker ownerId={ownerId} places={restaurantPlaces} dishes={restaurantDishes} /> : null}
+          </div>
         </>
       ) : null}
 
@@ -116,7 +125,7 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
                       <span className="block truncate">{x.description}{x.quantity ? <span className="text-fg-muted"> · {x.quantity}</span> : null}</span>
                       <span className="text-xs text-fg-muted">
                         {localTime(x.eaten_at, tz)} · P {Math.round(Number(x.protein_g ?? 0))} · C {Math.round(Number(x.carbs_g ?? 0))} · F {Math.round(Number(x.fat_g ?? 0))}
-                        {x.source !== "manual" ? " · AI estimate" : ""}
+                        {x.source === "restaurant" ? " · restaurant" : x.source !== "manual" ? " · AI estimate" : ""}
                       </span>
                     </span>
                     <span className="flex shrink-0 items-center gap-2">

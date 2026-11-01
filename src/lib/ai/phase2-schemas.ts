@@ -124,3 +124,25 @@ export const tripPlanSchema = z.object({
   tips: z.array(z.string().max(300)).max(8),
 });
 export type TripPlan = z.infer<typeof tripPlanSchema>;
+
+// ------------------------------------------------------------- Menus ----
+
+export const menuItemSchema = z.object({
+  section: z.string().max(80).nullable().describe("Menu section, e.g. Burgers, Starters, Mains, Beverages"),
+  name: z.string().min(1).max(120),
+  description: z.string().max(300).nullable(),
+  price: z.number().min(0).max(100000).nullable().describe("Printed price in the menu's currency, for one portion"),
+  veg: z.boolean().nullable().describe("true for a green veg mark, false for a red/brown non-veg mark, null if unclear"),
+  serves: z.number().int().min(1).max(10).describe("People the portion serves (1 unless stated, e.g. 'serves 2')"),
+  calories: z.number().int().min(0).max(5000).describe("Estimated kcal for ONE person's share (portion ÷ serves)"),
+  protein_g: z.number().min(0).max(500),
+  carbs_g: z.number().min(0).max(1000),
+  fat_g: z.number().min(0).max(500),
+});
+export type MenuItem = z.infer<typeof menuItemSchema>;
+
+export const menuExtractSchema = z.object({
+  restaurant_name: z.string().max(120).nullable(),
+  items: z.array(menuItemSchema).max(200),
+  note: z.string().max(300).nullable().describe("Caveats, e.g. some prices unreadable"),
+});

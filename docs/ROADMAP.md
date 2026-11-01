@@ -96,3 +96,8 @@ Each module is then mostly config + a form + a widget. This keeps 20+ modules ma
 
 ## 6. Verification
 - Each phase gets its own plan, with tests: RLS policy tests via `supabase test db`, and Playwright for the offline grocery list and install flow.
+
+## Later / optional
+
+- **Swiggy Builders (MCP) integration.** Live restaurant and menu search, and possibly ordering inside Hearth, with each person signing in with their own Swiggy account (OAuth). Needs an application to Swiggy's Builders program (video demo, staging integration, then production approval). Menus there have prices but no nutrition, so Hearth's estimates would still apply. Until then, menus are imported from screenshots, photos or text (built).
+- Zomato has no public consumer API (its old public API was shut down), and scraping breaks its terms, so it's not an option.

@@ -356,8 +356,9 @@ export type FoodEntry = {
   carbs_g: number | null;
   fat_g: number | null;
   fiber_g: number | null;
-  source: "manual" | "ai_estimate" | "recipe" | "photo";
+  source: "manual" | "ai_estimate" | "recipe" | "photo" | "restaurant";
   recipe_id: string | null;
+  dish_id?: string | null;
   notes: string | null;
 };
 
@@ -613,10 +614,16 @@ export type DiningDish = {
   id: string;
   place_id: string;
   name: string;
+  section: string | null;
+  description: string | null;
   price: number | null;
   veg: boolean | null;
   calories: number | null;
   protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+  nutrition_estimated: boolean;
+  source: "manual" | "menu_import";
   go_to_for: string[];
   notes: string | null;
 };

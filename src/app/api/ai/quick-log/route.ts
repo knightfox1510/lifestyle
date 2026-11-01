@@ -18,10 +18,25 @@ export async function POST(request: Request) {
     const session = await getSession();
     const input = body.safeParse(await request.json());
     if (!input.success) throw new AiError("Type or say what to log.");
+
+    // Saved restaurant dishes, so "had the smash burger from Good Flippin'" uses their numbers.
+    let menu = "";
+    if (session.isModuleEnabled("dining")) {
+      const [{ data: places }, { data: dishes }] = await Promise.all([
+        session.supabase.from("dining_places").select("id, name").eq("household_id", session.household.id),
+        session.supabase.from("dining_dishes").select("name, place_id, calories, protein_g, carbs_g, fat_g").eq("household_id", session.household.id).not("calories", "is", null).limit(400),
+      ]);
+      const placeName = new Map((places ?? []).map((p: { id: string; name: string }) => [p.id, p.name]));
+      const lines = ((dishes ?? []) as { name: string; place_id: string; calories: number; protein_g: number | null; carbs_g: number | null; fat_g: number | null }[]).map(
+        (d) => `- ${d.name} (${placeName.get(d.place_id) ?? "?"}): ${d.calories} kcal, P ${d.protein_g ?? 0}, C ${d.carbs_g ?? 0}, F ${d.fat_g ?? 0}`,
+      );
+      if (lines.length) menu = `\n\nSaved restaurant dishes (per person). If the note mentions one, use its name with the restaurant in brackets and these exact numbers (scaled for half/shared portions):\n${lines.join("\n")}`;
+    }
+
     return runJson(session, {
       feature: "quick_log",
       schema: quickLogSchema,
-      parts: [{ text: `Current local time: ${input.data.localTime}.\nNote: ${input.data.text}` }],
+      parts: [{ text: `Current local time: ${input.data.localTime}.\nNote: ${input.data.text}${menu}` }],
       system: SYSTEM,
       temperature: 0.1,
     });

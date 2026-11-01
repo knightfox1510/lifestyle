@@ -6,9 +6,29 @@ import { ActionMessage, SubmitButton } from "@/components/form-status";
 import type { OrderSuggestion } from "@/lib/ai/phase2-schemas";
 import { addFoodItems } from "@/app/(app)/food/actions";
 import { mealForHour } from "@/modules/food/meta";
-import { addDish, addPlace, logOrder } from "./actions";
+import { matchDish } from "@/modules/dining/menu";
+import { addDish, addPlace, logDish, logOrder } from "./actions";
 
-export function WhatToOrder({ members, me, defaultUseHealth, canLog }: { members: { id: string; name: string }[]; me: string; defaultUseHealth: boolean; canLog: boolean }) {
+type Ref = { id: string; name: string };
+
+export function WhatToOrder({
+  members,
+  me,
+  defaultUseHealth,
+  canLog,
+  places = [],
+  dishes = [],
+  placeId,
+}: {
+  members: Ref[];
+  me: string;
+  defaultUseHealth: boolean;
+  canLog: boolean;
+  places?: Ref[];
+  dishes?: (Ref & { place_id: string })[];
+  /** Limit suggestions to one restaurant. */
+  placeId?: string;
+}) {
   const [people, setPeople] = useState<string[]>(members.map((m) => m.id));
   const [notes, setNotes] = useState("");
   const [budget, setBudget] = useState("");
@@ -26,7 +46,7 @@ export function WhatToOrder({ members, me, defaultUseHealth, canLog }: { members
       const res = await fetch("/api/ai/what-to-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ people, notes: notes || undefined, budget: budget ? Number(budget) : null, useMedicalHistory: useHealth }),
+        body: JSON.stringify({ people, notes: notes || undefined, budget: budget ? Number(budget) : null, useMedicalHistory: useHealth, placeId }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? "Couldn't get suggestions");
@@ -39,8 +59,8 @@ export function WhatToOrder({ members, me, defaultUseHealth, canLog }: { members
   }
 
   return (
-    <Card className="space-y-3">
-      <h2 className="font-semibold">🍔 What should we order tonight?</h2>
+    <Card className={placeId ? "space-y-3 !bg-surface-2/50" : "space-y-3"}>
+      <h2 className="font-semibold">{placeId ? `✨ What should we get from ${places.find((p) => p.id === placeId)?.name ?? "here"}?` : "🍔 What should we order tonight?"}</h2>
       <div className="flex flex-wrap gap-3">
         {members.map((m) => (
           <Checkbox
@@ -70,8 +90,14 @@ export function WhatToOrder({ members, me, defaultUseHealth, canLog }: { members
                     <span><strong>{p.person}:</strong> {p.dish} <span className="text-fg-muted">~{p.calories_est} kcal{p.note ? ` · ${p.note}` : ""}</span></span>
                     {canLog && p.person === myName ? (
                       <Button size="sm" variant="ghost" disabled={pending} onClick={() => start(async () => {
-                        const r = await addFoodItems(me, mealForHour(new Date().getHours()), [{ description: `${p.dish} (${o.place})`, quantity: null, calories: p.calories_est, protein_g: 0, carbs_g: 0, fat_g: 0, fiber_g: 0 }], "ai_estimate");
-                        setMsg(r.error ? { tone: "danger", text: r.error } : { tone: "accent", text: "Logged to your food diary." });
+                        // Prefer the saved dish (real macros) when the suggestion matches one.
+                        const place = places.find((pl) => pl.name.trim().toLowerCase() === o.place.trim().toLowerCase()) ?? places.find((pl) => pl.id === placeId);
+                        const dish = place ? matchDish(p.dish, dishes.filter((d) => d.place_id === place.id)) : undefined;
+                        const meal = mealForHour(new Date().getHours());
+                        const r = dish
+                          ? await logDish(dish.id, me, meal, 1)
+                          : await addFoodItems(me, meal, [{ description: `${p.dish} (${o.place})`, quantity: null, calories: p.calories_est, protein_g: 0, carbs_g: 0, fat_g: 0, fiber_g: 0 }], "restaurant");
+                        setMsg(r.error ? { tone: "danger", text: r.error } : { tone: "accent", text: r.message ?? "Logged to your food diary." });
                       })}>Log to my diary</Button>
                     ) : null}
                   </li>

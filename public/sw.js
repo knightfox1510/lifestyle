@@ -4,9 +4,11 @@
  *   then to /offline. Pages are cached per device and wiped on sign-out.
  * - API, auth and Supabase calls are never cached.
  */
-const VERSION = "v2";
+const VERSION = "v3";
 const SHELL_CACHE = `shell-${VERSION}`;
 const PAGE_CACHE = `pages-${VERSION}`;
+// Files shared into the app (Android share sheet), picked up by /dining/share.
+const SHARE_CACHE = "share-inbox";
 const SHELL = ["/offline", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon.svg"];
 
 self.addEventListener("install", (event) => {
@@ -17,19 +19,37 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => ![SHELL_CACHE, PAGE_CACHE].includes(k)).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => ![SHELL_CACHE, PAGE_CACHE, SHARE_CACHE].includes(k)).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });
 
 self.addEventListener("message", (event) => {
   if (event.data === "clear-user-data") {
-    event.waitUntil(caches.delete(PAGE_CACHE));
+    event.waitUntil(Promise.all([caches.delete(PAGE_CACHE), caches.delete(SHARE_CACHE)]));
   }
 });
 
+async function receiveShare(request) {
+  const form = await request.formData();
+  const files = form.getAll("photos").filter((f) => f && typeof f !== "string").slice(0, 6);
+  await caches.delete(SHARE_CACHE);
+  const cache = await caches.open(SHARE_CACHE);
+  await Promise.all(
+    files.map((f, i) =>
+      cache.put(`/share-inbox/${i}`, new Response(f, { headers: { "Content-Type": f.type || "image/jpeg", "X-File-Name": encodeURIComponent(f.name || `shared-${i}.jpg`) } })),
+    ),
+  );
+  return Response.redirect(`/dining/share?files=${files.length}`, 303);
+}
+
 self.addEventListener("fetch", (event) => {
   const req = event.request;
+  const shareUrl = new URL(req.url);
+  if (req.method === "POST" && shareUrl.origin === self.location.origin && shareUrl.pathname === "/dining/share") {
+    event.respondWith(receiveShare(req).catch(() => Response.redirect("/dining/share?files=0", 303)));
+    return;
+  }
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;

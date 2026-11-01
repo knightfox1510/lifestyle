@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { Button, Card, Input, Notice, Select, cx } from "@/components/ui";
 import type { ScanItem } from "@/lib/ai/phase2-schemas";
+import { compressImage } from "@/lib/compress-image";
 import { addScannedToPantry } from "../actions";
 import { addToGroceryList } from "@/app/(app)/recipes/actions";
 
@@ -37,7 +38,7 @@ export function Scanner({ pantryOn, groceriesOn }: { pantryOn: boolean; grocerie
     setMsg(null);
     const fd = new FormData();
     fd.set("mode", mode);
-    fd.set("photo", file);
+    fd.set("photo", await compressImage(file));
     try {
       const res = await fetch("/api/ai/scan", { method: "POST", body: fd });
       const body = await res.json();

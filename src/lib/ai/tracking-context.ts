@@ -32,7 +32,7 @@ export async function buildTrackingContext(session: AppSession, subjectId: strin
     can("checkin") ? db.from("daily_checkins").select("*").eq("owner_id", subjectId).gte("checkin_date", addDays(today, -6)) : null,
     can("habits") ? db.from("habits").select("*").eq("owner_id", subjectId).eq("active", true) : null,
     can("habits") ? db.from("habit_logs").select("*").eq("owner_id", subjectId).gte("log_date", addDays(today, -6)) : null,
-    can("food_diary") ? db.from("food_entries").select("eaten_at, description, calories, protein_g, carbs_g, fat_g, fiber_g").eq("owner_id", subjectId).gte("eaten_at", startOfLocalDayIso(addDays(today, -6))) : null,
+    can("food_diary") ? db.from("food_entries").select("eaten_at, description, calories, protein_g, carbs_g, fat_g, fiber_g, source").eq("owner_id", subjectId).gte("eaten_at", startOfLocalDayIso(addDays(today, -6))) : null,
     can("food_diary") ? db.from("nutrition_goals").select("*").eq("owner_id", subjectId).maybeSingle() : null,
     can("body_recomp") ? db.from("body_metrics").select("*").eq("owner_id", subjectId).gte("measured_at", startOfLocalDayIso(addDays(today, -60))).order("measured_at") : null,
     can("body_recomp") ? db.from("body_goals").select("*").eq("owner_id", subjectId).maybeSingle() : null,
@@ -119,7 +119,7 @@ export async function buildTrackingContext(session: AppSession, subjectId: strin
   }
 
   const ng = (nGoals?.data ?? null) as NutritionGoals | null;
-  const fe = (food?.data ?? []) as Pick<FoodEntry, "eaten_at" | "description" | "calories" | "protein_g" | "carbs_g" | "fat_g" | "fiber_g">[];
+  const fe = (food?.data ?? []) as Pick<FoodEntry, "eaten_at" | "description" | "calories" | "protein_g" | "carbs_g" | "fat_g" | "fiber_g" | "source">[];
   if (ng || fe.length) {
     if (ng) {
       lines.push("", `Nutrition: goal ${ng.goal}, diet ${ng.diet_type}, activity ${ng.activity_level}${ng.calories ? `; targets ${ng.calories} kcal, ${ng.protein_g ?? "?"} g protein, ${ng.fiber_g ?? "?"} g fibre` : ""}${ng.dislikes ? `; avoids ${ng.dislikes}` : ""}.`);
@@ -129,6 +129,11 @@ export async function buildTrackingContext(session: AppSession, subjectId: strin
       const avg = (k: "calories" | "protein_g" | "fiber_g") => Math.round(days.reduce((a, t) => a + t[k], 0) / Math.max(1, days.length));
       const todayT = totals(fe.filter((e) => localDate(e.eaten_at, tz) === today));
       lines.push(`Food diary last 7 days (${days.length} days logged): avg ${avg("calories")} kcal, ${avg("protein_g")} g protein, ${avg("fiber_g")} g fibre per day. Today so far: ${todayT.calories} kcal, ${todayT.protein_g} g protein.`);
+      const eatenOut = fe.filter((e) => e.source === "restaurant");
+      if (eatenOut.length) {
+        const outDays = new Set(eatenOut.map((e) => localDate(e.eaten_at, tz))).size;
+        lines.push(`Restaurant/takeout meals in the last 7 days: ${eatenOut.length} items on ${outDays} day${outDays === 1 ? "" : "s"} (${eatenOut.slice(0, 5).map((e) => e.description).join("; ")}).`);
+      }
     }
   }
 

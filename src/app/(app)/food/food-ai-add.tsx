@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { Button, Card, Input, Notice, Select, Textarea } from "@/components/ui";
 import { VoiceButton } from "@/components/voice-input";
+import { compressImage } from "@/lib/compress-image";
 import type { FoodItem } from "@/lib/ai/phase2-schemas";
 import type { Meal } from "@/lib/types";
 import { MEAL_META, MEAL_ORDER, mealForHour } from "@/modules/food/meta";
@@ -24,7 +25,7 @@ export function FoodAiAdd({ ownerId }: { ownerId: string }) {
     const fd = new FormData();
     fd.set("text", text);
     fd.set("time", new Date().toTimeString().slice(0, 5));
-    if (photo) fd.set("photo", photo);
+    if (photo) fd.set("photo", await compressImage(photo, 1600));
     try {
       const res = await fetch("/api/ai/food-estimate", { method: "POST", body: fd });
       const body = await res.json();

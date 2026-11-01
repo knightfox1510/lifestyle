@@ -14,6 +14,7 @@ const body = z.object({
   notes: z.string().trim().max(400).optional(),
   budget: z.number().min(0).max(100000).nullable().optional(),
   useMedicalHistory: z.boolean().optional(),
+  placeId: z.uuid().optional(),
 });
 
 export async function POST(request: Request) {
@@ -31,8 +32,9 @@ export async function POST(request: Request) {
       session.supabase.from("dining_dishes").select("*").eq("household_id", session.household.id),
       session.supabase.from("dining_orders").select("*").eq("household_id", session.household.id).gte("ordered_on", addDays(today, -21)).order("ordered_on", { ascending: false }),
     ]);
-    const places = (pl ?? []) as DiningPlace[];
-    if (!places.length) throw new AiError("Add a few places you order from first.");
+    const allPlaces = (pl ?? []) as DiningPlace[];
+    const places = input.placeId ? allPlaces.filter((p) => p.id === input.placeId) : allPlaces;
+    if (!places.length) throw new AiError(input.placeId ? "Restaurant not found." : "Add a few places you order from first.");
     const dishes = (di ?? []) as DiningDish[];
     const orders = (or ?? []) as DiningOrder[];
     const nameOf = (id: string) => session.members.find((m) => m.user_id === id)?.display_name ?? "someone";
@@ -41,7 +43,7 @@ export async function POST(request: Request) {
       .map((p) => {
         const list = dishes.filter((d) => d.place_id === p.id);
         return `## ${p.name}${p.cuisine ? ` (${p.cuisine})` : ""}${p.area ? `, ${p.area}` : ""} · ${p.mode}${p.favorite ? " · favourite" : ""}\n${list
-          .map((d) => `- ${d.name}${d.price != null ? ` ₹${d.price}` : ""}${d.veg === true ? " [veg]" : d.veg === false ? " [non-veg]" : ""}${d.calories ? ` ~${d.calories} kcal` : ""}${d.protein_g ? `, ${d.protein_g} g protein` : ""}${d.go_to_for.length ? ` (go-to for ${d.go_to_for.map(nameOf).join(", ")})` : ""}`)
+          .map((d) => `- ${d.section ? `[${d.section}] ` : ""}${d.name}${d.price != null ? ` ₹${d.price}` : ""}${d.veg === true ? " [veg]" : d.veg === false ? " [non-veg]" : ""}${d.calories ? ` ~${d.calories} kcal` : ""}${d.protein_g ? `, ${d.protein_g} g protein` : ""}${d.carbs_g ? `, ${d.carbs_g} g carbs` : ""}${d.fat_g ? `, ${d.fat_g} g fat` : ""}${d.go_to_for.length ? ` (go-to for ${d.go_to_for.map(nameOf).join(", ")})` : ""}`)
           .join("\n") || "- (no dishes saved; suggest typical dishes for this place)"}`;
       })
       .join("\n\n");
@@ -59,7 +61,10 @@ export async function POST(request: Request) {
       }),
     );
 
-    const prompt = `We don't feel like cooking tonight. Suggest up to 3 takeout options from OUR saved places only, with a dish for each person that fits their remaining calories, goals, diet and health data (allergies and conditions are hard limits).
+    const scope = input.placeId
+      ? `We're ordering from ${places[0].name}. Suggest up to 3 different combinations from THIS restaurant's menu only (use dish names exactly as listed), with a dish for each person`
+      : "We don't feel like cooking tonight. Suggest up to 3 takeout options from OUR saved places only (use dish names exactly as listed when a menu is saved), with a dish for each person";
+    const prompt = `${scope} that fits their remaining calories, goals, diet and health data (allergies and conditions are hard limits). Prefer saved go-to dishes when they fit.
 Avoid repeating what we ordered in the last few days unless it's clearly the best fit.
 ${input.budget ? `Budget: about ₹${input.budget} total.` : ""}
 ${input.notes ? `Mood / wishes: ${input.notes}` : ""}
