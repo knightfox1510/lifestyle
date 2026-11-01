@@ -3,7 +3,8 @@ import { addDays, lastNDays, shortDate, todayIn } from "@/lib/dates";
 import { Card } from "@/components/ui";
 import { ColumnChart } from "@/components/charts";
 import type { DailyCheckin } from "@/lib/types";
-import { CheckinForm, SCALES } from "./checkin-form";
+import { CheckinForm } from "./checkin-form";
+import { SCALES } from "@/modules/checkin/meta";
 
 export const metadata = { title: "Daily check-in" };
 

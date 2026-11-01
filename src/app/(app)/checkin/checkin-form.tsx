@@ -4,15 +4,8 @@ import { useOptimistic, useState, useTransition } from "react";
 import { Button, Input, Textarea, cx } from "@/components/ui";
 import type { DailyCheckin } from "@/lib/types";
 import { saveCheckinField } from "@/app/(app)/checkin/actions";
+import { SCALES, type ScaleField } from "@/modules/checkin/meta";
 
-export const SCALES = [
-  { field: "sleep_quality", label: "Sleep", low: "😫", high: "😴" },
-  { field: "mood", label: "Mood", low: "😞", high: "😄" },
-  { field: "energy", label: "Energy", low: "🪫", high: "⚡" },
-  { field: "stress", label: "Stress", low: "😌", high: "😰" },
-] as const;
-
-type ScaleField = (typeof SCALES)[number]["field"];
 
 export function CheckinForm({
   ownerId,
