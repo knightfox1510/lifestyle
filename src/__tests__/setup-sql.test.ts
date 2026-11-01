@@ -7,3 +7,18 @@ describe("supabase/setup/all-in-one.sql", () => {
     expect(readFileSync(new URL("../../supabase/setup/all-in-one.sql", import.meta.url), "utf8")).toBe(buildAllInOne());
   });
 });
+
+describe("supabase/setup/update-existing-database.sql", () => {
+  const update = readFileSync(new URL("../../supabase/setup/update-existing-database.sql", import.meta.url), "utf8");
+  it("covers everything added after the language migration", () => {
+    for (const thing of ["home_view", "close_day", "close_day_time", "partner_updates", "public.cheers", "public.milestones", "public.activity_days", "ai_model"]) {
+      expect(update, thing).toContain(thing);
+    }
+  });
+  it("only uses re-runnable statements", () => {
+    expect(update).not.toMatch(/add column (?!if not exists)/i);
+    expect(update).not.toMatch(/create table (?!if not exists)/i);
+    // Every policy is dropped first so re-running doesn't fail on "already exists".
+    expect((update.match(/create policy/gi) ?? []).length).toBe((update.match(/drop policy if exists/gi) ?? []).length);
+  });
+});

@@ -4,8 +4,14 @@ import { GoogleGenAI } from "@google/genai";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { decryptSecret } from "@/lib/crypto";
 import type { AppSession } from "@/lib/session";
+import type { GenerateContentParameters, GenerateContentResponse } from "@google/genai";
+import { aiLanguageLine } from "@/lib/i18n/server";
+import { FAILURE_MESSAGE, classifyAiError, modelChain, withRetry } from "@/lib/ai/retry";
 
-export const DEFAULT_MODEL = process.env.GEMINI_MODEL || "gemini-flash-latest";
+/** Models for this household: Settings → Household → AI model, unless GEMINI_MODEL is set in Vercel. */
+export function modelsFor(session: AppSession) {
+  return modelChain(session.household.ai_model, process.env.GEMINI_MODEL);
+}
 
 export class AiError extends Error {
   constructor(message: string, public status = 400) {
@@ -61,4 +67,28 @@ export async function recordUsage(
     input_tokens: usage?.promptTokenCount ?? null,
     output_tokens: usage?.candidatesTokenCount ?? null,
   });
+}
+
+/**
+ * The one way the app calls Gemini: household model choice, retries with
+ * fallback, the person's language added to the system instruction, and a
+ * clear AiError when everything fails.
+ */
+export async function generate(session: AppSession, request: Omit<GenerateContentParameters, "model">): Promise<GenerateContentResponse & { modelUsed: string }> {
+  const ai = await getGemini(session);
+  const lang = aiLanguageLine(session);
+  const sys = request.config?.systemInstruction;
+  const config = { ...request.config, systemInstruction: typeof sys === "string" || sys == null ? [sys, lang].filter(Boolean).join("\n\n") || undefined : sys };
+  try {
+    const { result, model } = await withRetry(modelsFor(session), async (model) => {
+      const res = await ai.models.generateContent({ ...request, model, config });
+      if (!res.text?.trim()) throw Object.assign(new Error("Empty response"), { name: "EmptyResponse" });
+      return res;
+    });
+    return Object.assign(result, { modelUsed: model });
+  } catch (err) {
+    if (err instanceof AiError) throw err;
+    const c = classifyAiError(err);
+    throw new AiError(FAILURE_MESSAGE[c.kind], c.kind === "quota" ? 429 : c.kind === "key" ? 401 : 502);
+  }
 }

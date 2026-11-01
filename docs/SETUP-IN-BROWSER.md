@@ -121,6 +121,15 @@ In Supabase: **Authentication → URL Configuration**
 
 Sign-in emails work straight away with Supabase's built-in email, which is limited to a few emails per hour. That's fine for the two of you.
 
+### E2. Sign-in emails with a code (so they work on any phone)
+By default the email only has a link, and that link only works in the same browser that asked for it. Opening it from the Gmail or WhatsApp app often shows "link is invalid or expired". Adding the code fixes this.
+
+1. Supabase → **Authentication → Emails** (or **Email Templates**).
+2. Open **Magic Link**. Set the subject to `Your Hearth sign-in code`. Replace the whole message body with the contents of **docs/email-templates/sign-in.html** from GitHub (**Raw** → copy) → **Save**.
+3. Do the same for **Confirm signup** (used the very first time someone signs in, e.g. your partner).
+
+Now the email shows a 6-digit code to type on the sign-in screen, plus a button that works in any browser.
+
 ---
 
 ## Part F · Turn on reminders (every 5 minutes)
@@ -184,7 +193,7 @@ Then redeploy.
 - **Code changes** deploy automatically when they're pushed to the production branch on GitHub.
 - **Database changes** come as a new file in `supabase/migrations/`. Open that one new file on GitHub → Raw → copy → Supabase SQL Editor → Run. **Don't** re-run `all-in-one.sql` on a live database; it's only for brand-new projects.
   - **Setting up for the first time? Skip this.** `all-in-one.sql` (Part B2) already includes every change so far.
-  - For reference, the most recent ones are, in order: `20261106000001_menus.sql` (restaurant menus), `20261107000001_nutrition.sql` (ingredient nutrition, micronutrients, leftovers), `20261108000001_water.sql` (water reminders) `20261109000001_language.sql` (Hindi/Marathi) and `20261110000001_engagement.sql` (streaks, cheers, milestones, Home view). If you set up before any of these, paste each missing one once, in that order.
+  - **Already set up?** Paste **`supabase/setup/update-existing-database.sql`** once (Raw → copy → SQL Editor → Run). It brings an older database up to date and is safe to run again, so you don't need to work out which migrations you've already applied. It covers everything after the Hindi/Marathi change (streaks, cheers, milestones, Home view, AI model choice).
 
 ## If something goes wrong
 

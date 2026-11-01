@@ -29,7 +29,18 @@ run "$PG_BIN/pg_ctl" -D "$WORK/data" -o "-p $PORT -k $WORK -c listen_addresses='
 
 PSQL=("$PG_BIN/psql" -h "$WORK" -p "$PORT" -U postgres -d postgres -q -v ON_ERROR_STOP=1)
 "${PSQL[@]}" -f "$ROOT/supabase/tests/stubs.sql"
-if [ "${USE_ALL_IN_ONE:-0}" = "1" ]; then
+if [ "${USE_UPDATE:-0}" = "1" ]; then
+  # An existing database: migrations up to the language change, then the
+  # update file twice (it must be safe to re-run).
+  for f in "$ROOT"/supabase/migrations/*.sql; do
+    [[ "$(basename "$f")" > "20261109999999" ]] && continue
+    echo "applying $(basename "$f")"
+    "${PSQL[@]}" -f "$f"
+  done
+  echo "applying supabase/setup/update-existing-database.sql (twice)"
+  "${PSQL[@]}" -f "$ROOT/supabase/setup/update-existing-database.sql"
+  "${PSQL[@]}" -f "$ROOT/supabase/setup/update-existing-database.sql"
+elif [ "${USE_ALL_IN_ONE:-0}" = "1" ]; then
   echo "applying supabase/setup/all-in-one.sql"
   "${PSQL[@]}" -f "$ROOT/supabase/setup/all-in-one.sql"
 else

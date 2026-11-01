@@ -6,6 +6,7 @@ import { z } from "zod";
 import { getSession } from "@/lib/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { encryptSecret } from "@/lib/crypto";
+import { generate } from "@/lib/ai/gemini";
 import { MODULE_BY_KEY } from "@/modules/registry";
 import { cookies } from "next/headers";
 import { LANGS, LANG_COOKIE } from "@/lib/i18n/core";
@@ -99,6 +100,29 @@ export async function setModuleEnabled(moduleKey: string, enabled: boolean) {
 }
 
 // --------------------------------------------------------------------- AI ----
+
+export async function saveAiModel(_: ActionResult | null, form: FormData): Promise<ActionResult> {
+  const model = z.enum(["standard", "best"]).safeParse(form.get("ai_model"));
+  if (!model.success) return { error: "Pick a model." };
+  const session = await getSession();
+  if (session.me.role !== "owner") return { error: "Only the household owner can change this." };
+  const { error } = await session.supabase.from("households").update({ ai_model: model.data }).eq("id", session.household.id);
+  if (error) return { error: "Couldn't save. If you set up Hearth before November 2026, run update-existing-database.sql in Supabase first." };
+  refreshAll();
+  return { ok: true, message: "Saved." };
+}
+
+/** Sends one tiny request through the same path as every AI feature and reports what happened. */
+export async function testAi(): Promise<ActionResult> {
+  const session = await getSession();
+  const started = Date.now();
+  try {
+    const res = await generate(session, { contents: "Reply with the single word OK.", config: { temperature: 0, maxOutputTokens: 16 } });
+    return { ok: true, message: `Working: ${res.modelUsed} answered in ${((Date.now() - started) / 1000).toFixed(1)} s.` };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "The AI test failed." };
+  }
+}
 
 export async function saveAiLimit(_: ActionResult | null, form: FormData): Promise<ActionResult> {
   const limit = z.coerce.number().int().min(0).max(1000).safeParse(form.get("ai_daily_limit"));

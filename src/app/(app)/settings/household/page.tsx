@@ -129,6 +129,7 @@ export default async function HouseholdSettingsPage() {
             hasCustomKey={session.household.has_custom_ai_key}
             limit={session.household.ai_daily_limit}
             usedToday={usedToday ?? 0}
+            model={session.household.ai_model ?? "standard"}
           />
         </Card>
 

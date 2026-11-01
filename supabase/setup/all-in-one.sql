@@ -2317,3 +2317,12 @@ end;
 $$;
 revoke all on function public.activity_days(uuid, date) from public, anon;
 grant execute on function public.activity_days(uuid, date) to authenticated;
+
+-- ============================================================
+-- 20261111000001_ai_model.sql
+-- ============================================================
+
+-- Household AI model choice: standard (Flash: faster, more free requests)
+-- or best (Pro: smarter, slower, fewer free requests).
+alter table public.households
+  add column ai_model text not null default 'standard' check (ai_model in ('standard', 'best'));

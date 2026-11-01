@@ -2,7 +2,7 @@ import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { AppSession } from "@/lib/session";
-import { AiError, DEFAULT_MODEL, assertQuota, getGemini, recordUsage } from "@/lib/ai/gemini";
+import { AiError, assertQuota, generate, recordUsage } from "@/lib/ai/gemini";
 import { SAFETY_INSTRUCTIONS, buildAiContext } from "@/lib/ai/context";
 import { addDays, dayOfWeek, todayIn } from "@/lib/dates";
 
@@ -46,9 +46,7 @@ export async function generateDigest(session: AppSession): Promise<{ content: st
     buildAiContext(session, { subjectId: session.userId, useMedicalHistory: session.profile.ai_use_medical_history }),
     householdUpcoming(session, today),
   ]);
-  const ai = await getGemini(session);
-  const res = await ai.models.generateContent({
-    model: DEFAULT_MODEL,
+  const res = await generate(session, {
     contents: `Write ${session.me.display_name}'s weekly summary for the week starting ${ws}. Use only the data provided.
 Format (plain text, no markdown headings, max ~180 words):
 🌟 Wins: 2–3 short bullets (adherence, trends improving, workouts, habits).

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createPartFromBase64 } from "@google/genai";
 import { getSession } from "@/lib/session";
-import { AiError, DEFAULT_MODEL, assertQuota, getGemini, recordUsage } from "@/lib/ai/gemini";
+import { AiError, assertQuota, generate, recordUsage } from "@/lib/ai/gemini";
 import { medicalExtractionSchema, toGeminiSchema } from "@/lib/ai/schemas";
 import type { MedicalDocument } from "@/lib/types";
 
@@ -36,9 +36,7 @@ export async function POST(request: Request) {
     if (file.error || !file.data) throw new AiError("Couldn't read the uploaded file", 404);
     const base64 = Buffer.from(await file.data.arrayBuffer()).toString("base64");
 
-    const ai = await getGemini(session);
-    const res = await ai.models.generateContent({
-      model: DEFAULT_MODEL,
+    const res = await generate(session, {
       contents: [{ role: "user", parts: [createPartFromBase64(base64, document.mime_type), { text: PROMPT }] }],
       config: {
         responseMimeType: "application/json",

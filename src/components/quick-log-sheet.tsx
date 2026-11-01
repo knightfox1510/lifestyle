@@ -13,7 +13,7 @@ import { logDose } from "@/app/(app)/medicines/actions";
 import { logWater } from "@/lib/water-actions";
 import { getQuickLogData, undoQuickLog, type DueDose } from "@/lib/quick-actions";
 import { useT } from "@/lib/i18n/client";
-import { useToast } from "@/components/toaster";
+import { haptic, useToast } from "@/components/toaster";
 
 export type QuickLogConfig = { ownerId: string; medicines: boolean; bladder: boolean; body: boolean; checkin: boolean; food: boolean };
 type Step = null | "dose" | "water" | "food" | "bladder" | "weight" | "check";
@@ -27,6 +27,8 @@ export function QuickLogSheet({ open, onClose, config }: { open: boolean; onClos
   const [step, setStep] = useState<Step>(null);
   const [data, setData] = useState<Data | null>(null);
   const [pending, start] = useTransition();
+  const [added, setAdded] = useState<{ id: number; label: string; undo?: () => Promise<unknown> }[]>([]);
+  const seq = useRef(0);
   const panel = useRef<HTMLDivElement>(null);
 
   // Load fresh data each time the sheet opens; reset the step when it closes.
@@ -47,12 +49,25 @@ export function QuickLogSheet({ open, onClose, config }: { open: boolean; onClos
   function close() {
     onClose();
     setStep(null);
+    if (added.length) router.refresh();
+    setAdded([]);
   }
 
-  function done(message: string, undo?: { kind: "water" | "bladder" | "dose"; id?: string }) {
-    toast(message, undo?.id ? { undo: () => undoQuickLog(undo.kind, undo.id!).then(() => router.refresh()) } : undefined);
-    close();
-    router.refresh();
+  /** Logged: stay open for the next entry, list it under "Added" with Undo. */
+  function done(message: string, undo?: { kind: "water" | "bladder" | "dose"; id?: string }, doseKey?: string) {
+    haptic();
+    const id = ++seq.current;
+    setAdded((xs) => [...xs, { id, label: message, undo: undo?.id ? () => undoQuickLog(undo.kind, undo.id!) : undefined }]);
+    if (doseKey && data) setData({ ...data, due: data.due.filter((d) => `${d.medicineId}-${d.time}` !== doseKey) });
+    setStep(null);
+  }
+
+  async function undoAdded(id: number) {
+    const item = added.find((x) => x.id === id);
+    setAdded((xs) => xs.filter((x) => x.id !== id));
+    await item?.undo?.();
+    toast(t("Undone"));
+    getQuickLogData().then(setData);
   }
 
   if (!open) return null;
@@ -91,6 +106,20 @@ export function QuickLogSheet({ open, onClose, config }: { open: boolean; onClos
           </button>
         </div>
 
+        {added.length ? (
+          <div className="mb-4 space-y-1.5 rounded-[18px] bg-accent-soft p-3">
+            <p className="text-[12px] font-medium uppercase tracking-[0.08em] text-accent">{t("Added")}</p>
+            <ul className="space-y-1">
+              {added.map((a) => (
+                <li key={a.id} className="flex items-center justify-between gap-2 text-[14px] [animation:toast-in_.2s_ease-out]">
+                  <span className="flex min-w-0 items-center gap-1.5"><Check className="size-4 shrink-0 text-accent" aria-hidden /> <span className="truncate">{a.label}</span></span>
+                  {a.undo ? <button className="shrink-0 text-[13px] text-fg-muted underline" onClick={() => undoAdded(a.id)}>{t("Undo")}</button> : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
         {step === null ? (
           <>
             <div className="grid grid-cols-3 gap-2">
@@ -106,9 +135,14 @@ export function QuickLogSheet({ open, onClose, config }: { open: boolean; onClos
               ))}
             </div>
             <div className="mt-4 rounded-[20px] bg-surface p-3 shadow-[0_0_0_1px_var(--border)]">
-              <p className="mb-2 text-[13px] font-medium text-fg-muted">{t("Or just say it")}</p>
+              <p className="mb-2 text-[13px] font-medium text-fg-muted">{t("Or just say it, several things at once (e.g. 2 idlis, chai and a glass of water)")}</p>
               <QuickLogBox ownerId={config.ownerId} compact />
             </div>
+            {added.length ? (
+              <Button variant="primary" className="mt-4 w-full" onClick={close}>
+                {t("Done · {n} added", { n: added.length })}
+              </Button>
+            ) : null}
           </>
         ) : null}
 
@@ -152,7 +186,7 @@ export function QuickLogSheet({ open, onClose, config }: { open: boolean; onClos
                       start(async () => {
                         const r = await logDose(d.medicineId, config.ownerId, d.date, d.time, "taken");
                         if (r.error) toast(r.error, { tone: "error" });
-                        else done(t("{name} taken", { name: d.name }), { kind: "dose", id: r.id });
+                        else done(t("{name} taken", { name: d.name }), { kind: "dose", id: r.id }, `${d.medicineId}-${d.time}`);
                       })
                     }
                   >

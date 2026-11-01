@@ -1,9 +1,9 @@
 "use client";
 
 import { useActionState } from "react";
-import { Badge, Field, Input } from "@/components/ui";
+import { Select, Badge, Field, Input } from "@/components/ui";
 import { ActionMessage, SubmitButton } from "@/components/form-status";
-import { removeGeminiKey, renameHousehold, saveAiLimit, saveGeminiKey } from "../actions";
+import { removeGeminiKey, renameHousehold, saveAiLimit, saveAiModel, saveGeminiKey, testAi } from "../actions";
 
 export function RenameHousehold({ name }: { name: string }) {
   const [state, action] = useActionState(renameHousehold, null);
@@ -25,13 +25,17 @@ export function AiSettings({
   hasCustomKey,
   limit,
   usedToday,
+  model,
 }: {
   isOwner: boolean;
   hasCustomKey: boolean;
   limit: number;
   usedToday: number;
+  model: "standard" | "best";
 }) {
   const [limitState, limitAction] = useActionState(saveAiLimit, null);
+  const [modelState, modelAction] = useActionState(saveAiModel, null);
+  const [testState, testAction] = useActionState(async () => testAi(), null);
   const [keyState, keyAction] = useActionState(saveGeminiKey, null);
 
   return (
@@ -43,8 +47,24 @@ export function AiSettings({
           used today.
         </p>
       </div>
+      <form action={testAction} className="flex flex-wrap items-center gap-2">
+        <SubmitButton variant="secondary" pendingText="Testing…">Test AI</SubmitButton>
+        <ActionMessage state={testState} />
+      </form>
       {isOwner ? (
         <>
+          <form action={modelAction} className="flex flex-wrap items-end gap-2">
+            <Field label="AI model" className="min-w-60 flex-1" hint="If the chosen model is busy, Hearth retries and then falls back to a lighter one automatically.">
+              <Select name="ai_model" defaultValue={model}>
+                <option value="standard">Standard (Flash): faster, more free requests</option>
+                <option value="best">Best (Pro): smarter, slower, fewer free requests</option>
+              </Select>
+            </Field>
+            <SubmitButton variant="secondary">Save model</SubmitButton>
+            <div className="basis-full">
+              <ActionMessage state={modelState} />
+            </div>
+          </form>
           <form action={limitAction} className="flex flex-wrap items-end gap-2">
             <Field label="Daily request limit" className="w-40">
               <Input type="number" name="ai_daily_limit" min={0} max={1000} defaultValue={limit} />

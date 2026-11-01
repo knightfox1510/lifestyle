@@ -4,9 +4,8 @@ import { NextResponse } from "next/server";
 import type { Part } from "@google/genai";
 import type { z } from "zod";
 import type { AppSession } from "@/lib/session";
-import { AiError, DEFAULT_MODEL, assertQuota, getGemini, recordUsage } from "@/lib/ai/gemini";
+import { AiError, assertQuota, generate, recordUsage } from "@/lib/ai/gemini";
 import { toGeminiSchema } from "@/lib/ai/schemas";
-import { aiLanguageLine } from "@/lib/i18n/server";
 
 /** Calls Gemini for structured JSON, enforces the household quota, logs usage and validates the result. */
 export async function runJson<S extends z.ZodType>(
@@ -21,27 +20,30 @@ export async function runJson<S extends z.ZodType>(
   },
 ): Promise<z.infer<S>> {
   await assertQuota(session);
-  const ai = await getGemini(session);
-  const res = await ai.models.generateContent({
-    model: DEFAULT_MODEL,
+  const request = {
     contents: [{ role: "user", parts: opts.parts }],
     config: {
-      systemInstruction: [opts.system, aiLanguageLine(session)].filter(Boolean).join("\n\n") || undefined,
+      systemInstruction: opts.system,
       responseMimeType: "application/json",
       responseJsonSchema: toGeminiSchema(opts.schema),
       temperature: opts.temperature ?? 0.4,
     },
-  });
-  await recordUsage(session, opts.feature, opts.usedHealth ?? false, res.usageMetadata);
-  let json: unknown;
-  try {
-    json = JSON.parse(res.text ?? "");
-  } catch {
-    throw new AiError("The AI response couldn't be read. Try again.", 502);
+  };
+  // A malformed or incomplete JSON answer gets one more try before giving up.
+  for (let attempt = 0; ; attempt++) {
+    const res = await generate(session, request);
+    if (attempt === 0) await recordUsage(session, opts.feature, opts.usedHealth ?? false, res.usageMetadata);
+    let json: unknown = undefined;
+    try {
+      json = JSON.parse(res.text ?? "");
+    } catch {
+      /* retried below */
+    }
+    const parsed = opts.schema.safeParse(json);
+    if (parsed.success) return parsed.data;
+    console.error(`runJson ${opts.feature}: unusable answer from ${res.modelUsed}`, parsed.error?.issues?.slice(0, 3));
+    if (attempt >= 1) throw new AiError(json === undefined ? "The AI response couldn't be read. Try again." : "The AI response was incomplete. Try again.", 502);
   }
-  const parsed = opts.schema.safeParse(json);
-  if (!parsed.success) throw new AiError("The AI response was incomplete. Try again.", 502);
-  return parsed.data;
 }
 
 /** Wraps a route handler so AI/validation errors become friendly JSON responses. */

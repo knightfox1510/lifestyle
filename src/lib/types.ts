@@ -16,6 +16,8 @@ export type Household = {
   created_by: string | null;
   ai_daily_limit: number;
   has_custom_ai_key: boolean;
+  /** standard = Flash, best = Pro (missing on databases not yet updated). */
+  ai_model?: "standard" | "best";
 };
 
 export type MemberRole = "owner" | "member";

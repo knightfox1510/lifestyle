@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession } from "@/lib/session";
-import { AiError, DEFAULT_MODEL, assertQuota, getGemini, recordUsage } from "@/lib/ai/gemini";
+import { AiError, assertQuota, generate, recordUsage } from "@/lib/ai/gemini";
 import { SAFETY_INSTRUCTIONS, buildAiContext } from "@/lib/ai/context";
 
 const bodySchema = z.object({
@@ -29,9 +29,7 @@ export async function POST(request: Request) {
 
   try {
     await assertQuota(session);
-    const ai = await getGemini(session);
-    const res = await ai.models.generateContent({
-      model: DEFAULT_MODEL,
+    const res = await generate(session, {
       contents: prompt,
       config: {
         systemInstruction: `${SAFETY_INSTRUCTIONS}\n\n${context.text}`,
