@@ -2,7 +2,7 @@
 
 An installable web app (phone and laptop) for tracking household and partner life: health, food, routines and more. Personal data is private by default, and each person chooses which features their partner can see or edit. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the full plan.
 
-**Status: Phase 0 (foundation) + medical records + Phase 1 (health-first core).**
+**Status: Phases 0–2 built: foundation, medical records with blood work, health-first core, and food + AI.**
 
 ## What's included
 
@@ -15,7 +15,8 @@ An installable web app (phone and laptop) for tracking household and partner lif
 - **Medical records**
   - **Health profile:** DOB, sex, blood group, height, and free-text notes for the AI.
   - **Timeline** of conditions, illnesses, symptoms, injuries, surgeries, procedures, hospital stays, medications (dose, frequency, "taken for"), allergies, vaccinations, tests and visits. Includes summary cards for allergies, ongoing conditions and current medicines.
-  - **Hospital papers:** upload a PDF or photo (camera on phones) to a private bucket. **"Read with AI"** summarises it and proposes timeline entries; you tick which ones to add.
+  - **Papers & reports:** upload blood work, check-ups, discharge summaries, prescriptions, scans, ECGs and more (PDF or photo, camera on phones) to a private bucket. **"Read with AI"** summarises the document, proposes timeline entries and pulls out every lab value; you tick which ones to keep.
+  - **Blood work & labs:** structured results (value, unit, reference range, low/high flag) from AI extraction or manual entry with a catalogue of common markers. Shows out-of-range markers first, latest vs previous per panel, and a trend chart per marker with the reference band.
 - **Medicines:** prescriptions and courses with daily schedules (times + weekdays, start/end), Take / Skip per dose, as-needed doses, stock that counts down automatically with refill warnings, 7/30-day adherence and a 14-day grid. A new medicine can also be added to the medical timeline.
 - **Supplement stack:** a daily checklist grouped by time of day that starts fresh each morning (history is kept), optional stock, and a 30-day adherence view.
 - **Bladder diary:** one-tap logging of leaks (amount, urgency, what you were doing, pad change), urges, bathroom visits and drinks (type, ml, caffeine), with a day-by-day view.
@@ -25,7 +26,15 @@ An installable web app (phone and laptop) for tracking household and partner lif
 - **Daily check-in:** sleep, mood, energy and stress (1–5, one tap each), plus hours slept and notes.
 - **Habits:** weekly targets, tap-to-tick for the last 7 days, streaks.
 - **Grocery list (shared, offline-first):** changes save to the device first and sync when back online. Partners see updates live (Supabase Realtime). Items are grouped by aisle (category guessed from the name), with a "who added / picked up" note and a cart you can clear.
-- **AI (Gemini):** the key stays on the server. A household can optionally bring its own key, which is stored AES-256-GCM encrypted. There's a per-household daily request cap and usage logging. **Every AI request gets the person's health data**: medical history (allergies first, then conditions, current medicines, timeline and document summaries) plus recent tracking (tracked medicines and adherence, supplements, a 14-day bladder diary summary, pelvic floor sessions, check-ins and habits). There are three levels of override:
+- **Food diary:** describe a meal, say it (voice) or snap a photo, and AI estimates calories and macros for you to check before saving. Manual entry, "have it again", and daily progress against calorie, macro, fibre and water goals.
+  - **Goals:** goal, diet type, activity, cooking style, cuisines and dislikes. AI suggests targets from weight, height, age, labs and conditions, and explains why; a maintenance estimate is shown alongside.
+  - **Meal ideas:** 3 suggestions for a meal from what's in the pantry, what's expiring, or anything. Each fits the remaining calories and the person's health data and marks which ingredients you already have. Save as recipe, add missing items to the grocery list, or log it as eaten.
+- **Body recomposition:** weigh-ins, body fat and measurements. Shows progress to the target weight with milestones (e.g. every 1 kg to 60 kg), a weight trend line with the target, and weekly average calories next to weekly weight change. **Vitals:** blood pressure, resting heart rate and blood sugar, with charts.
+- **Pantry:** fridge / freezer / cupboard with expiry dates, opened state, "used up" and "used up + rebuy". Items expiring soon link to "cook something with these".
+- **Camera scan:** photograph a receipt or order screen, a fridge shelf, or a handwritten list or empty packet. AI lists the items with estimated (or printed) expiry; you confirm and send them to the pantry or the grocery list.
+- **Recipes & meal plan:** household recipe vault (manual or saved from AI ideas) with servings scaling, pantry check, log-as-eaten and add-to-plan. A weekly planner sends the rest of the week's missing ingredients to the grocery list.
+- **Quick log:** type or speak one sentence ("2 coffees, poha for breakfast, small leak during squats at 7:40, weighed 63.8"); AI splits it into food, drinks, bladder diary and weight entries for you to confirm.
+- **AI (Gemini):** the key stays on the server. A household can optionally bring its own key, which is stored AES-256-GCM encrypted. There's a per-household daily request cap and usage logging. **Every AI request gets the person's health data**: medical history (allergies first, then conditions, current medicines, timeline and document summaries) plus lab results (out-of-range first, with previous values) and recent tracking (medicines and adherence, supplements, a 14-day bladder diary summary, pelvic floor sessions, check-ins, habits, 7-day food averages vs goals, weight trend and target, latest vitals). There are three levels of override:
   1. A default in Settings ("Use my medical history in AI suggestions").
   2. A per-question switch on the Ask AI screen, plus "What will AI see?", which shows the exact context that will be sent.
   3. "Hide from AI" on any single timeline entry, document or the health profile.
@@ -88,7 +97,7 @@ npm run typecheck
 npm run build
 ```
 
-`npm test` runs the unit tests (scheduling, adherence, diary analysis, dates, categories). `npm run test:db` applies the migrations to a throwaway local PostgreSQL 15+ instance and runs the RLS tests, covering owner, partner and stranger access, read versus write grants, revocation on leaving, and stock updates when a dose is logged.
+`npm test` runs the unit tests (scheduling, adherence, diary analysis, dates, categories, pantry matching, lab flags, nutrition helpers). `npm run test:db` applies the migrations to a throwaway local PostgreSQL 15+ instance and runs the RLS tests, covering owner, partner and stranger access, read versus write grants, revocation on leaving, and stock updates when a dose is logged.
 
 ```bash
 npm run test:db

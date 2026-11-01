@@ -91,12 +91,17 @@ export type MedicalEvent = {
 };
 
 export const DOC_TYPES = [
+  "lab_report",
+  "health_checkup",
   "discharge_summary",
   "prescription",
-  "lab_report",
   "imaging",
+  "ecg",
+  "pathology",
   "consultation",
   "vaccination",
+  "dental",
+  "eye",
   "insurance",
   "other",
 ] as const;
@@ -296,4 +301,144 @@ export type GroceryItem = {
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
+};
+
+// ------------------------------------------------------------- Phase 2 ----
+
+export type LabFlag = "low" | "normal" | "high" | "abnormal";
+
+export type LabResult = {
+  id: string;
+  owner_id: string;
+  document_id: string | null;
+  test_date: string;
+  panel: string | null;
+  marker: string;
+  value: number | null;
+  value_text: string | null;
+  unit: string | null;
+  ref_low: number | null;
+  ref_high: number | null;
+  ref_text: string | null;
+  flag: LabFlag | null;
+  source: "manual" | "ai_extracted";
+  include_in_ai: boolean;
+};
+
+export type Meal = "breakfast" | "lunch" | "dinner" | "snack";
+
+export type NutritionGoals = {
+  owner_id: string;
+  goal: "lose" | "maintain" | "gain" | "recomp";
+  calories: number | null;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+  fiber_g: number | null;
+  water_ml: number | null;
+  diet_type: "any" | "vegetarian" | "eggetarian" | "vegan" | "jain" | "pescatarian" | "non_vegetarian";
+  activity_level: "sedentary" | "light" | "moderate" | "active" | "very_active";
+  cuisines: string[];
+  cooking_style: "quick" | "balanced" | "elaborate" | "meal_prep";
+  dislikes: string | null;
+  rationale: string | null;
+};
+
+export type FoodEntry = {
+  id: string;
+  owner_id: string;
+  eaten_at: string;
+  meal: Meal;
+  description: string;
+  quantity: string | null;
+  calories: number | null;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+  fiber_g: number | null;
+  source: "manual" | "ai_estimate" | "recipe" | "photo";
+  recipe_id: string | null;
+  notes: string | null;
+};
+
+export type BodyMetric = {
+  id: string;
+  owner_id: string;
+  measured_at: string;
+  weight_kg: number | null;
+  body_fat_pct: number | null;
+  waist_cm: number | null;
+  hip_cm: number | null;
+  chest_cm: number | null;
+  arm_cm: number | null;
+  thigh_cm: number | null;
+  resting_hr: number | null;
+  bp_systolic: number | null;
+  bp_diastolic: number | null;
+  blood_glucose_mgdl: number | null;
+  glucose_context: "fasting" | "post_meal" | "random" | null;
+  notes: string | null;
+};
+
+export type BodyGoals = {
+  owner_id: string;
+  start_weight_kg: number | null;
+  target_weight_kg: number | null;
+  target_date: string | null;
+  target_body_fat_pct: number | null;
+  milestones: number[];
+};
+
+export type PantryLocation = "fridge" | "freezer" | "pantry";
+
+export type PantryItem = {
+  id: string;
+  household_id: string;
+  created_by: string | null;
+  name: string;
+  quantity: string | null;
+  category: GroceryCategory;
+  location: PantryLocation;
+  purchased_on: string | null;
+  expires_on: string | null;
+  expiry_estimated: boolean;
+  opened: boolean;
+  notes: string | null;
+  used_up_at: string | null;
+  created_at: string;
+};
+
+export type RecipeIngredient = { name: string; quantity: string | null; category: GroceryCategory };
+
+export type Recipe = {
+  id: string;
+  household_id: string;
+  created_by: string | null;
+  title: string;
+  description: string | null;
+  servings: number;
+  prep_minutes: number | null;
+  cook_minutes: number | null;
+  ingredients: RecipeIngredient[];
+  steps: string[];
+  tags: string[];
+  calories_per_serving: number | null;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+  source_url: string | null;
+  ai_generated: boolean;
+  favorite: boolean;
+  updated_at: string;
+};
+
+export type MealPlanEntry = {
+  id: string;
+  household_id: string;
+  plan_date: string;
+  meal: Meal;
+  recipe_id: string | null;
+  title: string | null;
+  servings: number;
+  notes: string | null;
 };

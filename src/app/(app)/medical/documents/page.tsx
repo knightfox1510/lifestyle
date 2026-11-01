@@ -6,7 +6,7 @@ import { UploadDocument } from "./upload-document";
 import { AnalyzeDocument } from "./analyze-document";
 import { deleteMedicalDocument, setDocumentIncludeInAi } from "../actions";
 
-export const metadata = { title: "Hospital papers" };
+export const metadata = { title: "Papers & reports" };
 
 export default async function DocumentsPage() {
   const session = await getSession();
@@ -28,7 +28,7 @@ export default async function DocumentsPage() {
 
       {docs.length === 0 ? (
         <EmptyState title="No papers yet">
-          Upload discharge summaries, prescriptions or lab reports (PDF or photo). AI can read them and build the timeline for you.
+          Upload blood work, check-ups, discharge summaries, prescriptions, scans or ECGs (PDF or photo). AI reads them, adds lab values to Blood work and builds the timeline for you.
         </EmptyState>
       ) : (
         <ul className="space-y-3">

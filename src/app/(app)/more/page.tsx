@@ -9,6 +9,8 @@ export default async function MorePage() {
   const session = await getSession();
   const enabled = MODULES.filter((m) => m.href && session.isModuleEnabled(m.key));
   const extras = [
+    { href: "/log", name: "Quick log", icon: "🎙️", description: "Type or speak; AI logs food, drinks, bladder and weight." },
+    ...(session.isModuleEnabled("pantry") ? [{ href: "/pantry/scan", name: "Scan groceries", icon: "📷", description: "Receipt, fridge shelf or shopping list." }] : []),
     { href: "/assistant", name: "Ask AI", icon: "✨", description: "Suggestions that consider your health data." },
     { href: "/customize", name: "Home widgets", icon: "🧩", description: "Choose what appears on Home." },
     { href: "/settings/household", name: "Features on/off", icon: "🎛️", description: "Turn features on or off for the household." },

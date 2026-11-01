@@ -17,9 +17,14 @@ export const CATEGORY_META: Record<MedicalCategory, { label: string; icon: strin
 };
 
 export const DOC_TYPE_LABEL: Record<DocType, string> = {
+  health_checkup: "Health check-up",
+  ecg: "ECG / heart test",
+  pathology: "Pathology / biopsy",
+  dental: "Dental",
+  eye: "Eye test",
   discharge_summary: "Discharge summary",
   prescription: "Prescription",
-  lab_report: "Lab report",
+  lab_report: "Blood work / lab report",
   imaging: "Imaging / scan",
   consultation: "Consultation note",
   vaccination: "Vaccination record",

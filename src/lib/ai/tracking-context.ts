@@ -2,7 +2,9 @@ import "server-only";
 
 import type { AppSession } from "@/lib/session";
 import { addDays, lastNDays, startOfLocalDayIso, todayIn } from "@/lib/dates";
-import type { BladderEvent, DailyCheckin, FluidIntake, Habit, HabitLog, Medicine, MedicineDose, PelvicFloorSession, Supplement } from "@/lib/types";
+import type { BladderEvent, BodyGoals, BodyMetric, DailyCheckin, FluidIntake, FoodEntry, Habit, HabitLog, Medicine, MedicineDose, NutritionGoals, PelvicFloorSession, Supplement } from "@/lib/types";
+import { localDate } from "@/lib/dates";
+import { totals } from "@/modules/food/meta";
 import { adherence, doseLabel } from "@/modules/medicines/logic";
 import { dailyStats, physicalShare, trend, triggerCounts } from "@/modules/bladder/analysis";
 import { TIMING_LABEL } from "@/modules/supplements/meta";
@@ -20,7 +22,7 @@ export async function buildTrackingContext(session: AppSession, subjectId: strin
   const db = session.supabase;
   const lines: string[] = [];
 
-  const [meds, doses, sups, events, fluids, kegel, checkins, habits, habitLogs] = await Promise.all([
+  const [meds, doses, sups, events, fluids, kegel, checkins, habits, habitLogs, food, nGoals, body, bGoals] = await Promise.all([
     can("medicines") ? db.from("medicines").select("*").eq("owner_id", subjectId).eq("active", true).eq("include_in_ai", true) : null,
     can("medicines") ? db.from("medicine_doses").select("*").eq("owner_id", subjectId).gte("scheduled_date", days14[0]) : null,
     can("supplements") ? db.from("supplements").select("*").eq("owner_id", subjectId).eq("active", true).eq("include_in_ai", true) : null,
@@ -30,6 +32,10 @@ export async function buildTrackingContext(session: AppSession, subjectId: strin
     can("checkin") ? db.from("daily_checkins").select("*").eq("owner_id", subjectId).gte("checkin_date", addDays(today, -6)) : null,
     can("habits") ? db.from("habits").select("*").eq("owner_id", subjectId).eq("active", true) : null,
     can("habits") ? db.from("habit_logs").select("*").eq("owner_id", subjectId).gte("log_date", addDays(today, -6)) : null,
+    can("food_diary") ? db.from("food_entries").select("eaten_at, description, calories, protein_g, carbs_g, fat_g, fiber_g").eq("owner_id", subjectId).gte("eaten_at", startOfLocalDayIso(addDays(today, -6))) : null,
+    can("food_diary") ? db.from("nutrition_goals").select("*").eq("owner_id", subjectId).maybeSingle() : null,
+    can("body_recomp") ? db.from("body_metrics").select("*").eq("owner_id", subjectId).gte("measured_at", startOfLocalDayIso(addDays(today, -60))).order("measured_at") : null,
+    can("body_recomp") ? db.from("body_goals").select("*").eq("owner_id", subjectId).maybeSingle() : null,
   ]);
 
   const medList = (meds?.data ?? []) as Medicine[];
@@ -86,6 +92,35 @@ export async function buildTrackingContext(session: AppSession, subjectId: strin
   if (hb.length) {
     const logs = (habitLogs?.data ?? []) as HabitLog[];
     lines.push("", `Habits (done in last 7 days / target per week): ${hb.map((h) => `${h.name} ${logs.filter((l) => l.habit_id === h.id).length}/${h.target_per_week}`).join(", ")}.`);
+  }
+
+  const ng = (nGoals?.data ?? null) as NutritionGoals | null;
+  const fe = (food?.data ?? []) as Pick<FoodEntry, "eaten_at" | "description" | "calories" | "protein_g" | "carbs_g" | "fat_g" | "fiber_g">[];
+  if (ng || fe.length) {
+    if (ng) {
+      lines.push("", `Nutrition: goal ${ng.goal}, diet ${ng.diet_type}, activity ${ng.activity_level}${ng.calories ? `; targets ${ng.calories} kcal, ${ng.protein_g ?? "?"} g protein, ${ng.fiber_g ?? "?"} g fibre` : ""}${ng.dislikes ? `; avoids ${ng.dislikes}` : ""}.`);
+    }
+    if (fe.length) {
+      const days = lastNDays(today, 7).map((d) => totals(fe.filter((e) => localDate(e.eaten_at, tz) === d))).filter((t) => t.calories > 0);
+      const avg = (k: "calories" | "protein_g" | "fiber_g") => Math.round(days.reduce((a, t) => a + t[k], 0) / Math.max(1, days.length));
+      const todayT = totals(fe.filter((e) => localDate(e.eaten_at, tz) === today));
+      lines.push(`Food diary last 7 days (${days.length} days logged): avg ${avg("calories")} kcal, ${avg("protein_g")} g protein, ${avg("fiber_g")} g fibre per day. Today so far: ${todayT.calories} kcal, ${todayT.protein_g} g protein.`);
+    }
+  }
+
+  const bm = (body?.data ?? []) as BodyMetric[];
+  const bg = (bGoals?.data ?? null) as BodyGoals | null;
+  const w = bm.filter((m) => m.weight_kg !== null);
+  if (w.length || bg) {
+    const latest = w.at(-1);
+    const first = w[0];
+    lines.push(
+      "",
+      `Body: ${latest ? `weight ${latest.weight_kg} kg (${localDate(latest.measured_at, tz)})` : "no recent weigh-in"}${first && latest && first !== latest ? `, ${Math.round((Number(latest.weight_kg) - Number(first.weight_kg)) * 10) / 10} kg since ${localDate(first.measured_at, tz)}` : ""}${bg?.target_weight_kg ? `; target ${bg.target_weight_kg} kg${bg.target_date ? ` by ${bg.target_date}` : ""}` : ""}.`,
+    );
+    const bp = [...bm].reverse().find((m) => m.bp_systolic);
+    const gl = [...bm].reverse().find((m) => m.blood_glucose_mgdl);
+    if (bp || gl) lines.push(`Latest vitals: ${[bp ? `BP ${bp.bp_systolic}/${bp.bp_diastolic}` : null, gl ? `glucose ${gl.blood_glucose_mgdl} mg/dL (${gl.glucose_context ?? "random"})` : null].filter(Boolean).join(", ")}.`);
   }
 
   return lines.join("\n").trim();

@@ -11,6 +11,7 @@ const bodySchema = z.object({ documentId: z.uuid() });
 const PROMPT = `You are reading a patient's medical document (hospital paper, discharge summary, prescription, lab report or similar).
 Extract a faithful summary and timeline entries. Only include facts that are written in the document; never guess diagnoses.
 Dates must be YYYY-MM-DD. Medications: one entry per drug with dosage and frequency as written; mark ongoing=true if prescribed without an end date.
+For lab/blood reports, list every measured value in lab_results with the unit and reference range exactly as printed; use the sample/report date as test_date.
 If text is illegible, say so in the summary and skip that item.`;
 
 export async function POST(request: Request) {
@@ -50,7 +51,7 @@ export async function POST(request: Request) {
     const extraction = medicalExtractionSchema.safeParse(JSON.parse(res.text ?? "{}"));
     if (!extraction.success) throw new AiError("The AI response couldn't be read. Try again.", 502);
 
-    const { summary, document_date, provider, events } = extraction.data;
+    const { summary, document_date, provider, events, lab_results } = extraction.data;
     await session.supabase
       .from("medical_documents")
       .update({
@@ -62,7 +63,7 @@ export async function POST(request: Request) {
       })
       .eq("id", document.id);
 
-    return NextResponse.json({ summary, events });
+    return NextResponse.json({ summary, events, lab_results });
   } catch (err) {
     if (err instanceof AiError) return NextResponse.json({ error: err.message }, { status: err.status });
     console.error("medical extract failed", err);

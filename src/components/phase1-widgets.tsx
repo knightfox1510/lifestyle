@@ -7,6 +7,7 @@ import { ActionMessage, SubmitButton } from "@/components/form-status";
 import type { ActionResult } from "@/lib/types";
 import { quickLog } from "@/app/(app)/bladder/actions";
 import { quickAddGrocery } from "@/app/(app)/groceries/actions";
+import { logBodyMetric } from "@/app/(app)/body/actions";
 
 export function BladderQuickButtons({ ownerId, counts }: { ownerId: string; counts: { leaks: number; voids: number; fluidMl: number } }) {
   const [pending, start] = useTransition();
@@ -42,6 +43,20 @@ export function GroceryQuickAdd() {
       <div className="flex gap-2">
         <Input name="name" placeholder="Add to list…" aria-label="Grocery item" maxLength={120} required />
         <SubmitButton pendingText="…">Add</SubmitButton>
+      </div>
+      <ActionMessage state={state} />
+    </form>
+  );
+}
+
+export function QuickWeighIn({ ownerId, last }: { ownerId: string; last: number | null }) {
+  const [state, action] = useActionState(logBodyMetric, null);
+  return (
+    <form action={action} className="space-y-1">
+      <input type="hidden" name="ownerId" value={ownerId} />
+      <div className="flex gap-2">
+        <Input name="weight_kg" type="number" step="0.1" min={20} max={350} placeholder={last ? String(last) : "kg"} aria-label="Weight in kg" required />
+        <SubmitButton pendingText="…">Log</SubmitButton>
       </div>
       <ActionMessage state={state} />
     </form>

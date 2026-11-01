@@ -65,7 +65,7 @@ export function UploadDocument({ ownerId }: { ownerId: string }) {
         onClick={() => setOpen(true)}
         className="w-full rounded-2xl border border-dashed border-border px-4 py-3 text-left text-sm text-fg-muted hover:bg-surface"
       >
-        + Upload hospital papers: PDF, or take a photo
+        + Upload a report: blood work, hospital papers, scans (PDF or photo)
       </button>
     );
   }
@@ -84,10 +84,10 @@ export function UploadDocument({ ownerId }: { ownerId: string }) {
         </Field>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Title">
-            <Input name="title" maxLength={200} placeholder="e.g. Discharge summary, Apollo" />
+            <Input name="title" maxLength={200} placeholder="e.g. Annual blood work, Thyrocare" />
           </Field>
           <Field label="Type">
-            <Select name="doc_type" defaultValue="discharge_summary">
+            <Select name="doc_type" defaultValue="lab_report">
               {DOC_TYPES.map((t) => (
                 <option key={t} value={t}>{DOC_TYPE_LABEL[t]}</option>
               ))}

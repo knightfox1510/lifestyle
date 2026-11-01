@@ -20,6 +20,12 @@ export const WIDGETS: WidgetDef[] = [
   { key: "habits.today", name: "Today's habits", description: "Tick off today's habits.", module: "habits", defaultSize: "md" },
   { key: "pelvic_floor.today", name: "Pelvic floor", description: "Today's sessions and streak.", module: "pelvic_floor", defaultSize: "sm" },
   { key: "groceries.list", name: "Grocery list", description: "What's left to buy, with quick add.", module: "groceries", defaultSize: "md" },
+  { key: "core.quick_log", name: "Quick log (type or speak)", description: "One sentence logs food, drinks, bladder events and weight.", module: null, defaultSize: "md" },
+  { key: "food_diary.today", name: "Calories today", description: "Calories and macros against your goals.", module: "food_diary", defaultSize: "md" },
+  { key: "body_recomp.weight", name: "Weight", description: "Latest weight, progress to target and a quick weigh-in.", module: "body_recomp", defaultSize: "sm" },
+  { key: "pantry.expiring", name: "Expiring soon", description: "Pantry items to use up in the next 3 days.", module: "pantry", defaultSize: "md" },
+  { key: "recipes.today", name: "Today's meal plan", description: "What's planned to cook today.", module: "recipes", defaultSize: "md" },
+  { key: "medical_records.labs", name: "Blood work flags", description: "Latest lab values outside the reference range.", module: "medical_records", defaultSize: "md" },
   { key: "core.ask_ai", name: "Ask AI", description: "Ask for a suggestion from Home.", module: null, defaultSize: "md" },
   { key: "core.household", name: "Household", description: "Members and what's shared.", module: null, defaultSize: "md" },
 ];
@@ -27,13 +33,19 @@ export const WIDGETS: WidgetDef[] = [
 export const WIDGET_BY_KEY = Object.fromEntries(WIDGETS.map((w) => [w.key, w])) as Record<string, WidgetDef>;
 export const DEFAULT_WIDGETS = [
   "core.today",
+  "core.quick_log",
+  "food_diary.today",
   "medicines.today",
   "bladder_diary.quick",
   "supplements.today",
   "checkin.today",
   "habits.today",
   "pelvic_floor.today",
+  "body_recomp.weight",
   "groceries.list",
+  "pantry.expiring",
+  "recipes.today",
+  "medical_records.labs",
   "medical_records.quick_log",
   "core.ask_ai",
 ];

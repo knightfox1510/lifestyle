@@ -29,7 +29,7 @@ export default async function MedicalLayout({ children }: LayoutProps<"/medical"
         title={isSelf ? "Medical records" : `${subject.display_name}'s medical records`}
         subtitle={
           isSelf
-            ? "Your history, hospital papers and a timeline of everything health-related. AI suggestions use it unless you switch it off."
+            ? "Your history, blood work, hospital papers and reports, and a timeline of everything health-related. AI suggestions use it unless you switch it off."
             : access === "write"
               ? "Shared with you: you can view and add entries."
               : "Shared with you: view only."
@@ -38,7 +38,8 @@ export default async function MedicalLayout({ children }: LayoutProps<"/medical"
       <SubNav
         items={[
           { href: "/medical", label: "Timeline" },
-          { href: "/medical/documents", label: "Hospital papers" },
+          { href: "/medical/labs", label: "Blood work & labs" },
+          { href: "/medical/documents", label: "Papers & reports" },
           { href: "/medical/profile", label: "Health profile" },
         ]}
       />

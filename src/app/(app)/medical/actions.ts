@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getSession } from "@/lib/session";
 import { extractedEventSchema } from "@/lib/ai/schemas";
+import { labResultSchema } from "@/lib/ai/phase2-schemas";
+import { computeFlag } from "@/modules/medical/labs";
 import { DOC_TYPES, MEDICAL_CATEGORIES, SEVERITIES, type ActionResult } from "@/lib/types";
 
 const MODULE = "medical_records";
@@ -197,11 +199,12 @@ export async function deleteMedicalDocument(documentId: string) {
   refresh();
 }
 
-/** Saves the AI-proposed timeline entries the user ticked. */
-export async function importExtractedEvents(documentId: string, events: unknown): Promise<ActionResult> {
+/** Saves the AI-proposed timeline entries and lab values the user ticked. */
+export async function importExtractedEvents(documentId: string, events: unknown, labs: unknown = []): Promise<ActionResult> {
   const parsed = z.array(extractedEventSchema).max(100).safeParse(events);
-  if (!parsed.success) return { error: "Some entries are invalid. Check dates (YYYY-MM-DD)." };
-  if (parsed.data.length === 0) return { error: "Select at least one entry." };
+  const parsedLabs = z.array(labResultSchema).max(200).safeParse(labs);
+  if (!parsed.success || !parsedLabs.success) return { error: "Some entries are invalid. Check dates (YYYY-MM-DD)." };
+  if (parsed.data.length === 0 && parsedLabs.data.length === 0) return { error: "Select at least one entry." };
 
   const session = await getSession();
   const { data: doc } = await session.supabase
@@ -222,8 +225,78 @@ export async function importExtractedEvents(documentId: string, events: unknown)
     source: "ai_extracted" as const,
     include_in_ai: true,
   }));
-  const { error } = await session.supabase.from("medical_events").insert(rows);
-  if (error) return { error: "Couldn't add the entries." };
+  if (rows.length) {
+    const { error } = await session.supabase.from("medical_events").insert(rows);
+    if (error) return { error: "Couldn't add the entries." };
+  }
+  if (parsedLabs.data.length) {
+    const { error } = await session.supabase.from("lab_results").insert(
+      parsedLabs.data.map((l) => ({
+        ...l,
+        flag: l.flag ?? computeFlag(l.value, l.ref_low, l.ref_high),
+        owner_id: doc.owner_id,
+        created_by: session.userId,
+        household_id: session.household.id,
+        document_id: documentId,
+        source: "ai_extracted" as const,
+      })),
+    );
+    if (error) return { error: "Couldn't add the lab results." };
+  }
   refresh();
-  return { ok: true, message: `Added ${rows.length} ${rows.length === 1 ? "entry" : "entries"} to the timeline.` };
+  const parts = [
+    rows.length ? `${rows.length} timeline ${rows.length === 1 ? "entry" : "entries"}` : null,
+    parsedLabs.data.length ? `${parsedLabs.data.length} lab value${parsedLabs.data.length === 1 ? "" : "s"}` : null,
+  ].filter(Boolean);
+  return { ok: true, message: `Added ${parts.join(" and ")}.` };
+}
+
+// ------------------------------------------------------------ lab results ----
+
+const num = z.preprocess((v) => (v === "" || v == null ? null : Number(v)), z.number().finite().nullable());
+const labSchema = z
+  .object({
+    ownerId: z.uuid(),
+    test_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick the test date"),
+    panel: optionalText(100),
+    marker: z.string().trim().min(1, "Which test?").max(120),
+    value: num,
+    value_text: optionalText(120),
+    unit: optionalText(40),
+    ref_low: num,
+    ref_high: num,
+  })
+  .refine((v) => v.value !== null || v.value_text, { message: "Enter a value" });
+
+export async function addLabResult(_: ActionResult | null, form: FormData): Promise<ActionResult> {
+  const parsed = labSchema.safeParse(Object.fromEntries(form));
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const { ownerId, ...values } = parsed.data;
+  try {
+    const session = await requireWrite(ownerId);
+    const { error } = await session.supabase.from("lab_results").insert({
+      ...values,
+      flag: computeFlag(values.value ?? null, values.ref_low ?? null, values.ref_high ?? null),
+      owner_id: ownerId,
+      created_by: session.userId,
+      household_id: session.household.id,
+    });
+    if (error) return { error: "Couldn't save the result." };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+  refresh();
+  return { ok: true, message: "Result added." };
+}
+
+export async function setLabIncludeInAi(id: string, ownerId: string, include: boolean) {
+  const session = await requireWrite(ownerId);
+  await session.supabase.from("lab_results").update({ include_in_ai: include }).eq("id", id);
+  refresh();
+}
+
+export async function deleteLabResult(id: string) {
+  const session = await getSession();
+  await session.supabase.from("lab_results").delete().eq("id", id).eq("owner_id", session.userId);
+  refresh();
 }

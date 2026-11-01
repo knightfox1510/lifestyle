@@ -1,7 +1,8 @@
 import "server-only";
 
 import type { AppSession } from "@/lib/session";
-import type { MedicalDocument, MedicalEvent, MedicalProfile } from "@/lib/types";
+import type { LabResult, MedicalDocument, MedicalEvent, MedicalProfile } from "@/lib/types";
+import { byMarker, refLabel, valueLabel } from "@/modules/medical/labs";
 import { buildTrackingContext } from "@/lib/ai/tracking-context";
 
 /**
@@ -26,7 +27,7 @@ const MAX_CHARS = 24_000;
 export type AiContext = {
   text: string;
   usedMedical: boolean;
-  stats: { events: number; documents: number; profile: boolean };
+  stats: { events: number; documents: number; profile: boolean; labs?: number };
 };
 
 function age(dob: string | null): string | null {
@@ -63,7 +64,7 @@ export async function buildMedicalContext(
   subjectId: string,
 ): Promise<Omit<AiContext, "usedMedical">> {
   const { supabase } = session;
-  const [profileRes, eventsRes, docsRes] = await Promise.all([
+  const [profileRes, eventsRes, docsRes, labsRes] = await Promise.all([
     supabase.from("medical_profiles").select("*").eq("owner_id", subjectId).maybeSingle(),
     supabase
       .from("medical_events")
@@ -79,6 +80,13 @@ export async function buildMedicalContext(
       .eq("include_in_ai", true)
       .order("document_date", { ascending: false, nullsFirst: false })
       .limit(MAX_DOCS),
+    supabase
+      .from("lab_results")
+      .select("*")
+      .eq("owner_id", subjectId)
+      .eq("include_in_ai", true)
+      .order("test_date", { ascending: false })
+      .limit(600),
   ]);
 
   const profile = profileRes.data as MedicalProfile | null;
@@ -123,6 +131,18 @@ export async function buildMedicalContext(
     lines.push("", "Medical timeline (newest first):", ...history.map((e) => eventLine(e, byId)));
   }
 
+  const labGroups = byMarker((labsRes.data ?? []) as LabResult[]);
+  if (labGroups.length) {
+    const flagged = labGroups.filter((g) => g[0].flag && g[0].flag !== "normal");
+    const rest = labGroups.filter((g) => !g[0].flag || g[0].flag === "normal");
+    const labLine = (g: LabResult[]) => {
+      const [latest, prev] = g;
+      const ref = refLabel(latest);
+      return `- ${latest.marker}: ${valueLabel(latest)} on ${latest.test_date}${latest.flag && latest.flag !== "normal" ? ` (${latest.flag.toUpperCase()})` : ""}${ref ? `, ref ${ref}` : ""}${prev ? `; previous ${valueLabel(prev)} on ${prev.test_date}` : ""}`;
+    };
+    lines.push("", "Lab results / blood work (latest per test; out-of-range first):", ...flagged.map(labLine), ...rest.slice(0, 60).map(labLine));
+  }
+
   const docLines = docs
     .map((d) => {
       const summary = d.ai_summary || d.notes;
@@ -140,7 +160,7 @@ export async function buildMedicalContext(
 
   return {
     text,
-    stats: { events: events.length, documents: docLines.length, profile: Boolean(profile?.include_in_ai) },
+    stats: { events: events.length, documents: docLines.length, profile: Boolean(profile?.include_in_ai), labs: labGroups.length },
   };
 }
 
@@ -179,6 +199,6 @@ export async function buildAiContext(
 
 export const SAFETY_INSTRUCTIONS = `You are the household's lifestyle assistant (food, fitness, routines, groceries, wellbeing).
 Rules:
-- Use the person's medical history and recent health tracking below when relevant: respect allergies absolutely, avoid foods/exercises that conflict with conditions, recent surgeries or current medications, and mention briefly when a suggestion was adjusted because of their history.
+- Use the person's medical history, lab results and recent health tracking below when relevant (e.g. low vitamin D/B12/iron, high HbA1c or lipids should shape food and activity suggestions): respect allergies absolutely, avoid foods/exercises that conflict with conditions, recent surgeries or current medications, and mention briefly when a suggestion was adjusted because of their history.
 - You are not a doctor. Do not diagnose or change prescriptions. For red-flag symptoms or medication questions, recommend contacting their doctor.
 - Be concise and practical. Use metric units unless the person prefers imperial.`;

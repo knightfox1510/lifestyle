@@ -6,7 +6,11 @@ import { CATEGORY_META, formatRange } from "@/modules/medical/meta";
 import { WIDGET_BY_KEY } from "@/modules/widgets";
 import { QuickHealthLog } from "@/components/quick-health-log";
 import { AskAiWidget } from "@/components/ask-ai-widget";
-import { BladderQuickButtons, GroceryQuickAdd } from "@/components/phase1-widgets";
+import { BladderQuickButtons, GroceryQuickAdd, QuickWeighIn } from "@/components/phase1-widgets";
+import { QuickLogBox } from "@/components/quick-log-box";
+import { totals } from "@/modules/food/meta";
+import { daysUntil } from "@/modules/pantry/match";
+import { byMarker, valueLabel } from "@/modules/medical/labs";
 import { DoseButtons } from "@/app/(app)/medicines/dose-buttons";
 import { SupplementChecklist } from "@/app/(app)/supplements/checklist";
 import { CheckinForm } from "@/app/(app)/checkin/checkin-form";
@@ -15,6 +19,7 @@ import { addDays, lastNDays, localDate, localTime, startOfLocalDayIso, todayIn }
 import { streak } from "@/lib/streak";
 import { slotsForDay, doseLabel } from "@/modules/medicines/logic";
 import { dailyStats } from "@/modules/bladder/analysis";
+import type { BodyGoals, BodyMetric, FoodEntry, LabResult, MealPlanEntry, NutritionGoals, PantryItem, Recipe } from "@/lib/types";
 import type { BladderEvent, DailyCheckin, FluidIntake, GroceryItem, Habit, HabitLog, Medicine, MedicineDose, PelvicFloorSession, Supplement } from "@/lib/types";
 
 const span: Record<WidgetSize, string> = {
@@ -307,6 +312,153 @@ export async function Widget({ widgetKey, size, session }: { widgetKey: string; 
             <p className="text-sm text-fg-muted">Nothing to buy.</p>
           )}
           <GroceryQuickAdd />
+        </WidgetFrame>
+      );
+    }
+
+    case "core.quick_log": {
+      const canSomething = ["food_diary", "bladder_diary", "body_recomp"].some((k) => session.isModuleEnabled(k) && session.accessTo(k, subject.user_id) === "write");
+      if (!canSomething) return null;
+      return (
+        <WidgetFrame size={size} title={isSelf ? "✨ Quick log" : `✨ Log for ${subject.display_name}`} href="/log">
+          <QuickLogBox ownerId={subject.user_id} compact />
+        </WidgetFrame>
+      );
+    }
+
+    case "food_diary.today": {
+      const access = session.accessTo("food_diary", subject.user_id);
+      if (access === "none") return <NotShared size={size} title="Food" name={subject.display_name} />;
+      const tz = session.profile.timezone;
+      const today = todayIn(tz);
+      const [{ data: f }, { data: g }] = await Promise.all([
+        session.supabase.from("food_entries").select("eaten_at, calories, protein_g, carbs_g, fat_g, fiber_g").eq("owner_id", subject.user_id).gte("eaten_at", startOfLocalDayIso(today)),
+        session.supabase.from("nutrition_goals").select("*").eq("owner_id", subject.user_id).maybeSingle(),
+      ]);
+      const t = totals(((f ?? []) as FoodEntry[]).filter((x) => localDate(x.eaten_at, tz) === today));
+      const goals = g as NutritionGoals | null;
+      const pct = goals?.calories ? Math.min(100, (t.calories / goals.calories) * 100) : 0;
+      return (
+        <WidgetFrame size={size} title="Calories today" href="/food">
+          <p className="text-2xl font-semibold tabular-nums">
+            {t.calories.toLocaleString("en-IN")}
+            <span className="text-sm font-normal text-fg-muted">{goals?.calories ? ` / ${goals.calories.toLocaleString("en-IN")} kcal` : " kcal"}</span>
+          </p>
+          {goals?.calories ? (
+            <div className="h-2 overflow-hidden rounded-full bg-surface-2">
+              <div className={cx("h-full rounded-full", t.calories > goals.calories * 1.05 ? "bg-danger" : "bg-series-1")} style={{ width: `${pct}%` }} />
+            </div>
+          ) : null}
+          <p className="text-xs text-fg-muted">
+            Protein {t.protein_g}{goals?.protein_g ? `/${goals.protein_g}` : ""} g · Carbs {t.carbs_g} g · Fat {t.fat_g} g
+          </p>
+          {access === "write" ? <Link href="/food" className="text-sm font-medium text-accent hover:underline">+ Add food</Link> : null}
+        </WidgetFrame>
+      );
+    }
+
+    case "body_recomp.weight": {
+      const access = session.accessTo("body_recomp", subject.user_id);
+      if (access === "none") return <NotShared size={size} title="Weight" name={subject.display_name} />;
+      const [{ data: m }, { data: g }] = await Promise.all([
+        session.supabase.from("body_metrics").select("weight_kg, measured_at").eq("owner_id", subject.user_id).not("weight_kg", "is", null).order("measured_at", { ascending: false }).limit(1),
+        session.supabase.from("body_goals").select("*").eq("owner_id", subject.user_id).maybeSingle(),
+      ]);
+      const last = ((m ?? []) as Pick<BodyMetric, "weight_kg">[])[0]?.weight_kg ?? null;
+      const goals = g as BodyGoals | null;
+      return (
+        <WidgetFrame size={size} title="Weight" href="/body">
+          <p className="text-2xl font-semibold tabular-nums">{last ?? "–"}<span className="text-sm font-normal text-fg-muted"> kg</span></p>
+          {goals?.target_weight_kg && last !== null ? (
+            <p className="text-xs text-fg-muted">{Math.round(Math.abs(Number(last) - Number(goals.target_weight_kg)) * 10) / 10} kg to {goals.target_weight_kg} kg</p>
+          ) : null}
+          {access === "write" ? <QuickWeighIn ownerId={subject.user_id} last={last === null ? null : Number(last)} /> : null}
+        </WidgetFrame>
+      );
+    }
+
+    case "pantry.expiring": {
+      const today = todayIn(session.profile.timezone);
+      const { data } = await session.supabase
+        .from("pantry_items")
+        .select("*")
+        .eq("household_id", session.household.id)
+        .is("used_up_at", null)
+        .lte("expires_on", addDays(today, 3))
+        .order("expires_on")
+        .limit(8);
+      const items = (data ?? []) as PantryItem[];
+      return (
+        <WidgetFrame size={size} title="Expiring soon" href="/pantry">
+          {items.length ? (
+            <>
+              <ul className="space-y-1 text-sm">
+                {items.map((i) => {
+                  const d = daysUntil(i.expires_on, today)!;
+                  return (
+                    <li key={i.id} className="flex justify-between gap-2">
+                      <span className="truncate">{i.name}</span>
+                      <span className={cx("shrink-0 text-xs", d < 0 ? "text-danger" : "text-fg-muted")}>{d < 0 ? "expired" : d === 0 ? "today" : `${d}d`}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+              <Link href="/food/ideas?mode=expiring" className="text-sm font-medium text-accent hover:underline">✨ Cook something with these</Link>
+            </>
+          ) : (
+            <p className="text-sm text-fg-muted">Nothing expiring in the next 3 days.</p>
+          )}
+        </WidgetFrame>
+      );
+    }
+
+    case "recipes.today": {
+      const today = todayIn(session.profile.timezone);
+      const { data } = await session.supabase.from("meal_plan").select("*").eq("household_id", session.household.id).eq("plan_date", today);
+      const plan = (data ?? []) as MealPlanEntry[];
+      const ids = plan.map((p) => p.recipe_id).filter(Boolean) as string[];
+      const { data: r } = ids.length ? await session.supabase.from("recipes").select("id, title").in("id", ids) : { data: [] };
+      const titles = new Map(((r ?? []) as Pick<Recipe, "id" | "title">[]).map((x) => [x.id, x.title]));
+      return (
+        <WidgetFrame size={size} title="Today's meals" href="/recipes/plan">
+          {plan.length ? (
+            <ul className="space-y-1 text-sm">
+              {plan.map((p) => (
+                <li key={p.id}>
+                  <span className="capitalize text-fg-muted">{p.meal}:</span>{" "}
+                  {p.recipe_id ? <Link href={`/recipes/${p.recipe_id}`} className="hover:underline">{titles.get(p.recipe_id) ?? "Recipe"}</Link> : p.title}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-fg-muted">
+              Nothing planned. <Link href="/food/ideas" className="text-accent hover:underline">Get ideas</Link>
+            </p>
+          )}
+        </WidgetFrame>
+      );
+    }
+
+    case "medical_records.labs": {
+      if (session.accessTo("medical_records", subject.user_id) === "none") return <NotShared size={size} title="Blood work" name={subject.display_name} />;
+      const { data } = await session.supabase.from("lab_results").select("*").eq("owner_id", subject.user_id).order("test_date", { ascending: false }).limit(500);
+      const flagged = byMarker((data ?? []) as LabResult[]).filter((g) => g[0].flag && g[0].flag !== "normal");
+      return (
+        <WidgetFrame size={size} title="Blood work" href="/medical/labs">
+          {(data ?? []).length === 0 ? (
+            <p className="text-sm text-fg-muted">No lab results yet. Upload a report and let AI read it.</p>
+          ) : flagged.length ? (
+            <ul className="space-y-1 text-sm">
+              {flagged.slice(0, 6).map((g) => (
+                <li key={g[0].id} className="flex justify-between gap-2">
+                  <span className="truncate">{g[0].flag === "low" ? "↓" : "↑"} {g[0].marker}</span>
+                  <span className="shrink-0 font-medium text-danger">{valueLabel(g[0])}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm">✓ Latest results are within range.</p>
+          )}
         </WidgetFrame>
       );
     }
