@@ -442,3 +442,139 @@ export type MealPlanEntry = {
   servings: number;
   notes: string | null;
 };
+
+// ------------------------------------------------------------- Phase 3 ----
+
+export const WORKOUT_KINDS = ["gym", "yoga", "pilates", "swim", "run", "walk", "cycle", "dance", "sport", "class", "physio", "other"] as const;
+export type WorkoutKind = (typeof WORKOUT_KINDS)[number];
+
+export type FitnessClass = {
+  id: string;
+  owner_id: string;
+  name: string;
+  kind: WorkoutKind;
+  days_of_week: number[];
+  start_time: string;
+  duration_minutes: number;
+  location: string | null;
+  instructor: string | null;
+  remind_minutes_before: number | null;
+  active: boolean;
+  notes: string | null;
+};
+
+export type WorkoutLog = {
+  id: string;
+  owner_id: string;
+  performed_on: string;
+  class_id: string | null;
+  kind: WorkoutKind;
+  title: string;
+  status: "done" | "skipped";
+  duration_minutes: number | null;
+  intensity: number | null;
+  notes: string | null;
+};
+
+export type Dependent = {
+  id: string;
+  household_id: string;
+  name: string;
+  kind: "child" | "pet";
+  date_of_birth: string | null;
+  sex: "female" | "male" | "other" | null;
+  notes: string | null;
+};
+
+export const CHILD_LOG_KINDS = ["feed", "sleep", "diaper", "medicine", "temperature", "milestone", "note"] as const;
+export type ChildLog = {
+  id: string;
+  dependent_id: string;
+  logged_by: string | null;
+  kind: (typeof CHILD_LOG_KINDS)[number];
+  started_at: string;
+  ended_at: string | null;
+  amount_ml: number | null;
+  value: number | null;
+  detail: string | null;
+};
+
+export type Vaccination = { id: string; dependent_id: string; vaccine: string; due_on: string | null; given_on: string | null; notes: string | null };
+export type GrowthRecord = { id: string; dependent_id: string; measured_on: string; weight_kg: number | null; height_cm: number | null; head_cm: number | null };
+
+export type MaintenanceTask = {
+  id: string;
+  household_id: string;
+  title: string;
+  category: "appliance" | "vehicle" | "home" | "insurance" | "health" | "other";
+  interval_days: number | null;
+  last_done_on: string | null;
+  next_due_on: string | null;
+  remind_days_before: number;
+  vendor: string | null;
+  notes: string | null;
+};
+export type MaintenanceLog = { id: string; task_id: string; done_on: string; done_by: string | null; cost: number | null; notes: string | null };
+
+export const VAULT_DOC_TYPES = [
+  "passport",
+  "visa",
+  "national_id",
+  "driving_licence",
+  "pan",
+  "vehicle_rc",
+  "vehicle_insurance",
+  "health_insurance",
+  "life_insurance",
+  "home_insurance",
+  "warranty",
+  "lease",
+  "membership",
+  "other",
+] as const;
+export type VaultDocument = {
+  id: string;
+  owner_id: string;
+  household_id: string;
+  scope: "personal" | "household";
+  title: string;
+  doc_type: (typeof VAULT_DOC_TYPES)[number];
+  holder: string | null;
+  number_last4: string | null;
+  issued_on: string | null;
+  expires_on: string | null;
+  remind_days_before: number;
+  notes: string | null;
+};
+
+export const SUB_CATEGORIES = ["streaming", "music", "food", "shopping", "utilities", "software", "fitness", "news", "cloud", "other"] as const;
+export const BILLING_CYCLES = ["weekly", "monthly", "quarterly", "half_yearly", "yearly"] as const;
+export type Subscription = {
+  id: string;
+  household_id: string;
+  name: string;
+  category: (typeof SUB_CATEGORIES)[number];
+  cost: number | null;
+  currency: string;
+  billing_cycle: (typeof BILLING_CYCLES)[number];
+  next_renewal_on: string | null;
+  paid_by: string | null;
+  auto_renew: boolean;
+  url: string | null;
+  notes: string | null;
+  active: boolean;
+};
+
+export type NotificationPrefs = {
+  user_id: string;
+  medicines: boolean;
+  fitness: boolean;
+  expiries: boolean;
+  renewals: boolean;
+  maintenance: boolean;
+  child: boolean;
+  digest: boolean;
+  daily_hour: number;
+  quiet_start: string | null;
+  quiet_end: string | null;
+};

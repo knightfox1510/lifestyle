@@ -8,6 +8,9 @@ import { QuickHealthLog } from "@/components/quick-health-log";
 import { AskAiWidget } from "@/components/ask-ai-widget";
 import { BladderQuickButtons, GroceryQuickAdd, QuickWeighIn } from "@/components/phase1-widgets";
 import { QuickLogBox } from "@/components/quick-log-box";
+import { ClassButtons } from "@/app/(app)/fitness/client";
+import { KIND_META as WORKOUT_META, classesOn } from "@/modules/fitness/meta";
+import { LOG_META } from "@/modules/child/vaccines";
 import { totals } from "@/modules/food/meta";
 import { daysUntil } from "@/modules/pantry/match";
 import { byMarker, valueLabel } from "@/modules/medical/labs";
@@ -19,6 +22,7 @@ import { addDays, lastNDays, localDate, localTime, startOfLocalDayIso, todayIn }
 import { streak } from "@/lib/streak";
 import { slotsForDay, doseLabel } from "@/modules/medicines/logic";
 import { dailyStats } from "@/modules/bladder/analysis";
+import type { ChildLog, Dependent, FitnessClass, WorkoutLog } from "@/lib/types";
 import type { BodyGoals, BodyMetric, FoodEntry, LabResult, MealPlanEntry, NutritionGoals, PantryItem, Recipe } from "@/lib/types";
 import type { BladderEvent, DailyCheckin, FluidIntake, GroceryItem, Habit, HabitLog, Medicine, MedicineDose, PelvicFloorSession, Supplement } from "@/lib/types";
 
@@ -458,6 +462,109 @@ export async function Widget({ widgetKey, size, session }: { widgetKey: string; 
             </ul>
           ) : (
             <p className="text-sm">✓ Latest results are within range.</p>
+          )}
+        </WidgetFrame>
+      );
+    }
+
+    case "fitness.today": {
+      const access = session.accessTo("fitness", subject.user_id);
+      if (access === "none") return <NotShared size={size} title="Fitness" name={subject.display_name} />;
+      const today = todayIn(session.profile.timezone);
+      const [{ data: c }, { data: l }] = await Promise.all([
+        session.supabase.from("fitness_classes").select("*").eq("owner_id", subject.user_id).eq("active", true),
+        session.supabase.from("workout_logs").select("*").eq("owner_id", subject.user_id).eq("performed_on", today),
+      ]);
+      const classes = classesOn((c ?? []) as FitnessClass[], today);
+      const logs = (l ?? []) as WorkoutLog[];
+      return (
+        <WidgetFrame size={size} title="Workout today" href="/fitness">
+          {classes.length ? (
+            <ul className="space-y-2 text-sm">
+              {classes.map((cl) => {
+                const log = logs.find((x) => x.class_id === cl.id);
+                return (
+                  <li key={cl.id} className="flex flex-wrap items-center justify-between gap-2">
+                    <span>
+                      <span className="mr-1.5 font-mono text-fg-muted">{cl.start_time}</span>
+                      {WORKOUT_META[cl.kind].icon} {cl.name}
+                    </span>
+                    {access === "write" ? <ClassButtons classId={cl.id} ownerId={subject.user_id} date={today} status={log?.status ?? null} /> : log ? <span className="text-xs">{log.status}</span> : null}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="text-sm text-fg-muted">{logs.length ? `✓ ${logs.filter((x) => x.status === "done").length} workout logged today.` : "Rest day. Nothing scheduled."}</p>
+          )}
+        </WidgetFrame>
+      );
+    }
+
+    case "child.today": {
+      const tz = session.profile.timezone;
+      const today = todayIn(tz);
+      const { data: deps } = await session.supabase.from("dependents").select("*").eq("household_id", session.household.id).eq("kind", "child").order("created_at").limit(1);
+      const dep = ((deps ?? []) as Dependent[])[0];
+      if (!dep) {
+        return (
+          <WidgetFrame size={size} title="Child" href="/child">
+            <p className="text-sm text-fg-muted">Add your child to start tracking.</p>
+          </WidgetFrame>
+        );
+      }
+      const { data } = await session.supabase.from("child_logs").select("*").eq("dependent_id", dep.id).gte("started_at", startOfLocalDayIso(addDays(today, -1))).order("started_at", { ascending: false });
+      const logs = (data ?? []) as ChildLog[];
+      const todays = logs.filter((x) => localDate(x.started_at, tz) === today);
+      const lastFeed = logs.find((x) => x.kind === "feed");
+      const lastMed = logs.find((x) => x.kind === "medicine");
+      const sleeping = logs.find((x) => x.kind === "sleep" && !x.ended_at);
+      return (
+        <WidgetFrame size={size} title={`👶 ${dep.name}`} href={`/child?c=${dep.id}`}>
+          <p className="text-sm">
+            {LOG_META.feed.icon} {todays.filter((x) => x.kind === "feed").length} feeds · {LOG_META.diaper.icon} {todays.filter((x) => x.kind === "diaper").length} nappies
+            {sleeping ? " · 😴 sleeping now" : ""}
+          </p>
+          <ul className="space-y-0.5 text-xs text-fg-muted">
+            {lastFeed ? <li>Last feed {localTime(lastFeed.started_at, tz)}{lastFeed.detail ? ` · ${lastFeed.detail}` : ""}</li> : null}
+            {lastMed ? <li className="text-danger">Last medicine {localTime(lastMed.started_at, tz)} · {lastMed.detail}</li> : null}
+          </ul>
+          <Link href={`/child?c=${dep.id}`} className="text-sm font-medium text-accent hover:underline">+ Log</Link>
+        </WidgetFrame>
+      );
+    }
+
+    case "core.coming_up": {
+      const today = todayIn(session.profile.timezone);
+      const until = addDays(today, 30);
+      const on = (k: string) => session.isModuleEnabled(k);
+      const [m, d, sb] = await Promise.all([
+        on("maintenance") ? session.supabase.from("maintenance_tasks").select("title, next_due_on").eq("household_id", session.household.id).lte("next_due_on", until) : null,
+        on("documents") ? session.supabase.from("documents").select("title, expires_on").eq("household_id", session.household.id).lte("expires_on", addDays(today, 60)) : null,
+        on("subscriptions") ? session.supabase.from("subscriptions").select("name, next_renewal_on").eq("household_id", session.household.id).eq("active", true).lte("next_renewal_on", addDays(today, 7)) : null,
+      ]);
+      const items = [
+        ...((m?.data ?? []) as { title: string; next_due_on: string }[]).map((x) => ({ icon: "🛠️", label: x.title, date: x.next_due_on, href: "/maintenance" })),
+        ...((d?.data ?? []) as { title: string; expires_on: string }[]).map((x) => ({ icon: "🛂", label: `${x.title} expires`, date: x.expires_on, href: "/documents" })),
+        ...((sb?.data ?? []) as { name: string; next_renewal_on: string }[]).map((x) => ({ icon: "🔁", label: `${x.name} renews`, date: x.next_renewal_on, href: "/subscriptions" })),
+      ].sort((a, b) => a.date.localeCompare(b.date));
+      if (!on("maintenance") && !on("documents") && !on("subscriptions")) return null;
+      return (
+        <WidgetFrame size={size} title="Coming up">
+          {items.length ? (
+            <ul className="space-y-1 text-sm">
+              {items.slice(0, 6).map((x, i) => {
+                const left = daysUntil(x.date, today)!;
+                return (
+                  <li key={i} className="flex justify-between gap-2">
+                    <Link href={x.href} className="truncate hover:underline">{x.icon} {x.label}</Link>
+                    <span className={cx("shrink-0 text-xs", left < 0 ? "text-danger" : "text-fg-muted")}>{left < 0 ? "overdue" : left === 0 ? "today" : `${left}d`}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="text-sm text-fg-muted">Nothing due in the next month.</p>
           )}
         </WidgetFrame>
       );

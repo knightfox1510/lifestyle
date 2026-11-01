@@ -130,6 +130,14 @@ describe("bladder analysis", () => {
   it("finds leaks within 2h of caffeine", () => {
     expect(leaksAfterCaffeine(events, fluids)).toEqual({ total: 4, after: 2 });
   });
+  it("compares workout days vs rest days", () => {
+    const s = dailyStats(days, events, fluids, tz, [], [{ performed_on: "2026-10-31", kind: "gym", status: "done" }, { performed_on: "2026-11-01", kind: "yoga", status: "skipped" }]);
+    expect(s[0].workouts).toEqual(["gym"]);
+    expect(s[1].workouts).toEqual([]);
+    const c = comparisons(s, []).find((x) => x.label === "Workouts")!;
+    expect(c.a).toMatchObject({ value: 2, days: 1 });
+    expect(c.b).toMatchObject({ value: 1, days: 1 });
+  });
   it("compares caffeine vs non-caffeine days", () => {
     const c = comparisons(dailyStats(days, events, fluids, tz), []).find((x) => x.label === "Caffeine")!;
     expect(c.a).toMatchObject({ value: 2, days: 1 });

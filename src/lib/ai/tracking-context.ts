@@ -22,7 +22,7 @@ export async function buildTrackingContext(session: AppSession, subjectId: strin
   const db = session.supabase;
   const lines: string[] = [];
 
-  const [meds, doses, sups, events, fluids, kegel, checkins, habits, habitLogs, food, nGoals, body, bGoals] = await Promise.all([
+  const [meds, doses, sups, events, fluids, kegel, checkins, habits, habitLogs, food, nGoals, body, bGoals, workouts, classes] = await Promise.all([
     can("medicines") ? db.from("medicines").select("*").eq("owner_id", subjectId).eq("active", true).eq("include_in_ai", true) : null,
     can("medicines") ? db.from("medicine_doses").select("*").eq("owner_id", subjectId).gte("scheduled_date", days14[0]) : null,
     can("supplements") ? db.from("supplements").select("*").eq("owner_id", subjectId).eq("active", true).eq("include_in_ai", true) : null,
@@ -36,6 +36,8 @@ export async function buildTrackingContext(session: AppSession, subjectId: strin
     can("food_diary") ? db.from("nutrition_goals").select("*").eq("owner_id", subjectId).maybeSingle() : null,
     can("body_recomp") ? db.from("body_metrics").select("*").eq("owner_id", subjectId).gte("measured_at", startOfLocalDayIso(addDays(today, -60))).order("measured_at") : null,
     can("body_recomp") ? db.from("body_goals").select("*").eq("owner_id", subjectId).maybeSingle() : null,
+    can("fitness") ? db.from("workout_logs").select("performed_on, kind, title, status, duration_minutes").eq("owner_id", subjectId).gte("performed_on", days14[0]) : null,
+    can("fitness") ? db.from("fitness_classes").select("name, kind, days_of_week, start_time").eq("owner_id", subjectId).eq("active", true) : null,
   ]);
 
   const medList = (meds?.data ?? []) as Medicine[];
@@ -60,7 +62,7 @@ export async function buildTrackingContext(session: AppSession, subjectId: strin
   const ev = (events?.data ?? []) as BladderEvent[];
   const fl = (fluids?.data ?? []) as FluidIntake[];
   if (ev.length || fl.length) {
-    const stats = dailyStats(days14, ev, fl, tz, (kegel?.data ?? []) as PelvicFloorSession[]);
+    const stats = dailyStats(days14, ev, fl, tz, (kegel?.data ?? []) as PelvicFloorSession[], (workouts?.data ?? []) as { performed_on: string; kind: string; status: string }[]);
     const logged = stats.filter((s) => s.leaks + s.urges + s.voids + s.fluidMl > 0);
     const n = Math.max(1, logged.length);
     const avg = (k: "leaks" | "urges" | "voids" | "fluidMl" | "caffeineMl") => (logged.reduce((a, s) => a + s[k], 0) / n).toFixed(k.endsWith("Ml") ? 0 : 1);
@@ -71,6 +73,17 @@ export async function buildTrackingContext(session: AppSession, subjectId: strin
       `Bladder diary (urinary incontinence), last 14 days, ${logged.length} days logged: avg ${avg("leaks")} leaks/day, ${avg("urges")} urges/day, ${avg("voids")} toilet visits/day, ${avg("fluidMl")} ml fluids/day (${avg("caffeineMl")} ml caffeinated).`,
       `Leak circumstances: ${triggerCounts(ev).slice(0, 5).map((x) => `${x.label} ${x.value}`).join(", ") || "not recorded"}. ${share.physical}/${share.total} leaks with physical effort, ${share.urge}/${share.total} with strong urge.${t ? ` Trend: ${t.first} → ${t.second} leaks/day (${t.change > 0 ? "+" : ""}${t.change}%).` : ""}`,
       "When suggesting exercise, food or drinks, consider bladder irritants (caffeine, alcohol, fizzy drinks, spicy food), and pelvic-floor-friendly alternatives to high-impact or heavy-lifting moves.",
+    );
+  }
+
+  const wl = (workouts?.data ?? []) as { performed_on: string; kind: string; title: string; status: string; duration_minutes: number | null }[];
+  const cl = (classes?.data ?? []) as { name: string; kind: string; days_of_week: number[]; start_time: string }[];
+  if (wl.length || cl.length) {
+    const doneW = wl.filter((w) => w.status === "done");
+    const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    lines.push(
+      "",
+      `Exercise: ${cl.length ? `scheduled ${cl.map((c) => `${c.name} (${c.kind}, ${c.days_of_week.map((d) => DAYS[d]).join("/")} ${c.start_time})`).join("; ")}. ` : ""}Last 14 days: ${doneW.length} sessions, ${doneW.reduce((a, w) => a + (w.duration_minutes ?? 0), 0)} min (${[...new Set(doneW.map((w) => w.kind))].join(", ") || "none"}), ${wl.filter((w) => w.status === "skipped").length} skipped.`,
     );
   }
 

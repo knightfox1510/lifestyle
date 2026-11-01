@@ -12,8 +12,9 @@ export async function loadDiary(session: AppSession, ownerId: string, days: numb
   const from = startOfLocalDayIso(dayList[0]);
   const canSeeKegel = session.isModuleEnabled("pelvic_floor") && session.accessTo("pelvic_floor", ownerId) !== "none";
   const canSeeCheckin = session.isModuleEnabled("checkin") && session.accessTo("checkin", ownerId) !== "none";
+  const canSeeFitness = session.isModuleEnabled("fitness") && session.accessTo("fitness", ownerId) !== "none";
 
-  const [ev, fl, pf, ci] = await Promise.all([
+  const [ev, fl, pf, ci, wo] = await Promise.all([
     session.supabase.from("bladder_events").select("*").eq("owner_id", ownerId).gte("occurred_at", from).order("occurred_at").limit(5000),
     session.supabase.from("fluid_intake").select("*").eq("owner_id", ownerId).gte("occurred_at", from).order("occurred_at").limit(5000),
     canSeeKegel
@@ -21,6 +22,9 @@ export async function loadDiary(session: AppSession, ownerId: string, days: numb
       : Promise.resolve({ data: [] }),
     canSeeCheckin
       ? session.supabase.from("daily_checkins").select("*").eq("owner_id", ownerId).gte("checkin_date", addDays(today, -days))
+      : Promise.resolve({ data: [] }),
+    canSeeFitness
+      ? session.supabase.from("workout_logs").select("performed_on, kind, status").eq("owner_id", ownerId).gte("performed_on", dayList[0])
       : Promise.resolve({ data: [] }),
   ]);
 
@@ -32,5 +36,6 @@ export async function loadDiary(session: AppSession, ownerId: string, days: numb
     fluids: (fl.data ?? []) as FluidIntake[],
     sessions: (pf.data ?? []) as PelvicFloorSession[],
     checkins: (ci.data ?? []) as DailyCheckin[],
+    workouts: (wo.data ?? []) as { performed_on: string; kind: string; status: string }[],
   };
 }

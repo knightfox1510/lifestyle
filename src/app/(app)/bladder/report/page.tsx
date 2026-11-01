@@ -18,7 +18,7 @@ export default async function BladderReportPage({ searchParams }: PageProps<"/bl
   const period = PERIODS.includes(Number(dParam)) ? Number(dParam) : 7;
   const subject = session.subject;
   const d = await loadDiary(session, subject.user_id, period);
-  const stats = dailyStats(d.days, d.events, d.fluids, d.tz, d.sessions);
+  const stats = dailyStats(d.days, d.events, d.fluids, d.tz, d.sessions, d.workouts);
   const logged = stats.filter((s) => s.leaks + s.urges + s.voids + s.fluidMl > 0);
   const n = Math.max(logged.length, 1);
   const sum = (k: "leaks" | "urges" | "voids" | "fluidMl" | "caffeineMl" | "padChanges") => logged.reduce((a, s) => a + s[k], 0);
@@ -94,12 +94,12 @@ export default async function BladderReportPage({ searchParams }: PageProps<"/bl
             <h3 className="mb-2 font-semibold">Daily totals</h3>
             <table className="w-full text-right tabular-nums">
               <thead className="text-xs text-fg-muted">
-                <tr><th className="text-left font-medium">Day</th><th className="font-medium">Leaks</th><th className="font-medium">Urges</th><th className="font-medium">Toilet</th><th className="font-medium">Fluids ml</th><th className="font-medium">Caffeine ml</th><th className="font-medium">Pads</th></tr>
+                <tr><th className="text-left font-medium">Day</th><th className="text-left font-medium">Exercise</th><th className="font-medium">Leaks</th><th className="font-medium">Urges</th><th className="font-medium">Toilet</th><th className="font-medium">Fluids ml</th><th className="font-medium">Caffeine ml</th><th className="font-medium">Pads</th></tr>
               </thead>
               <tbody className="[&_td]:border-t [&_td]:border-border [&_td]:py-1">
                 {stats.map((s) => (
                   <tr key={s.date}>
-                    <td className="text-left">{shortDate(s.date)}</td><td>{s.leaks}</td><td>{s.urges}</td><td>{s.voids}</td><td>{s.fluidMl}</td><td>{s.caffeineMl}</td><td>{s.padChanges}</td>
+                    <td className="text-left">{shortDate(s.date)}</td><td className="text-left text-xs">{s.workouts.join(", ")}</td><td>{s.leaks}</td><td>{s.urges}</td><td>{s.voids}</td><td>{s.fluidMl}</td><td>{s.caffeineMl}</td><td>{s.padChanges}</td>
                   </tr>
                 ))}
               </tbody>

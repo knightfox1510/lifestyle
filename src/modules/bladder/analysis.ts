@@ -12,6 +12,8 @@ export type DayStats = {
   caffeineMl: number;
   alcoholMl: number;
   kegel: boolean;
+  /** Workout kinds done that day (gym, yoga…) from the fitness log. */
+  workouts: string[];
 };
 
 export function dailyStats(
@@ -20,9 +22,10 @@ export function dailyStats(
   fluids: FluidIntake[],
   tz: string,
   sessions: PelvicFloorSession[] = [],
+  workouts: { performed_on: string; kind: string; status: string }[] = [],
 ): DayStats[] {
   const map = new Map<string, DayStats>(
-    days.map((date) => [date, { date, leaks: 0, urges: 0, voids: 0, padChanges: 0, fluidMl: 0, caffeineMl: 0, alcoholMl: 0, kegel: false }]),
+    days.map((date) => [date, { date, leaks: 0, urges: 0, voids: 0, padChanges: 0, fluidMl: 0, caffeineMl: 0, alcoholMl: 0, kegel: false, workouts: [] as string[] }]),
   );
   for (const e of events) {
     const d = map.get(localDate(e.occurred_at, tz));
@@ -42,6 +45,10 @@ export function dailyStats(
   for (const s of sessions) {
     const d = map.get(localDate(s.performed_at, tz));
     if (d && s.completed) d.kegel = true;
+  }
+  for (const w of workouts) {
+    const d = map.get(w.performed_on);
+    if (d && w.status === "done" && !d.workouts.includes(w.kind)) d.workouts.push(w.kind);
   }
   return days.map((d) => map.get(d)!);
 }
@@ -85,6 +92,11 @@ export function comparisons(stats: DayStats[], checkins: DailyCheckin[]): Compar
       note,
     });
   };
+  if (stats.some((s) => s.workouts.length)) {
+    split("Workouts", (s) => s.workouts.length > 0, "workout days", "rest days");
+    if (stats.some((s) => s.workouts.includes("gym"))) split("Gym", (s) => s.workouts.includes("gym"), "gym days", "other days");
+    if (stats.some((s) => s.workouts.includes("yoga"))) split("Yoga", (s) => s.workouts.includes("yoga"), "yoga days", "other days");
+  }
   split("Caffeine", (s) => s.caffeineMl >= 250, "≥250 ml caffeinated", "less caffeine");
   split("Pelvic floor exercises", (s) => s.kegel, "Kegel days", "no session");
   split("Fluid intake", (s) => s.fluidMl >= 2000, "≥2 L fluids", "under 2 L", "Too little fluid can also irritate the bladder; don't cut water without advice.");

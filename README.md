@@ -2,7 +2,7 @@
 
 An installable web app (phone and laptop) for tracking household and partner life: health, food, routines and more. Personal data is private by default, and each person chooses which features their partner can see or edit. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the full plan.
 
-**Status: Phases 0–2 built: foundation, medical records with blood work, health-first core, and food + AI.**
+**Status: Phases 0–3 built.** To go live on Vercel + Supabase, follow [`docs/DEPLOY.md`](docs/DEPLOY.md).
 
 ## What's included
 
@@ -34,6 +34,13 @@ An installable web app (phone and laptop) for tracking household and partner lif
 - **Camera scan:** photograph a receipt or order screen, a fridge shelf, or a handwritten list or empty packet. AI lists the items with estimated (or printed) expiry; you confirm and send them to the pantry or the grocery list.
 - **Recipes & meal plan:** household recipe vault (manual or saved from AI ideas) with servings scaling, pantry check, log-as-eaten and add-to-plan. A weekly planner sends the rest of the week's missing ingredients to the grocery list.
 - **Quick log:** type or speak one sentence ("2 coffees, poha for breakfast, small leak during squats at 7:40, weighed 63.8"); AI splits it into food, drinks, bladder diary and weight entries for you to confirm.
+- **Fitness:** weekly class schedule (gym, yoga… with days, time, place) with reminders before each class, Done/Skipped per session, ad-hoc workouts and weekly minutes. The bladder diary now compares leaks on workout, gym and yoga days against rest days.
+- **Child routine** (opt-in): shared feed / sleep / nappy / medicine / temperature / milestone log. Warns with the last dose time and who gave it, to prevent double-dosing. IAP vaccination schedule from date of birth, and growth records.
+- **Home maintenance:** recurring tasks (AC filters, RO service, pest control, car service, insurance…) with quick-add templates, due/overdue states, "Done" with cost, and history.
+- **Document vault:** passports, visas, IDs, insurance and warranties with expiry dates and reminders from 60 days out. Only the last 4 characters of any number are stored. Each document is personal (shareable) or household-wide.
+- **Subscriptions:** what the household pays for, who pays, monthly total and renewal reminders.
+- **Notifications:** Web Push on Android, desktop and installed iOS apps, covering medicine doses, classes, expiring food, documents, subscriptions, maintenance and vaccinations. Per-type switches, a daily reminder hour and quiet hours. A scheduled job calls `/api/cron/tick`, and every notification is sent at most once.
+- **Weekly summary:** a Sunday-evening AI recap (wins, things to watch, what's coming up), also available on demand.
 - **AI (Gemini):** the key stays on the server. A household can optionally bring its own key, which is stored AES-256-GCM encrypted. There's a per-household daily request cap and usage logging. **Every AI request gets the person's health data**: medical history (allergies first, then conditions, current medicines, timeline and document summaries) plus lab results (out-of-range first, with previous values) and recent tracking (medicines and adherence, supplements, a 14-day bladder diary summary, pelvic floor sessions, check-ins, habits, 7-day food averages vs goals, weight trend and target, latest vitals). There are three levels of override:
   1. A default in Settings ("Use my medical history in AI suggestions").
   2. A per-question switch on the Ask AI screen, plus "What will AI see?", which shows the exact context that will be sent.
@@ -77,7 +84,7 @@ npm install
 npm run dev
 ```
 
-Deploy on Vercel with the same environment variables.
+Deploy on Vercel: see [`docs/DEPLOY.md`](docs/DEPLOY.md) for the full checklist (Supabase setup, env vars, reminders job, phones).
 
 ## Checks
 

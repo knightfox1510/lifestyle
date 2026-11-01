@@ -17,7 +17,7 @@ export default async function BladderTrendsPage({ searchParams }: PageProps<"/bl
   const ownerId = session.subject.user_id;
   const d = await loadDiary(session, ownerId, period);
 
-  const stats = dailyStats(d.days, d.events, d.fluids, d.tz, d.sessions);
+  const stats = dailyStats(d.days, d.events, d.fluids, d.tz, d.sessions, d.workouts);
   const loggedDays = stats.filter((s) => s.leaks + s.urges + s.voids + s.fluidMl > 0).length;
   if (loggedDays === 0) {
     return <EmptyState title="No diary entries in this period">Log leaks, urges, bathroom visits and drinks for a few days to see patterns.</EmptyState>;
@@ -71,7 +71,7 @@ export default async function BladderTrendsPage({ searchParams }: PageProps<"/bl
         <ColumnChart
           title="Leaks per day"
           subtitle={`Last ${period} days`}
-          data={stats.map((s) => ({ key: s.date, label: dayLabel(s.date), value: s.leaks, tooltip: `${dayLabel(s.date)}: ${s.leaks} leak${s.leaks === 1 ? "" : "s"}, ${s.fluidMl} ml fluids${s.kegel ? ", Kegel ✓" : ""}` }))}
+          data={stats.map((s) => ({ key: s.date, label: dayLabel(s.date), value: s.leaks, tooltip: `${dayLabel(s.date)}: ${s.leaks} leak${s.leaks === 1 ? "" : "s"}, ${s.fluidMl} ml fluids${s.kegel ? ", Kegel ✓" : ""}${s.workouts.length ? `, ${s.workouts.join("+")}` : ""}` }))}
           line={rollingAverage(leaks)}
           barLabel="Leaks"
           lineLabel="7-day average"
