@@ -12,9 +12,10 @@ export async function logWater(ml: number): Promise<ActionResult> {
   const parsed = z.number().int().min(50).max(1500).safeParse(ml);
   if (!parsed.success) return { error: "Invalid amount." };
   const session = await getSession();
-  if (!(await insertWater(session, parsed.data))) return { error: "Couldn't save." };
+  const id = await insertWater(session, parsed.data);
+  if (!id) return { error: "Couldn't save." };
   const [{ ml: total }, target] = await Promise.all([waterToday(session), waterTarget(session)]);
   revalidatePath("/", "layout");
   const t = await getT(session);
-  return { ok: true, message: `+${parsed.data} ml · ${t("{ml} / {target} ml today", { ml: total, target })}` };
+  return { ok: true, id, message: `+${parsed.data} ml · ${t("{ml} / {target} ml today", { ml: total, target })}` };
 }

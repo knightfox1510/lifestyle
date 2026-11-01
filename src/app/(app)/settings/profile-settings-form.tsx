@@ -23,6 +23,13 @@ export function ProfileSettingsForm({ profile }: { profile: Profile }) {
           ))}
         </Select>
       </Field>
+      <Field label={t("Home view")} hint={t("How your day looks on Home. Each person can choose their own.")}>
+        <Select name="home_view" defaultValue={profile.home_view ?? "arc"}>
+          <option value="arc">{t("Day arc (your day as the sun's path)")}</option>
+          <option value="bars">{t("Simple bars")}</option>
+          <option value="tiles">{t("Tiles")}</option>
+        </Select>
+      </Field>
       <div className="grid gap-3 sm:grid-cols-3">
         <Field label={t("Display name")}>
           <Input name="display_name" defaultValue={profile.display_name} required maxLength={60} />

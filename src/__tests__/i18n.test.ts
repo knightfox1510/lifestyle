@@ -9,6 +9,7 @@ import { IRRITANT_META } from "@/modules/nutrition/irritants";
 import { DISHES } from "@/modules/nutrition/dishes";
 import { TRIGGER_LABEL } from "@/modules/bladder/meta";
 import { checkMedicines, type CheckMed } from "@/modules/medicines/checks";
+import { MILESTONES } from "@/modules/engagement/rings";
 
 function files(dir: string): string[] {
   return readdirSync(dir).flatMap((f) => {
@@ -45,6 +46,9 @@ describe("translations", () => {
       ...Object.values(IRRITANT_META).map((m) => m.label),
       ...new Set(DISHES.map((d) => d.region)),
       ...Object.values(TRIGGER_LABEL),
+      ...MILESTONES.flatMap((m) => [m.title, m.detail]),
+      "Water", "Meals", "Medicines", "Check-in",
+      "Health", "Food", "Family & home", "Leisure", "Admin",
     ];
     expect(labels.filter((l) => !PHRASES[l])).toEqual([]);
   });

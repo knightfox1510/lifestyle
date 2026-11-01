@@ -139,23 +139,23 @@ export async function logDose(
       if (existing) {
         await session.supabase.from("medicine_doses").update({ status, taken_at: new Date().toISOString() }).eq("id", existing.id);
         refreshModule("/medicines");
-        return { ok: true };
+        return { ok: true, id: existing.id };
       }
     }
-    const { error } = await session.supabase.from("medicine_doses").insert({
+    const { data: row, error } = await session.supabase.from("medicine_doses").insert({
       medicine_id: medicineId,
       owner_id: ownerId,
       scheduled_date: date,
       scheduled_time: time,
       status,
       logged_by: session.userId,
-    });
+    }).select("id").single();
     if (error) return { error: "Couldn't log the dose." };
+    refreshModule("/medicines");
+    return { ok: true, id: row?.id };
   } catch (e) {
     return { error: errorMessage(e) };
   }
-  refreshModule("/medicines");
-  return { ok: true };
 }
 
 export async function undoDose(doseId: string, ownerId: string) {

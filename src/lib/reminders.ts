@@ -9,6 +9,7 @@ import { nextOccurrence } from "@/modules/occasions/logic";
 import type { Occasion } from "@/lib/types";
 import { daysUntil } from "@/modules/pantry/match";
 import { generateDigest, weekStart } from "@/lib/digest";
+import { loadDays, waterSettings } from "@/lib/today";
 import { serviceSession } from "@/lib/service-session";
 import type { FitnessClass, Medicine, NotificationPrefs, Profile } from "@/lib/types";
 import { makeT, isLang } from "@/lib/i18n/core";
@@ -29,6 +30,9 @@ const DEFAULT_PREFS: Omit<NotificationPrefs, "user_id"> = {
   water_interval_min: 120,
   water_start: "08:00",
   water_end: "19:30",
+  close_day: true,
+  close_day_time: "21:00",
+  partner_updates: true,
   daily_hour: 9,
   quiet_start: null,
   quiet_end: null,
@@ -151,6 +155,22 @@ async function remindUser(
     }
   }
 
+  // Evening "close your day": one nudge, only if goals are left.
+  if (prefs.close_day && inWindow(time, toMinutes(prefs.close_day_time.slice(0, 5)))) {
+    const water = await waterSettings(admin, profile.id);
+    const day = await loadDays(admin, profile.id, {
+      tz,
+      today,
+      days: 1,
+      enabled: { medicines: on("medicines"), food: on("food_diary"), checkin: on("checkin") },
+      waterTarget: water.target,
+    });
+    const left = day.today.rings.filter((r) => r.pct < 1).length;
+    if (day.today.rings.length && left > 0) {
+      await send("close_day", `close:${today}`, `🌙 ${left === 1 ? tr("1 thing left today") : tr("{n} things left today", { n: left })}`, tr("30 seconds to close your day."), "/close");
+    }
+  }
+
   // Daily digest of due things, at the person's chosen hour.
   const dailyNow = inWindow(time, prefs.daily_hour * 60, WINDOW_MINUTES);
   if (dailyNow) {
@@ -231,7 +251,7 @@ async function remindUser(
         try {
           await generateDigest(session);
           result.digests += 1;
-          await send("digest", `digest:${ws}`, `📬 ${tr("Your weekly summary is ready")}`, tr("Wins, things to watch and what's coming up."), "/digest");
+          await send("digest", `digest:${ws}`, `📬 ${tr("Your weekly summary is ready")}`, tr("Wins, things to watch and what's coming up."), "/digest/wrap");
         } catch (err) {
           console.warn("digest failed", profile.id, (err as Error).message);
         }

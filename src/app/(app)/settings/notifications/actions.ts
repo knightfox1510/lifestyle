@@ -67,6 +67,9 @@ const prefsSchema = z.object({
   occasions: z.boolean(),
   travel: z.boolean(),
   water: z.boolean(),
+  close_day: z.boolean(),
+  close_day_time: z.string().regex(/^\d{2}:\d{2}$/),
+  partner_updates: z.boolean(),
   water_target_ml: z.preprocess((v) => (v === "" || v == null ? null : v), z.coerce.number().int().min(500).max(6000).nullable()),
   water_interval_min: z.coerce.number().int().min(30).max(360),
   water_start: z.string().regex(/^\d{2}:\d{2}$/),
@@ -77,7 +80,7 @@ const prefsSchema = z.object({
 });
 
 export async function saveNotificationPrefs(_: ActionResult | null, form: FormData): Promise<ActionResult> {
-  const flags = ["medicines", "fitness", "expiries", "renewals", "maintenance", "child", "digest", "occasions", "travel", "water"];
+  const flags = ["medicines", "fitness", "expiries", "renewals", "maintenance", "child", "digest", "occasions", "travel", "water", "close_day", "partner_updates"];
   const parsed = prefsSchema.safeParse({
     ...Object.fromEntries(form),
     ...Object.fromEntries(flags.map((f) => [f, form.get(f) === "on"])),

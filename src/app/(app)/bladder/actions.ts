@@ -80,16 +80,16 @@ export async function quickLog(ownerId: string, what: "leak" | "urge" | "void" |
   try {
     const session = await requireWrite(MODULE, ownerId);
     const base = { owner_id: ownerId, created_by: session.userId, household_id: session.household.id };
-    const { error } =
+    const { data: row, error } =
       what === "water"
-        ? await session.supabase.from("fluid_intake").insert({ ...base, drink: "water", volume_ml: 250, caffeinated: DRINK_META.water.caffeinated })
-        : await session.supabase.from("bladder_events").insert({ ...base, kind: what, amount: what === "leak" ? "small" : null });
+        ? await session.supabase.from("fluid_intake").insert({ ...base, drink: "water", volume_ml: 250, caffeinated: DRINK_META.water.caffeinated }).select("id").single()
+        : await session.supabase.from("bladder_events").insert({ ...base, kind: what, amount: what === "leak" ? "small" : null }).select("id").single();
     if (error) return { error: "Couldn't save." };
+    refreshModule("/bladder");
+    return { ok: true, id: row?.id, message: what === "water" ? "+250 ml water" : "Logged. Add details in the diary." };
   } catch (e) {
     return { error: errorMessage(e) };
   }
-  refreshModule("/bladder");
-  return { ok: true, message: what === "water" ? "+250 ml water" : "Logged. Add details in the diary." };
 }
 
 export async function deleteBladderEvent(id: string) {

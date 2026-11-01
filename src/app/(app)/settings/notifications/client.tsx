@@ -99,7 +99,7 @@ export function PushToggle({ vapidKey }: { vapidKey: string }) {
 
 export function PrefsForm({ prefs, waterGoal }: { prefs: NotificationPrefs | null; waterGoal: number | null }) {
   const [state, action] = useActionState(saveNotificationPrefs, null);
-  const p = prefs ?? { medicines: true, fitness: true, expiries: true, renewals: true, maintenance: true, child: true, digest: true, occasions: true, travel: true, water: false, water_target_ml: null, water_interval_min: 120, water_start: "08:00", water_end: "19:30", daily_hour: 9, quiet_start: null, quiet_end: null };
+  const p = prefs ?? { medicines: true, fitness: true, expiries: true, renewals: true, maintenance: true, child: true, digest: true, occasions: true, travel: true, water: false, water_target_ml: null, water_interval_min: 120, water_start: "08:00", water_end: "19:30", close_day: true, close_day_time: "21:00", partner_updates: true, daily_hour: 9, quiet_start: null, quiet_end: null };
   const rows: [keyof typeof p, string, string][] = [
     ["medicines", "Medicine doses", "At each scheduled dose time"],
     ["fitness", "Classes & workouts", "Before each scheduled class"],
@@ -134,7 +134,16 @@ export function PrefsForm({ prefs, waterGoal }: { prefs: NotificationPrefs | nul
           <Input type="time" name="quiet_end" defaultValue={p.quiet_end?.slice(0, 5) ?? ""} />
         </Field>
       </div>
-      <fieldset className="space-y-3 rounded-xl border border-border p-3">
+      <fieldset className="space-y-3 rounded-2xl bg-surface-2/60 p-4">
+        <Checkbox name="close_day" defaultChecked={p.close_day} label="Close your day" hint="One evening nudge, only if something is left: missed doses, water, meals or the check-in." />
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Field label="At">
+            <Input type="time" name="close_day_time" defaultValue={p.close_day_time.slice(0, 5)} required />
+          </Field>
+        </div>
+        <Checkbox name="partner_updates" defaultChecked={p.partner_updates} label="Partner updates" hint="When your partner closes their day or cheers you on." />
+      </fieldset>
+      <fieldset className="space-y-3 rounded-2xl bg-surface-2/60 p-4">
         <Checkbox name="water" defaultChecked={p.water} label="💧 Water reminders" hint="Only when you're behind for the time of day, and not if you drank in the last 45 minutes. Tap “+250 ml” on the notification to log it." />
         <div className="grid gap-3 sm:grid-cols-4">
           <Field label="Daily target (ml)" hint={waterGoal ? `Your food goal: ${waterGoal} ml` : "Blank = 2000 ml"}>

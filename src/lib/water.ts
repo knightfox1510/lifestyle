@@ -28,13 +28,13 @@ export async function waterTarget(session: AppSession, ownerId = session.userId)
 
 /** Logs water for yourself (your own rows are always writable, whatever modules are on). */
 export async function insertWater(session: AppSession, ml: number) {
-  const { error } = await session.supabase.from("fluid_intake").insert({
+  const { data, error } = await session.supabase.from("fluid_intake").insert({
     owner_id: session.userId,
     created_by: session.userId,
     household_id: session.household.id,
     drink: "water",
     volume_ml: ml,
     caffeinated: false,
-  });
-  return !error;
+  }).select("id").single();
+  return error ? null : (data?.id as string);
 }

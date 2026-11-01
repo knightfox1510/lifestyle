@@ -43,11 +43,7 @@ export const WIDGETS: WidgetDef[] = [
 export const WIDGET_BY_KEY = Object.fromEntries(WIDGETS.map((w) => [w.key, w])) as Record<string, WidgetDef>;
 export const DEFAULT_WIDGETS = [
   "core.getting_started",
-  "core.today",
-  "core.quick_log",
   "food_diary.today",
-  "core.water",
-  "medicines.today",
   "fitness.today",
   "bladder_diary.quick",
   "supplements.today",

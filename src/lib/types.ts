@@ -6,6 +6,8 @@ export type Profile = {
   ai_use_medical_history: boolean;
   active_household_id: string | null;
   language: "en" | "hi" | "mr";
+  /** Home hero: day arc (default), quiet bars or tiles. */
+  home_view?: "arc" | "bars" | "tiles";
 };
 
 export type Household = {
@@ -138,7 +140,8 @@ export type MedicalProfile = {
   include_in_ai: boolean;
 };
 
-export type ActionResult = { ok?: boolean; error?: string; message?: string };
+/** `id` is the created row, so a toast can offer Undo. */
+export type ActionResult = { ok?: boolean; error?: string; message?: string; id?: string };
 
 // ------------------------------------------------------------- Phase 1 ----
 
@@ -609,6 +612,9 @@ export type NotificationPrefs = {
   water_interval_min: number;
   water_start: string;
   water_end: string;
+  close_day: boolean;
+  close_day_time: string;
+  partner_updates: boolean;
   daily_hour: number;
   quiet_start: string | null;
   quiet_end: string | null;

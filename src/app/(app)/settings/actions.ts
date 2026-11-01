@@ -29,6 +29,7 @@ const profileSchema = z.object({
   }, "Unknown timezone"),
   units: z.enum(["metric", "imperial"]),
   language: z.enum(LANGS),
+  home_view: z.enum(["arc", "bars", "tiles"]),
   ai_use_medical_history: z.boolean(),
 });
 

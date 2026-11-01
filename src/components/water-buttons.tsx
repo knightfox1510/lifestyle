@@ -1,36 +1,37 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { Droplet } from "lucide-react";
 import { Button } from "@/components/ui";
 import { logWater } from "@/lib/water-actions";
-import { useT } from "@/lib/i18n/client";
+import { undoQuickLog } from "@/lib/quick-actions";
+import { useToast } from "@/components/toaster";
 
-/** One-tap water logging for yourself. */
+/** One-tap water logging for yourself, confirmed by a toast with Undo. */
 export function WaterButtons({ amounts = [250, 500] }: { amounts?: number[] }) {
-  const [msg, setMsg] = useState<string | null>(null);
   const [pending, start] = useTransition();
-  const t = useT();
+  const { toast } = useToast();
+  const router = useRouter();
   return (
-    <div className="space-y-1">
-      <div className="flex flex-wrap gap-2">
-        {amounts.map((ml) => (
-          <Button
-            key={ml}
-            size="sm"
-            variant="secondary"
-            disabled={pending}
-            onClick={() =>
-              start(async () => {
-                const r = await logWater(ml);
-                setMsg(r.error ? t(r.error) : (r.message ?? null));
-              })
-            }
-          >
-            💧 +{ml} ml
-          </Button>
-        ))}
-      </div>
-      {msg ? <p className="text-xs text-fg-muted" role="status">{msg}</p> : null}
+    <div className="flex flex-wrap gap-2">
+      {amounts.map((ml) => (
+        <Button
+          key={ml}
+          size="sm"
+          variant="soft"
+          disabled={pending}
+          onClick={() =>
+            start(async () => {
+              const r = await logWater(ml);
+              if (r.error) return toast(r.error, { tone: "error" });
+              toast(r.message ?? `+${ml} ml`, { undo: r.id ? () => undoQuickLog("water", r.id!).then(() => router.refresh()) : undefined });
+            })
+          }
+        >
+          <Droplet className="size-4" aria-hidden /> +{ml} ml
+        </Button>
+      ))}
     </div>
   );
 }

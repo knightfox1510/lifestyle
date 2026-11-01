@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { getSession } from "@/lib/session";
 import { Card, PageHeader } from "@/components/ui";
 import { SignOutButton } from "@/components/sign-out-button";
 import { InstallPrompt } from "@/components/install-prompt";
+import { HubList } from "@/components/hub";
 import { ProfileSettingsForm } from "./profile-settings-form";
 import { getT } from "@/lib/i18n/server";
 
@@ -19,32 +19,16 @@ export default async function SettingsPage() {
           <h2 className="mb-3 font-semibold">{t("You")}</h2>
           <ProfileSettingsForm profile={session.profile} />
         </Card>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Link href="/settings/household" className="rounded-2xl border border-border bg-surface p-4 hover:bg-surface-2">
-            <p className="font-medium">🏠 {t("Household")}</p>
-            <p className="mt-1 text-sm text-fg-muted">{t("Members, invites, features on/off, AI key and limits.")}</p>
-          </Link>
-          <Link href="/settings/sharing" className="rounded-2xl border border-border bg-surface p-4 hover:bg-surface-2">
-            <p className="font-medium">🔐 {t("Sharing")}</p>
-            <p className="mt-1 text-sm text-fg-muted">{t("Choose what your partner can see or edit, and who viewed it.")}</p>
-          </Link>
-          <Link href="/settings/notifications" className="rounded-2xl border border-border bg-surface p-4 hover:bg-surface-2">
-            <p className="font-medium">🔔 {t("Notifications")}</p>
-            <p className="mt-1 text-sm text-fg-muted">{t("Turn on push for this device; choose reminders and quiet hours.")}</p>
-          </Link>
-          <Link href="/digest" className="rounded-2xl border border-border bg-surface p-4 hover:bg-surface-2">
-            <p className="font-medium">📬 {t("Weekly summary")}</p>
-            <p className="mt-1 text-sm text-fg-muted">{t("AI recap of your week, every Sunday evening.")}</p>
-          </Link>
-          <Link href="/settings/privacy" className="rounded-2xl border border-border bg-surface p-4 hover:bg-surface-2">
-            <p className="font-medium">🔒 {t("Privacy & data")}</p>
-            <p className="mt-1 text-sm text-fg-muted">{t("App lock, download your data, delete your account.")}</p>
-          </Link>
-          <Link href="/customize" className="rounded-2xl border border-border bg-surface p-4 hover:bg-surface-2">
-            <p className="font-medium">🧩 {t("Home widgets")}</p>
-            <p className="mt-1 text-sm text-fg-muted">{t("Pick and arrange the quick-log widgets on Home.")}</p>
-          </Link>
-        </div>
+        <HubList
+          items={[
+            { href: "/settings/household", name: t("Household"), hint: t("Members, invites, features on/off, AI key and limits.") },
+            { href: "/settings/sharing", name: t("Sharing"), hint: t("Choose what your partner can see or edit, and who viewed it.") },
+            { href: "/settings/notifications", name: t("Notifications"), hint: t("Turn on push for this device; choose reminders and quiet hours.") },
+            { href: "/digest", name: t("Weekly summary"), hint: t("AI recap of your week, every Sunday evening.") },
+            { href: "/settings/privacy", name: t("Privacy & data"), hint: t("App lock, download your data, delete your account.") },
+            { href: "/customize", name: t("Home widgets"), hint: t("Pick and arrange the quick-log widgets on Home.") },
+          ]}
+        />
         <InstallPrompt />
         <SignOutButton />
       </div>

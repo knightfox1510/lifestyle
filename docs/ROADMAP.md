@@ -99,7 +99,7 @@ Each module is then mostly config + a form + a widget. This keeps 20+ modules ma
 
 ## Later / optional
 
-- **Shipped after Phase 4:** restaurant menus, accurate home-cooked nutrition, the Indian dish library (174 dishes), water reminders, medicine safety checks, the doctor visit summary and Hindi/Marathi (frame, daily screens, reminders, AI).
+- **Shipped after Phase 4:** restaurant menus, accurate home-cooked nutrition, the Indian dish library (174 dishes), water reminders, medicine safety checks, the doctor visit summary, Hindi/Marathi (frame, daily screens, reminders, AI), and the redesign (quiet visual system, day-arc Home with a per-person view, instant feedback, ＋ quick-log sheet, five-tab navigation, streaks with rest days, close-your-day, partner cheers, milestones, weekly story).
 - **Ideas not built yet:** period/cycle tracking correlated with leaks and energy; vrat/fasting mode (Navratri, Ekadashi) for meal ideas and calorie targets; an emergency health card; chore rotation; a child tiffin planner; finishing Hindi/Marathi on the remaining screens (and Devanagari dish search); Android Health Connect sync; sleep vs leak correlation; grocery price tracking.
 
 - **Swiggy Builders (MCP) integration.** Live restaurant and menu search, and possibly ordering inside Hearth, with each person signing in with their own Swiggy account (OAuth). Needs an application to Swiggy's Builders program (video demo, staging integration, then production approval). Menus there have prices but no nutrition, so Hearth's estimates would still apply. Until then, menus are imported from screenshots, photos or text (built).

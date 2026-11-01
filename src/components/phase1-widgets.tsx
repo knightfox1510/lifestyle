@@ -2,29 +2,45 @@
 
 import { useActionState, useTransition } from "react";
 import Link from "next/link";
-import { Button, Input, Notice } from "@/components/ui";
+import { Button, Input } from "@/components/ui";
 import { ActionMessage, SubmitButton } from "@/components/form-status";
-import type { ActionResult } from "@/lib/types";
 import { quickLog } from "@/app/(app)/bladder/actions";
 import { quickAddGrocery } from "@/app/(app)/groceries/actions";
 import { logBodyMetric } from "@/app/(app)/body/actions";
 import { useT } from "@/lib/i18n/client";
+import { useToast } from "@/components/toaster";
+import { undoQuickLog } from "@/lib/quick-actions";
+import { useRouter } from "next/navigation";
 
 export function BladderQuickButtons({ ownerId, counts }: { ownerId: string; counts: { leaks: number; voids: number; fluidMl: number } }) {
   const [pending, start] = useTransition();
   const t = useT();
-  const [state, run] = useActionState(async (_: ActionResult | null, what: "leak" | "urge" | "void" | "water") => quickLog(ownerId, what), null);
+  const { toast } = useToast();
+  const router = useRouter();
   const buttons = [
-    { what: "leak", label: `💧 ${t("Leak")}` },
-    { what: "urge", label: `⚡ ${t("Urge")}` },
-    { what: "void", label: `🚻 ${t("Bathroom")}` },
-    { what: "water", label: "🥤 +250 ml" },
+    { what: "leak", label: t("Leak") },
+    { what: "urge", label: t("Urge") },
+    { what: "void", label: t("Bathroom") },
+    { what: "water", label: "+250 ml" },
   ] as const;
   return (
     <div className="space-y-2">
       <div className="grid grid-cols-4 gap-1.5">
         {buttons.map((b) => (
-          <Button key={b.what} size="sm" variant="secondary" className="!h-11 !px-1 text-xs" disabled={pending} onClick={() => start(() => run(b.what))}>
+          <Button
+            key={b.what}
+            size="sm"
+            variant="secondary"
+            className="!h-11 !rounded-2xl !px-1 text-xs"
+            disabled={pending}
+            onClick={() =>
+              start(async () => {
+                const r = await quickLog(ownerId, b.what);
+                if (r.error) return toast(r.error, { tone: "error" });
+                toast(t("{what} logged", { what: b.label }), { undo: r.id ? () => undoQuickLog(b.what === "water" ? "water" : "bladder", r.id!).then(() => router.refresh()) : undefined });
+              })
+            }
+          >
             {b.label}
           </Button>
         ))}
@@ -33,7 +49,6 @@ export function BladderQuickButtons({ ownerId, counts }: { ownerId: string; coun
         {t("Today: {leaks} leaks · {voids} bathroom · {ml} ml.", { leaks: counts.leaks, voids: counts.voids, ml: counts.fluidMl })}{" "}
         <Link href="/bladder" className="text-accent hover:underline">{t("Add details")}</Link>
       </p>
-      {state?.error ? <Notice tone="danger">{state.error}</Notice> : <ActionMessage state={state} />}
     </div>
   );
 }

@@ -1,5 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import { cookies } from "next/headers";
+import { GeistSans } from "geist/font/sans";
+import { GeistMono } from "geist/font/mono";
+import "@fontsource/mukta/devanagari-400.css";
+import "@fontsource/mukta/devanagari-500.css";
+import "@fontsource/mukta/devanagari-600.css";
 import { ServiceWorker } from "@/components/service-worker";
 import { isLang, LANG_COOKIE } from "@/lib/i18n/core";
 import "./globals.css";
@@ -31,15 +36,15 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f7f6f3" },
-    { media: "(prefers-color-scheme: dark)", color: "#141412" },
+    { media: "(prefers-color-scheme: light)", color: "#fbfbfa" },
+    { media: "(prefers-color-scheme: dark)", color: "#0b0b0a" },
   ],
 };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   const c = (await cookies()).get(LANG_COOKIE)?.value;
   return (
-    <html lang={isLang(c) ? c : "en"} className="h-full antialiased">
+    <html lang={isLang(c) ? c : "en"} className={`h-full antialiased ${GeistSans.variable} ${GeistMono.variable}`}>
       <body className="min-h-full font-sans">
         {children}
         <ServiceWorker />

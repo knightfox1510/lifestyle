@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { getSession, type AppSession } from "@/lib/session";
 import { getT } from "@/lib/i18n/server";
 import type { MedicalEvent, WidgetSize } from "@/lib/types";
@@ -38,14 +39,15 @@ const span: Record<WidgetSize, string> = {
 
 export async function WidgetFrame({ size, title, href, children }: { size: WidgetSize; title: string; href?: string; children: React.ReactNode }) {
   const t = await getT(await getSession());
-  title = t(title);
+  // Quiet look: no emoji in titles, a small muted heading and a chevron link.
+  title = t(title).replace(/^[\p{Extended_Pictographic}\uFE0F\u200D\s]+/u, "");
   return (
     <Card className={cx(span[size], "flex min-w-0 flex-col gap-3")}>
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold">{title}</h2>
+        <h2 className="text-[13px] font-medium text-fg-muted">{title}</h2>
         {href ? (
-          <Link href={href} className="text-xs text-accent hover:underline">
-            {t("Open")}
+          <Link href={href} className="pressable -mr-1 grid size-7 place-items-center rounded-full text-fg-muted hover:bg-surface-2 hover:text-fg" aria-label={`${t("Open")} ${title}`}>
+            <ChevronRight className="size-4" aria-hidden />
           </Link>
         ) : null}
       </div>
