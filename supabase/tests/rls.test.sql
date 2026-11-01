@@ -38,11 +38,11 @@ do $$ begin
   assert (select count(*) from public.household_members) = 2, 'B sees both members';
   assert (select count(*) from public.profiles) = 2, 'B sees A profile';
 end $$;
+-- Using the same invite again as B is harmless (no duplicate membership);
+-- reuse by someone else is covered in invites.test.sql.
+select public.accept_invite((select code from public.invites limit 1));
 do $$ begin
-  perform public.accept_invite((select code from public.invites limit 1));
-  raise exception 'SHOULD_FAIL: invite reused';
-exception when raise_exception then
-  if sqlerrm like 'SHOULD_FAIL%' then raise; end if;
+  assert (select count(*) from public.household_members) = 2, 'still two members after re-join';
 end $$;
 
 select set_config('request.jwt.claim.sub', :c, false);

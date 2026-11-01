@@ -66,3 +66,12 @@ describe("safeNext", () => {
     expect(safeNext(null)).toBe("/");
   });
 });
+
+describe("stale deployment errors", () => {
+  it("recognises errors a reload fixes", async () => {
+    const { isStaleDeployError } = await import("@/components/error-screen");
+    expect(isStaleDeployError(new Error('Failed to find Server Action "abc". This request might be from an older or newer deployment.'))).toBe(true);
+    expect(isStaleDeployError(new Error("ChunkLoadError: Loading chunk 123 failed."))).toBe(true);
+    expect(isStaleDeployError(new Error("Cannot read properties of undefined"))).toBe(false);
+  });
+});

@@ -8,7 +8,7 @@ export const metadata = { title: "Get started" };
 
 export default async function OnboardingPage({ searchParams }: PageProps<"/onboarding">) {
   const { profile } = await getUser();
-  const { code, new: addAnother } = await searchParams;
+  const { code, new: addAnother, tab, error } = await searchParams;
   if (profile?.active_household_id && !addAnother) redirect("/");
 
   return (
@@ -22,6 +22,8 @@ export default async function OnboardingPage({ searchParams }: PageProps<"/onboa
       <OnboardingForms
         defaultName={profile?.display_name ?? ""}
         defaultCode={typeof code === "string" ? code : ""}
+        initialTab={tab === "join" || (typeof code === "string" && code) ? "join" : "create"}
+        error={typeof error === "string" ? error.slice(0, 200) : null}
         modules={MODULES.filter((m) => m.status === "available").map((m) => ({ key: m.key, name: m.name, icon: m.icon, group: m.group, defaultOn: m.key !== "child" }))}
       />
       {profile?.active_household_id ? (

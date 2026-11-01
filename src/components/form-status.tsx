@@ -6,9 +6,11 @@ import { Button } from "@/components/ui";
 import type { ActionResult } from "@/lib/types";
 
 export function SubmitButton({ children, pendingText, ...props }: ComponentProps<typeof Button> & { pendingText?: string }) {
-  const { pending } = useFormStatus();
+  const status = useFormStatus();
+  // `pending` can also come from the caller (plain form posts that navigate away).
+  const pending = status.pending || Boolean(props.pending);
   return (
-    <Button type="submit" pending={pending} {...props}>
+    <Button type="submit" {...props} pending={pending}>
       {pending && pendingText ? pendingText : children}
     </Button>
   );

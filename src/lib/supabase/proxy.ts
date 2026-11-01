@@ -38,10 +38,13 @@ export async function updateSession(request: NextRequest) {
     }
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    // Keep the query string (e.g. invite ?code=…) so it survives sign-in.
-    const target = path + request.nextUrl.search;
+    // Keep the query string (e.g. invite ?code=…) so it survives sign-in. A
+    // signed-out form post goes back to its page (not the endpoint), and 303
+    // turns the POST into a normal GET of the login page.
+    const isPost = request.method !== "GET" && request.method !== "HEAD";
+    const target = isPost ? (path.startsWith("/onboarding/") ? "/onboarding" : "/") : path + request.nextUrl.search;
     url.search = target === "/" ? "" : `?next=${encodeURIComponent(target)}`;
-    return NextResponse.redirect(url);
+    return NextResponse.redirect(url, isPost ? 303 : 307);
   }
 
   if (signedIn && path === "/login") {

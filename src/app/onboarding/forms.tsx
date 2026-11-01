@@ -1,16 +1,32 @@
 "use client";
 
-import { useActionState, useState } from "react";
-import { Card, Field, Input, cx } from "@/components/ui";
-import { ActionMessage, SubmitButton } from "@/components/form-status";
-import { createHouseholdAction, joinHouseholdAction } from "./actions";
+import { useState } from "react";
+import { Card, Field, Input, Notice, cx } from "@/components/ui";
+import { SubmitButton } from "@/components/form-status";
 
 type ModuleOption = { key: string; name: string; icon: string; group: string; defaultOn: boolean };
 
-export function OnboardingForms({ defaultName, defaultCode, modules }: { defaultName: string; defaultCode: string; modules: ModuleOption[] }) {
-  const [tab, setTab] = useState<"create" | "join">(defaultCode ? "join" : "create");
-  const [createState, createAction] = useActionState(createHouseholdAction, null);
-  const [joinState, joinAction] = useActionState(joinHouseholdAction, null);
+/**
+ * Create or join a household. Plain form posts to /onboarding/create and
+ * /onboarding/join (not server actions), so they keep working across deploys
+ * and even before the page's JavaScript has loaded.
+ */
+export function OnboardingForms({
+  defaultName,
+  defaultCode,
+  modules,
+  initialTab,
+  error,
+}: {
+  defaultName: string;
+  defaultCode: string;
+  modules: ModuleOption[];
+  initialTab: "create" | "join";
+  error: string | null;
+}) {
+  const [tab, setTab] = useState<"create" | "join">(initialTab);
+  // A plain form post navigates away; show progress and block double taps meanwhile.
+  const [busy, setBusy] = useState(false);
 
   return (
     <Card className="space-y-4">
@@ -29,7 +45,7 @@ export function OnboardingForms({ defaultName, defaultCode, modules }: { default
       </div>
 
       {tab === "create" ? (
-        <form action={createAction} className="space-y-3">
+        <form method="post" action="/onboarding/create" className="space-y-3" onSubmit={() => setBusy(true)}>
           <Field label="Your name">
             <Input name="displayName" defaultValue={defaultName} required maxLength={60} />
           </Field>
@@ -53,19 +69,19 @@ export function OnboardingForms({ defaultName, defaultCode, modules }: { default
               </div>
             ))}
           </fieldset>
-          <ActionMessage state={createState} />
-          <SubmitButton className="w-full" pendingText="Creating…">Create household</SubmitButton>
+          {error && tab === initialTab ? <Notice tone="danger">{error}</Notice> : null}
+          <SubmitButton className="w-full" pending={busy} pendingText="Creating…">Create household</SubmitButton>
         </form>
       ) : (
-        <form action={joinAction} className="space-y-3">
+        <form method="post" action="/onboarding/join" className="space-y-3" onSubmit={() => setBusy(true)}>
           <Field label="Your name">
             <Input name="displayName" defaultValue={defaultName} required maxLength={60} />
           </Field>
           <Field label="Invite code" hint="Your partner can create one in Settings → Household.">
             <Input name="code" defaultValue={defaultCode} required maxLength={8} className="uppercase tracking-widest" />
           </Field>
-          <ActionMessage state={joinState} />
-          <SubmitButton className="w-full" pendingText="Joining…">Join household</SubmitButton>
+          {error && tab === initialTab ? <Notice tone="danger">{error}</Notice> : null}
+          <SubmitButton className="w-full" pending={busy} pendingText="Joining…">Join household</SubmitButton>
         </form>
       )}
     </Card>
