@@ -2,7 +2,7 @@
 
 An installable web app (phone and laptop) for tracking household and partner life: health, food, routines and more. Personal data is private by default, and each person chooses which features their partner can see or edit. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the full plan.
 
-**Status: Phases 0–3 built.** To go live on Vercel + Supabase, follow [`docs/DEPLOY.md`](docs/DEPLOY.md).
+**Status: all roadmap phases (0–4) built.** To go live on Vercel + Supabase, follow [`docs/DEPLOY.md`](docs/DEPLOY.md).
 
 ## What's included
 
@@ -41,6 +41,16 @@ An installable web app (phone and laptop) for tracking household and partner lif
 - **Subscriptions:** what the household pays for, who pays, monthly total and renewal reminders.
 - **Notifications:** Web Push on Android, desktop and installed iOS apps, covering medicine doses, classes, expiring food, documents, subscriptions, maintenance and vaccinations. Per-type switches, a daily reminder hour and quiet hours. A scheduled job calls `/api/cron/tick`, and every notification is sent at most once.
 - **Weekly summary:** a Sunday-evening AI recap (wins, things to watch, what's coming up), also available on demand.
+- **Couples' watchlist:** shows and movies with each person's season/episode, a warning when someone is ahead on a show you watch together, ratings, and a backlog.
+- **Takeout & dining vault:** favourite places, go-to dishes per person and an order log. **"What should we order?"** suggests a place and a dish for each person that fits their calories left, goals and health data, and can log it to the food diary.
+- **Travel:** trips from idea to booked, a day-by-day itinerary with links, bookings and costs vs budget. Packing lists with built-in templates (international flight, weekend, drone & camera gear, beach) and your own saved ones. An AI planner suggests an itinerary, packing list and tips.
+- **Occasions & gifts:** birthdays and anniversaries with ages and years, plus reminders. **Gift ideas are private to their author**, enforced in the database, so surprises stay surprises.
+- **Wearables:** import Zepp/Amazfit CSV exports (activity, sleep, heart rate) or any CSV with a date column, or sync automatically. A per-user token webhook (`POST /api/ingest/wearable`) works with Health Connect / Apple Health automations. Shows steps, sleep and resting HR charts and feeds AI context.
+- **Privacy & data:**
+  - Device app lock with a passkey (fingerprint, face or device PIN) or a Hearth PIN, with an auto-lock timeout.
+  - Full JSON export.
+  - Account deletion that hands household ownership to your partner.
+- **Households:** belong to several households and switch between them. Onboarding lets you pick which features to turn on, and Home shows a "Getting started" checklist.
 - **AI (Gemini):** the key stays on the server. A household can optionally bring its own key, which is stored AES-256-GCM encrypted. There's a per-household daily request cap and usage logging. **Every AI request gets the person's health data**: medical history (allergies first, then conditions, current medicines, timeline and document summaries) plus lab results (out-of-range first, with previous values) and recent tracking (medicines and adherence, supplements, a 14-day bladder diary summary, pelvic floor sessions, check-ins, habits, 7-day food averages vs goals, weight trend and target, latest vitals). There are three levels of override:
   1. A default in Settings ("Use my medical history in AI suggestions").
   2. A per-question switch on the Ask AI screen, plus "What will AI see?", which shows the exact context that will be sent.

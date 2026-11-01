@@ -167,3 +167,12 @@ export async function setShare(granteeId: string, moduleKey: string, level: "non
   }
   refreshAll();
 }
+
+export async function switchHousehold(hid: string) {
+  const session = await getSession();
+  const { error } = await session.supabase.rpc("switch_household", { hid });
+  if (!error) {
+    refreshAll();
+    redirect("/");
+  }
+}

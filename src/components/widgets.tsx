@@ -22,7 +22,8 @@ import { addDays, lastNDays, localDate, localTime, startOfLocalDayIso, todayIn }
 import { streak } from "@/lib/streak";
 import { slotsForDay, doseLabel } from "@/modules/medicines/logic";
 import { dailyStats } from "@/modules/bladder/analysis";
-import type { ChildLog, Dependent, FitnessClass, WorkoutLog } from "@/lib/types";
+import type { ChildLog, Dependent, FitnessClass, Occasion, Trip, WatchItem, WatchProgress, WearableDay, WorkoutLog } from "@/lib/types";
+import { occasionInfo } from "@/modules/occasions/logic";
 import type { BodyGoals, BodyMetric, FoodEntry, LabResult, MealPlanEntry, NutritionGoals, PantryItem, Recipe } from "@/lib/types";
 import type { BladderEvent, DailyCheckin, FluidIntake, GroceryItem, Habit, HabitLog, Medicine, MedicineDose, PelvicFloorSession, Supplement } from "@/lib/types";
 
@@ -565,6 +566,154 @@ export async function Widget({ widgetKey, size, session }: { widgetKey: string; 
             </ul>
           ) : (
             <p className="text-sm text-fg-muted">Nothing due in the next month.</p>
+          )}
+        </WidgetFrame>
+      );
+    }
+
+    case "core.getting_started": {
+      if (!isSelf) return null;
+      const [{ count: devices }, mp, ng, { count: meds }] = await Promise.all([
+        session.supabase.from("push_subscriptions").select("id", { count: "exact", head: true }).eq("user_id", session.userId),
+        session.isModuleEnabled("medical_records") ? session.supabase.from("medical_profiles").select("owner_id").eq("owner_id", session.userId).maybeSingle() : Promise.resolve({ data: { owner_id: "skip" } }),
+        session.isModuleEnabled("food_diary") ? session.supabase.from("nutrition_goals").select("calories").eq("owner_id", session.userId).maybeSingle() : Promise.resolve({ data: { calories: 1 } }),
+        session.supabase.from("medicines").select("id", { count: "exact", head: true }).eq("owner_id", session.userId),
+      ]);
+      const steps = [
+        { done: session.members.length > 1, label: "Invite your partner", href: "/settings/household" },
+        { done: (devices ?? 0) > 0, label: "Turn on notifications on this device", href: "/settings/notifications" },
+        { done: Boolean(mp.data), label: "Fill in your health profile (helps AI suggestions)", href: "/medical/profile" },
+        { done: !session.isModuleEnabled("food_diary") || Boolean((ng.data as { calories: number | null } | null)?.calories), label: "Set your nutrition goals", href: "/food/goals" },
+        { done: !session.isModuleEnabled("medicines") || (meds ?? 0) > 0, label: "Add your medicines or supplements", href: "/medicines/manage" },
+        { done: session.shares.some((x) => x.owner_id === session.userId) || session.members.length < 2, label: "Choose what your partner can see", href: "/settings/sharing" },
+      ];
+      const left = steps.filter((x) => !x.done);
+      if (!left.length) return null;
+      return (
+        <WidgetFrame size={size} title={`Getting started · ${steps.length - left.length}/${steps.length}`} href="/customize">
+          <ul className="grid gap-1.5 sm:grid-cols-2">
+            {steps.map((x) => (
+              <li key={x.label} className="text-sm">
+                {x.done ? <span className="text-fg-muted line-through">✓ {x.label}</span> : <Link href={x.href} className="text-accent hover:underline">○ {x.label}</Link>}
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs text-fg-muted">Remove this card anytime from Customize.</p>
+        </WidgetFrame>
+      );
+    }
+
+    case "wearables.today": {
+      if (session.accessTo("wearables", subject.user_id) === "none") return <NotShared size={size} title="Steps & sleep" name={subject.display_name} />;
+      const today = todayIn(session.profile.timezone);
+      const { data } = await session.supabase.from("wearable_daily").select("*").eq("owner_id", subject.user_id).gte("day", addDays(today, -2)).order("day", { ascending: false });
+      const rows = (data ?? []) as WearableDay[];
+      const latest = rows[0];
+      return (
+        <WidgetFrame size={size} title="⌚ Steps & sleep" href="/wearables">
+          {latest ? (
+            <div className="space-y-0.5 text-sm">
+              <p><strong className="text-lg tabular-nums">{latest.steps?.toLocaleString("en-IN") ?? "–"}</strong> steps</p>
+              <p className="text-fg-muted">
+                {latest.sleep_minutes ? `${Math.floor(latest.sleep_minutes / 60)}h ${latest.sleep_minutes % 60}m sleep` : ""}
+                {latest.resting_hr ? ` · RHR ${latest.resting_hr}` : ""}
+              </p>
+              <p className="text-xs text-fg-muted">{latest.day === today ? "today" : latest.day}</p>
+            </div>
+          ) : (
+            <p className="text-sm text-fg-muted">No recent data. Import or sync from your band.</p>
+          )}
+        </WidgetFrame>
+      );
+    }
+
+    case "watchlist.watching": {
+      const [{ data: i }, { data: p }] = await Promise.all([
+        session.supabase.from("watchlist_items").select("*").eq("household_id", session.household.id).eq("status", "watching").order("updated_at", { ascending: false }).limit(4),
+        session.supabase.from("watch_progress").select("*").eq("household_id", session.household.id),
+      ]);
+      const items = (i ?? []) as WatchItem[];
+      const prog = (p ?? []) as WatchProgress[];
+      const pos = (x?: WatchProgress) => (x ? x.season * 1000 + x.episode : 1000);
+      return (
+        <WidgetFrame size={size} title="📺 Watching" href="/watchlist">
+          {items.length ? (
+            <ul className="space-y-1.5 text-sm">
+              {items.map((it) => {
+                const mine = prog.find((x) => x.item_id === it.id && x.user_id === session.userId);
+                const ahead = it.together ? session.members.filter((m) => m.user_id !== session.userId && pos(prog.find((x) => x.item_id === it.id && x.user_id === m.user_id)) > pos(mine)) : [];
+                return (
+                  <li key={it.id}>
+                    <span>{it.title}</span>
+                    {it.kind !== "movie" ? <span className="text-xs text-fg-muted"> · you&apos;re on S{mine?.season ?? 1} E{mine?.episode ?? 0}</span> : null}
+                    {ahead.length ? <span className="block text-xs text-danger">⚠️ {ahead.map((a) => a.display_name).join(", ")} is ahead</span> : null}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="text-sm text-fg-muted">Nothing on the go. Pick something from your backlog.</p>
+          )}
+        </WidgetFrame>
+      );
+    }
+
+    case "dining.order":
+      return (
+        <WidgetFrame size={size} title="🍔 Order in?">
+          <p className="text-sm text-fg-muted">Not cooking tonight? Get picks that fit both your goals.</p>
+          <Link href="/dining" className="text-sm font-medium text-accent hover:underline">✨ What should we order?</Link>
+        </WidgetFrame>
+      );
+
+    case "travel.next": {
+      const today = todayIn(session.profile.timezone);
+      const { data } = await session.supabase.from("trips").select("*").eq("household_id", session.household.id).neq("status", "done").gte("start_date", today).order("start_date").limit(1);
+      const trip = ((data ?? []) as Trip[])[0];
+      if (!trip) {
+        return (
+          <WidgetFrame size={size} title="✈️ Next trip" href="/travel">
+            <p className="text-sm text-fg-muted">No trip booked. Dreaming of Japan? Start an idea.</p>
+          </WidgetFrame>
+        );
+      }
+      const { data: pk } = await session.supabase.from("trip_packing").select("packed").eq("trip_id", trip.id);
+      const total = (pk ?? []).length;
+      const packed = (pk ?? []).filter((x: { packed: boolean }) => x.packed).length;
+      return (
+        <WidgetFrame size={size} title="✈️ Next trip" href={`/travel/${trip.id}`}>
+          <p className="font-medium">{trip.title}</p>
+          <p className="text-sm text-fg-muted">{trip.destination ? `${trip.destination} · ` : ""}in {daysUntil(trip.start_date, today)} days</p>
+          {total ? (
+            <>
+              <div className="h-2 overflow-hidden rounded-full bg-surface-2"><div className="h-full rounded-full bg-accent" style={{ width: `${(packed / total) * 100}%` }} /></div>
+              <p className="text-xs text-fg-muted">{packed}/{total} packed</p>
+            </>
+          ) : null}
+        </WidgetFrame>
+      );
+    }
+
+    case "occasions.upcoming": {
+      const today = todayIn(session.profile.timezone);
+      const { data } = await session.supabase.from("occasions").select("*").eq("household_id", session.household.id);
+      const list = ((data ?? []) as Occasion[])
+        .map((o) => ({ o, info: occasionInfo(o, today) }))
+        .filter((x) => x.info.inDays !== null && x.info.inDays <= 30)
+        .sort((a, b) => a.info.inDays! - b.info.inDays!);
+      return (
+        <WidgetFrame size={size} title="🎂 Coming up" href="/occasions">
+          {list.length ? (
+            <ul className="space-y-1 text-sm">
+              {list.slice(0, 4).map(({ o, info }) => (
+                <li key={o.id} className="flex justify-between gap-2">
+                  <span className="truncate">{o.title}{info.label ? <span className="text-fg-muted"> · {info.label}</span> : null}</span>
+                  <span className="shrink-0 text-xs text-fg-muted">{info.inDays === 0 ? "today 🎉" : `${info.inDays}d`}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-fg-muted">No birthdays or anniversaries in the next 30 days.</p>
           )}
         </WidgetFrame>
       );

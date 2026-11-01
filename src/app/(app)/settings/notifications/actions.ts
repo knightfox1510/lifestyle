@@ -64,13 +64,15 @@ const prefsSchema = z.object({
   maintenance: z.boolean(),
   child: z.boolean(),
   digest: z.boolean(),
+  occasions: z.boolean(),
+  travel: z.boolean(),
   daily_hour: z.coerce.number().int().min(0).max(23),
   quiet_start: time,
   quiet_end: time,
 });
 
 export async function saveNotificationPrefs(_: ActionResult | null, form: FormData): Promise<ActionResult> {
-  const flags = ["medicines", "fitness", "expiries", "renewals", "maintenance", "child", "digest"];
+  const flags = ["medicines", "fitness", "expiries", "renewals", "maintenance", "child", "digest", "occasions", "travel"];
   const parsed = prefsSchema.safeParse({
     ...Object.fromEntries(form),
     ...Object.fromEntries(flags.map((f) => [f, form.get(f) === "on"])),

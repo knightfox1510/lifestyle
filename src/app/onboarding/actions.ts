@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getUser } from "@/lib/session";
+import { MODULES } from "@/modules/registry";
 import type { ActionResult } from "@/lib/types";
 
 const createSchema = z.object({
@@ -16,8 +17,17 @@ export async function createHouseholdAction(_: ActionResult | null, form: FormDa
   const { supabase, userId } = await getUser();
 
   await supabase.from("profiles").update({ display_name: parsed.data.displayName }).eq("id", userId);
-  const { error } = await supabase.rpc("create_household", { household_name: parsed.data.householdName });
-  if (error) return { error: "Couldn't create the household. Please try again." };
+  const { data: hid, error } = await supabase.rpc("create_household", { household_name: parsed.data.householdName });
+  if (error || !hid) return { error: "Couldn't create the household. Please try again." };
+
+  // Apply the features picked during setup (defaults are on if the picker wasn't shown).
+  const picked = new Set(form.getAll("modules").map(String));
+  if (form.get("picker") === "1") {
+    await supabase.from("household_modules").upsert(
+      MODULES.filter((m) => m.status === "available").map((m) => ({ household_id: hid, module_key: m.key, enabled: picked.has(m.key) })),
+      { onConflict: "household_id,module_key" },
+    );
+  }
   redirect("/");
 }
 

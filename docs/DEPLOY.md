@@ -99,7 +99,17 @@ The response is JSON like `{"ok":true,"users":1,"sent":0,"digests":0,"errors":0}
 - **iPhone (Safari):** Share → **Add to Home Screen**, then open Hearth *from the Home Screen icon*. iOS only allows web push for installed apps (iOS 16.4+).
 - On each device: **Settings → Notifications → Turn on notifications**, then **Send a test**.
 
-## 6. After going live
+## 6. Wearable sync (optional)
+
+In the app: **Wearables → Automatic sync → Create sync token**. Your automation (Tasker / a Health Connect exporter on Android, or an Apple Shortcuts automation on iPhone) then POSTs daily totals:
+
+```bash
+curl -X POST https://YOUR-APP.vercel.app/api/ingest/wearable -H "Authorization: Bearer hth_…" -H "Content-Type: application/json" -d '{"days":[{"date":"2026-11-01","steps":8123,"sleep_minutes":412,"resting_hr":61}]}'
+```
+
+Or skip automation and import the Zepp CSV export from time to time.
+
+## 7. After going live
 
 - **Gemini usage:** each household has a daily AI request cap (Settings → Household, default 50). You can also paste a household-specific Gemini key there; it's stored encrypted.
 - **Backups:** Supabase Pro has daily backups and point-in-time recovery. On the free plan, export regularly with `npx supabase db dump`.

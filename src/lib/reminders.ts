@@ -5,6 +5,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { notifyUser } from "@/lib/push";
 import { addDays, dayOfWeek, localDate, localTime } from "@/lib/dates";
 import { isScheduledOn } from "@/modules/medicines/logic";
+import { nextOccurrence } from "@/modules/occasions/logic";
+import type { Occasion } from "@/lib/types";
 import { daysUntil } from "@/modules/pantry/match";
 import { generateDigest, weekStart } from "@/lib/digest";
 import { serviceSession } from "@/lib/service-session";
@@ -19,6 +21,8 @@ const DEFAULT_PREFS: Omit<NotificationPrefs, "user_id"> = {
   maintenance: true,
   child: true,
   digest: true,
+  occasions: true,
+  travel: true,
   daily_hour: 9,
   quiet_start: null,
   quiet_end: null,
@@ -151,6 +155,28 @@ async function remindUser(
         if (left === 7 || left === 1 || left === 0) {
           await send("vaccination", `vac:${v.id}:${left}`, `💉 ${v.vaccine} due ${left === 0 ? "today" : left === 1 ? "tomorrow" : "in a week"}`, "Book the paediatrician visit.", "/child/health");
         }
+      }
+    }
+  }
+
+  if (dailyNow && prefs.occasions && on("occasions")) {
+    const { data } = await admin.from("occasions").select("*").eq("household_id", hid);
+    for (const o of (data ?? []) as Occasion[]) {
+      const next = nextOccurrence(o, today);
+      if (!next) continue;
+      const left = daysUntil(next, today)!;
+      if (left === o.remind_days_before || left === 1 || left === 0) {
+        await send("occasion", `occ:${o.id}:${next}:${left}`, left === 0 ? `🎉 ${o.title} is today` : `🎁 ${o.title} in ${left} day${left === 1 ? "" : "s"}`, left === 0 ? "Don't forget to celebrate!" : "Check your gift ideas in Hearth.", "/occasions");
+      }
+    }
+  }
+  if (dailyNow && prefs.travel && on("travel")) {
+    const { data } = await admin.from("trips").select("id, title, start_date").eq("household_id", hid).neq("status", "done").not("start_date", "is", null);
+    for (const t of (data ?? []) as { id: string; title: string; start_date: string }[]) {
+      const left = daysUntil(t.start_date, today)!;
+      if (left === 7 || left === 2) {
+        const { count } = await admin.from("trip_packing").select("id", { count: "exact", head: true }).eq("trip_id", t.id).eq("packed", false);
+        await send("travel", `trip:${t.id}:${left}`, `✈️ ${t.title} in ${left} days`, count ? `${count} item${count === 1 ? "" : "s"} still to pack.` : "Time to start packing.", `/travel/${t.id}`);
       }
     }
   }

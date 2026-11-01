@@ -99,7 +99,7 @@ export function PushToggle({ vapidKey }: { vapidKey: string }) {
 
 export function PrefsForm({ prefs }: { prefs: NotificationPrefs | null }) {
   const [state, action] = useActionState(saveNotificationPrefs, null);
-  const p = prefs ?? { medicines: true, fitness: true, expiries: true, renewals: true, maintenance: true, child: true, digest: true, daily_hour: 9, quiet_start: null, quiet_end: null };
+  const p = prefs ?? { medicines: true, fitness: true, expiries: true, renewals: true, maintenance: true, child: true, digest: true, occasions: true, travel: true, daily_hour: 9, quiet_start: null, quiet_end: null };
   const rows: [keyof typeof p, string, string][] = [
     ["medicines", "Medicine doses", "At each scheduled dose time"],
     ["fitness", "Classes & workouts", "Before each scheduled class"],
@@ -107,6 +107,8 @@ export function PrefsForm({ prefs }: { prefs: NotificationPrefs | null }) {
     ["renewals", "Documents & subscriptions", "Passports, insurance and IDs from 60 days before expiry; subscriptions 3 days before renewal"],
     ["maintenance", "Home maintenance", "When a task is coming due"],
     ["child", "Child", "Upcoming vaccinations"],
+    ["occasions", "Birthdays & anniversaries", "A few days before, and on the day"],
+    ["travel", "Trips", "A week and two days before, with what's left to pack"],
     ["digest", "Weekly summary", "Sunday evening AI summary of the week"],
   ];
   return (

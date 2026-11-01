@@ -10,7 +10,7 @@ export type Profile = {
 export type Household = {
   id: string;
   name: string;
-  created_by: string;
+  created_by: string | null;
   ai_daily_limit: number;
   has_custom_ai_key: boolean;
 };
@@ -574,7 +574,109 @@ export type NotificationPrefs = {
   maintenance: boolean;
   child: boolean;
   digest: boolean;
+  occasions: boolean;
+  travel: boolean;
   daily_hour: number;
   quiet_start: string | null;
   quiet_end: string | null;
+};
+
+// ------------------------------------------------------------- Phase 4 ----
+
+export type WatchItem = {
+  id: string;
+  household_id: string;
+  added_by: string | null;
+  title: string;
+  kind: "series" | "movie" | "documentary" | "anime" | "other";
+  platform: string | null;
+  status: "want" | "watching" | "paused" | "finished" | "dropped";
+  together: boolean;
+  total_seasons: number | null;
+  notes: string | null;
+  updated_at: string;
+};
+export type WatchProgress = { item_id: string; user_id: string; season: number; episode: number; rating: number | null; updated_at: string };
+
+export type DiningPlace = {
+  id: string;
+  household_id: string;
+  name: string;
+  cuisine: string | null;
+  area: string | null;
+  mode: "delivery" | "dine_in" | "both";
+  order_via: string | null;
+  favorite: boolean;
+  notes: string | null;
+};
+export type DiningDish = {
+  id: string;
+  place_id: string;
+  name: string;
+  price: number | null;
+  veg: boolean | null;
+  calories: number | null;
+  protein_g: number | null;
+  go_to_for: string[];
+  notes: string | null;
+};
+export type DiningOrder = { id: string; place_id: string | null; ordered_by: string | null; ordered_on: string; items: string; total: number | null; rating: number | null; notes: string | null };
+
+export const TRIP_ITEM_KINDS = ["idea", "link", "flight", "stay", "transport", "activity", "food", "note"] as const;
+export type Trip = {
+  id: string;
+  household_id: string;
+  title: string;
+  destination: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  status: "idea" | "planning" | "booked" | "done";
+  budget: number | null;
+  currency: string;
+  notes: string | null;
+};
+export type TripItem = {
+  id: string;
+  trip_id: string;
+  day_date: string | null;
+  kind: (typeof TRIP_ITEM_KINDS)[number];
+  title: string;
+  url: string | null;
+  start_time: string | null;
+  location: string | null;
+  cost: number | null;
+  booked: boolean;
+  notes: string | null;
+};
+export type PackingItem = { id: string; trip_id: string; name: string; category: string; qty: number; for_user: string | null; packed: boolean };
+export type PackingTemplate = { id: string; name: string; items: { name: string; category: string; qty: number }[] };
+
+export type Occasion = {
+  id: string;
+  household_id: string;
+  title: string;
+  kind: "birthday" | "anniversary" | "festival" | "other";
+  month: number;
+  day: number;
+  year: number | null;
+  recurring: boolean;
+  person: string | null;
+  remind_days_before: number;
+  notes: string | null;
+};
+export type GiftIdea = { id: string; occasion_id: string | null; for_person: string; idea: string; url: string | null; price: number | null; status: "idea" | "bought" | "given"; notes: string | null };
+
+export type WearableDay = {
+  id: string;
+  owner_id: string;
+  day: string;
+  source: "manual" | "csv" | "webhook";
+  steps: number | null;
+  resting_hr: number | null;
+  avg_hr: number | null;
+  sleep_minutes: number | null;
+  deep_sleep_minutes: number | null;
+  active_minutes: number | null;
+  calories_burned: number | null;
+  hrv_ms: number | null;
 };

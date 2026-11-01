@@ -1,8 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-// /api/cron authenticates itself with CRON_SECRET.
-const PUBLIC_PATHS = ["/login", "/auth", "/offline", "/api/cron"];
+// /api/cron and /api/ingest authenticate themselves (CRON_SECRET / per-user tokens).
+const PUBLIC_PATHS = ["/login", "/auth", "/offline", "/api/cron", "/api/ingest"];
 
 /** Refreshes the Supabase session cookie and gates private routes. */
 export async function updateSession(request: NextRequest) {
@@ -38,7 +38,9 @@ export async function updateSession(request: NextRequest) {
     }
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    url.search = path === "/" ? "" : `?next=${encodeURIComponent(path)}`;
+    // Keep the query string (e.g. invite ?code=…) so it survives sign-in.
+    const target = path + request.nextUrl.search;
+    url.search = target === "/" ? "" : `?next=${encodeURIComponent(target)}`;
     return NextResponse.redirect(url);
   }
 

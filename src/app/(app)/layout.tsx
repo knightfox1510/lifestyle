@@ -2,6 +2,7 @@ import { getSession } from "@/lib/session";
 import { MODULES } from "@/modules/registry";
 import { AppNav, type NavItem } from "@/components/app-nav";
 import { ViewSwitch } from "@/components/view-switch";
+import { AppLockGate } from "@/components/app-lock";
 
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const session = await getSession();
@@ -45,6 +46,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         </header>
         <main className="mx-auto w-full max-w-4xl px-4 py-6 md:px-8">{children}</main>
       </div>
+      <AppLockGate />
     </div>
   );
 }

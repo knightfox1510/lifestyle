@@ -55,10 +55,11 @@ export const MODULES: ModuleDef[] = [
   { key: "maintenance", name: "Home maintenance", description: "AC filters, RO service, insurance renewals.", group: "Family & home", scope: "household", status: "available", phase: 3, href: "/maintenance", icon: "🛠️" },
   { key: "documents", name: "Document expiry", description: "Passports, visas, IDs, insurance and warranties with expiry reminders.", group: "Admin", scope: "mixed", status: "available", phase: 3, href: "/documents", icon: "🛂" },
   { key: "subscriptions", name: "Subscriptions", description: "Active household subscriptions and renewals.", group: "Admin", scope: "household", status: "available", phase: 3, href: "/subscriptions", icon: "🔁" },
-  { key: "watchlist", name: "Couples' watchlist", description: "Shows, episodes and movie backlog.", group: "Leisure", scope: "household", status: "planned", phase: 4, icon: "🎬" },
-  { key: "dining", name: "Takeout & dining vault", description: "Go-to orders and AI 'what to order'.", group: "Leisure", scope: "household", status: "planned", phase: 4, icon: "🍔" },
-  { key: "travel", name: "Travel & packing", description: "Itineraries and reusable packing lists.", group: "Leisure", scope: "household", status: "planned", phase: 4, icon: "✈️" },
-  { key: "occasions", name: "Occasions & gifts", description: "Birthdays, anniversaries and gift ideas.", group: "Family & home", scope: "household", status: "planned", phase: 4, icon: "🎁" },
+  { key: "wearables", name: "Wearable data", description: "Steps, sleep and heart rate from your band (Amazfit/Zepp via CSV or an automatic sync).", group: "Health", scope: "personal", status: "available", phase: 4, href: "/wearables", icon: "⌚" },
+  { key: "watchlist", name: "Couples' watchlist", description: "Shows, episodes and movie backlog.", group: "Leisure", scope: "household", status: "available", phase: 4, href: "/watchlist", icon: "🎬" },
+  { key: "dining", name: "Takeout & dining vault", description: "Go-to orders and AI 'what to order'.", group: "Leisure", scope: "household", status: "available", phase: 4, href: "/dining", icon: "🍔" },
+  { key: "travel", name: "Travel & packing", description: "Itineraries and reusable packing lists.", group: "Leisure", scope: "household", status: "available", phase: 4, href: "/travel", icon: "✈️" },
+  { key: "occasions", name: "Occasions & gifts", description: "Birthdays, anniversaries and private gift ideas.", group: "Family & home", scope: "household", status: "available", phase: 4, href: "/occasions", icon: "🎁" },
 ];
 
 export const MODULE_BY_KEY = Object.fromEntries(MODULES.map((m) => [m.key, m])) as Record<string, ModuleDef>;

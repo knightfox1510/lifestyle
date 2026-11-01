@@ -95,3 +95,32 @@ export const labResultSchema = z.object({
   flag: z.enum(["low", "normal", "high", "abnormal"]).nullable(),
 });
 export type LabResultInput = z.infer<typeof labResultSchema>;
+
+// ------------------------------------------------------------ Phase 4 ----
+
+export const orderSuggestionSchema = z.object({
+  options: z
+    .array(
+      z.object({
+        place: z.string().max(120).describe("Exactly one of the saved places' names"),
+        why: z.string().max(400),
+        picks: z.array(z.object({ person: z.string().max(80), dish: z.string().max(150), calories_est: z.number().int().min(0).max(4000), note: z.string().max(200).nullable() })).max(10),
+        total_estimate: z.number().min(0).max(100000).nullable(),
+      }),
+    )
+    .min(1)
+    .max(3),
+  tip: z.string().max(300).nullable().describe("e.g. ask for less oil, swap naan for roti, skip the cola"),
+});
+export type OrderSuggestion = z.infer<typeof orderSuggestionSchema>;
+
+export const tripPlanSchema = z.object({
+  days: z.array(z.object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+    title: z.string().max(120),
+    items: z.array(z.object({ kind: z.enum(["activity", "food", "transport", "stay", "idea"]), time: z.string().regex(/^\d{2}:\d{2}$/).nullable(), title: z.string().max(200), location: z.string().max(200).nullable(), notes: z.string().max(300).nullable() })).max(10),
+  })).max(21),
+  packing: z.array(z.object({ name: z.string().max(120), category: z.string().max(40), qty: z.number().int().min(1).max(20) })).max(60),
+  tips: z.array(z.string().max(300)).max(8),
+});
+export type TripPlan = z.infer<typeof tripPlanSchema>;

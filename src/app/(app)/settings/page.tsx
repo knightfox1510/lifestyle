@@ -34,6 +34,10 @@ export default async function SettingsPage() {
             <p className="font-medium">📬 Weekly summary</p>
             <p className="mt-1 text-sm text-fg-muted">AI recap of your week, every Sunday evening.</p>
           </Link>
+          <Link href="/settings/privacy" className="rounded-2xl border border-border bg-surface p-4 hover:bg-surface-2">
+            <p className="font-medium">🔒 Privacy & data</p>
+            <p className="mt-1 text-sm text-fg-muted">App lock, download your data, delete your account.</p>
+          </Link>
           <Link href="/customize" className="rounded-2xl border border-border bg-surface p-4 hover:bg-surface-2">
             <p className="font-medium">🧩 Home widgets</p>
             <p className="mt-1 text-sm text-fg-muted">Pick and arrange the quick-log widgets on Home.</p>

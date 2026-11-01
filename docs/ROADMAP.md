@@ -88,7 +88,7 @@ Each module is then mostly config + a form + a widget. This keeps 20+ modules ma
 - **Phase 1 – Health-first MVP** ✅ *built*: medicines (schedule, stock, adherence), supplement stack (daily checklist), bladder diary + fluids + activity tags + trend charts + doctor PDF export, Kegel trainer, daily check-in, habit tracker, offline grocery list (household scope).
 - **Phase 2 – Food + AI** ✅ *built* (plus blood work / lab results and vitals): food diary + calorie/macro goals, body recomposition dashboard (weight, milestones such as 60 kg, trend vs. intake), Gemini meal suggestions (goal, cooking style, pantry), camera → grocery/pantry (receipt, shelf, label) with a confirm sheet, pantry expiry, recipe vault + meal planner → grocery list, voice/NL quick log.
 - **Phase 3 – Reminders & logistics** ✅ *built*: Web Push + `pg_cron` (meds, classes such as 7:30 gym, expiries, renewals 60 days ahead), fitness classes schedule, child routine + vaccinations + growth, household maintenance matrix, document vault, subscriptions roster, weekly AI digest.
-- **Phase 4 – Leisure & integrations**: couples' watchlist, dining vault + "what to order" AI, travel itineraries, packing templates, occasions & gifts, wearable webhook ingest + Zepp CSV import, data export/deletion, WebAuthn app lock, multi-household onboarding polish.
+- **Phase 4 – Leisure & integrations** ✅ *built*: couples' watchlist, dining vault + "what to order" AI, travel itineraries, packing templates, occasions & gifts, wearable webhook ingest + Zepp CSV import, data export/deletion, WebAuthn app lock, multi-household onboarding polish.
 
 ## 5. Critical files (when the build starts)
 - `docs/ROADMAP.md`: this document

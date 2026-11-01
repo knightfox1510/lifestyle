@@ -3,7 +3,8 @@ import { Badge, Card, PageHeader, buttonClass } from "@/components/ui";
 import { MODULES } from "@/modules/registry";
 import { InviteCreator } from "./invite-creator";
 import { AiSettings, RenameHousehold } from "./forms";
-import { leaveHousehold, removeMember, revokeInvite, setModuleEnabled } from "../actions";
+import Link from "next/link";
+import { leaveHousehold, removeMember, revokeInvite, setModuleEnabled, switchHousehold } from "../actions";
 
 export const metadata = { title: "Household" };
 
@@ -13,6 +14,8 @@ export default async function HouseholdSettingsPage() {
   const start = new Date();
   start.setUTCHours(0, 0, 0, 0);
 
+  const { data: memberships } = await session.supabase.from("household_members").select("household_id, role").eq("user_id", session.userId);
+  const { data: myHouseholds } = await session.supabase.from("households").select("id, name").in("id", (memberships ?? []).map((m: { household_id: string }) => m.household_id));
   const [{ data: invites }, { count: usedToday }] = await Promise.all([
     session.supabase
       .from("invites")
@@ -127,6 +130,25 @@ export default async function HouseholdSettingsPage() {
             limit={session.household.ai_daily_limit}
             usedToday={usedToday ?? 0}
           />
+        </Card>
+
+        <Card className="space-y-2">
+          <h2 className="font-semibold">Your households</h2>
+          <ul className="divide-y divide-border text-sm">
+            {(myHouseholds ?? []).map((h: { id: string; name: string }) => (
+              <li key={h.id} className="flex items-center justify-between gap-2 py-2">
+                <span>{h.name}</span>
+                {h.id === session.household.id ? (
+                  <Badge tone="accent">current</Badge>
+                ) : (
+                  <form action={switchHousehold.bind(null, h.id)}>
+                    <button className={buttonClass("secondary", "sm")}>Switch</button>
+                  </form>
+                )}
+              </li>
+            ))}
+          </ul>
+          <Link href="/onboarding?new=1" className="text-sm text-accent hover:underline">+ Create or join another household (e.g. your parents&apos;)</Link>
         </Card>
 
         <form action={leaveHousehold}>

@@ -22,7 +22,7 @@ export async function buildTrackingContext(session: AppSession, subjectId: strin
   const db = session.supabase;
   const lines: string[] = [];
 
-  const [meds, doses, sups, events, fluids, kegel, checkins, habits, habitLogs, food, nGoals, body, bGoals, workouts, classes] = await Promise.all([
+  const [meds, doses, sups, events, fluids, kegel, checkins, habits, habitLogs, food, nGoals, body, bGoals, workouts, classes, wear] = await Promise.all([
     can("medicines") ? db.from("medicines").select("*").eq("owner_id", subjectId).eq("active", true).eq("include_in_ai", true) : null,
     can("medicines") ? db.from("medicine_doses").select("*").eq("owner_id", subjectId).gte("scheduled_date", days14[0]) : null,
     can("supplements") ? db.from("supplements").select("*").eq("owner_id", subjectId).eq("active", true).eq("include_in_ai", true) : null,
@@ -38,6 +38,7 @@ export async function buildTrackingContext(session: AppSession, subjectId: strin
     can("body_recomp") ? db.from("body_goals").select("*").eq("owner_id", subjectId).maybeSingle() : null,
     can("fitness") ? db.from("workout_logs").select("performed_on, kind, title, status, duration_minutes").eq("owner_id", subjectId).gte("performed_on", days14[0]) : null,
     can("fitness") ? db.from("fitness_classes").select("name, kind, days_of_week, start_time").eq("owner_id", subjectId).eq("active", true) : null,
+    can("wearables") ? db.from("wearable_daily").select("day, steps, sleep_minutes, deep_sleep_minutes, resting_hr").eq("owner_id", subjectId).gte("day", addDays(today, -6)) : null,
   ]);
 
   const medList = (meds?.data ?? []) as Medicine[];
@@ -85,6 +86,16 @@ export async function buildTrackingContext(session: AppSession, subjectId: strin
       "",
       `Exercise: ${cl.length ? `scheduled ${cl.map((c) => `${c.name} (${c.kind}, ${c.days_of_week.map((d) => DAYS[d]).join("/")} ${c.start_time})`).join("; ")}. ` : ""}Last 14 days: ${doneW.length} sessions, ${doneW.reduce((a, w) => a + (w.duration_minutes ?? 0), 0)} min (${[...new Set(doneW.map((w) => w.kind))].join(", ") || "none"}), ${wl.filter((w) => w.status === "skipped").length} skipped.`,
     );
+  }
+
+  const wd = (wear?.data ?? []) as { day: string; steps: number | null; sleep_minutes: number | null; deep_sleep_minutes: number | null; resting_hr: number | null }[];
+  if (wd.length) {
+    const mean = (k: "steps" | "sleep_minutes" | "resting_hr") => {
+      const v = wd.map((r) => r[k]).filter((x): x is number => x !== null);
+      return v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length) : null;
+    };
+    const sleep = mean("sleep_minutes");
+    lines.push("", `Wearable, last 7 days (${wd.length} days): avg ${mean("steps") ?? "?"} steps/day, ${sleep ? `${Math.floor(sleep / 60)}h ${sleep % 60}m sleep` : "sleep n/a"}, resting HR ${mean("resting_hr") ?? "n/a"}.`);
   }
 
   const kg = ((kegel?.data ?? []) as PelvicFloorSession[]).filter((s) => s.completed);

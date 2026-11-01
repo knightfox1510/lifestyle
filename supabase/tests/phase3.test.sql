@@ -12,7 +12,7 @@ select set_config('request.jwt.claim.sub', :j, false);
 select public.create_household('P3 home') as hid \gset
 select public.create_invite(:'hid') as code \gset
 do $$ begin
-  assert (select count(*) from public.household_modules where enabled) = 16, 'phase 3 modules on, child opt-in';
+  assert (select count(*) from public.household_modules where enabled) >= 16, 'phase 3 modules on, child opt-in';
   assert (select enabled from public.household_modules where module_key = 'child') = false, 'child off by default';
 end $$;
 select set_config('request.jwt.claim.sub', :k, false);

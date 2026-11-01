@@ -10,6 +10,7 @@ export type WidgetDef = {
 };
 
 export const WIDGETS: WidgetDef[] = [
+  { key: "core.getting_started", name: "Getting started", description: "A short setup checklist; disappears when done.", module: null, defaultSize: "lg" },
   { key: "core.today", name: "Today", description: "Date, greeting and who's viewing.", module: null, defaultSize: "lg" },
   { key: "medical_records.quick_log", name: "Quick health log", description: "Log a cold, symptom or medicine in two taps.", module: "medical_records", defaultSize: "md" },
   { key: "medical_records.timeline", name: "Recent health timeline", description: "Latest entries and current medicines.", module: "medical_records", defaultSize: "md" },
@@ -29,12 +30,18 @@ export const WIDGETS: WidgetDef[] = [
   { key: "fitness.today", name: "Today's workout", description: "Scheduled classes with Done / Skipped.", module: "fitness", defaultSize: "md" },
   { key: "child.today", name: "Child today", description: "Feeds, sleep, nappies and the last medicine dose.", module: "child", defaultSize: "md" },
   { key: "core.coming_up", name: "Coming up", description: "Maintenance, document expiries and subscription renewals.", module: null, defaultSize: "md" },
+  { key: "wearables.today", name: "Steps & sleep", description: "Latest steps, sleep and resting heart rate from your band.", module: "wearables", defaultSize: "sm" },
+  { key: "watchlist.watching", name: "Watching now", description: "Your episode vs your partner's.", module: "watchlist", defaultSize: "md" },
+  { key: "dining.order", name: "Order in tonight?", description: "One tap to AI takeout suggestions.", module: "dining", defaultSize: "sm" },
+  { key: "travel.next", name: "Next trip", description: "Countdown and packing progress.", module: "travel", defaultSize: "md" },
+  { key: "occasions.upcoming", name: "Upcoming occasions", description: "Birthdays and anniversaries in the next 30 days.", module: "occasions", defaultSize: "md" },
   { key: "core.ask_ai", name: "Ask AI", description: "Ask for a suggestion from Home.", module: null, defaultSize: "md" },
   { key: "core.household", name: "Household", description: "Members and what's shared.", module: null, defaultSize: "md" },
 ];
 
 export const WIDGET_BY_KEY = Object.fromEntries(WIDGETS.map((w) => [w.key, w])) as Record<string, WidgetDef>;
 export const DEFAULT_WIDGETS = [
+  "core.getting_started",
   "core.today",
   "core.quick_log",
   "food_diary.today",
@@ -51,6 +58,11 @@ export const DEFAULT_WIDGETS = [
   "recipes.today",
   "child.today",
   "core.coming_up",
+  "occasions.upcoming",
+  "travel.next",
+  "watchlist.watching",
+  "wearables.today",
+  "dining.order",
   "medical_records.labs",
   "medical_records.quick_log",
   "core.ask_ai",

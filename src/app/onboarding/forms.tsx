@@ -5,7 +5,9 @@ import { Card, Field, Input, cx } from "@/components/ui";
 import { ActionMessage, SubmitButton } from "@/components/form-status";
 import { createHouseholdAction, joinHouseholdAction } from "./actions";
 
-export function OnboardingForms({ defaultName, defaultCode }: { defaultName: string; defaultCode: string }) {
+type ModuleOption = { key: string; name: string; icon: string; group: string; defaultOn: boolean };
+
+export function OnboardingForms({ defaultName, defaultCode, modules }: { defaultName: string; defaultCode: string; modules: ModuleOption[] }) {
   const [tab, setTab] = useState<"create" | "join">(defaultCode ? "join" : "create");
   const [createState, createAction] = useActionState(createHouseholdAction, null);
   const [joinState, joinAction] = useActionState(joinHouseholdAction, null);
@@ -34,6 +36,23 @@ export function OnboardingForms({ defaultName, defaultCode }: { defaultName: str
           <Field label="Household name" hint="e.g. “Home” or “Gaurav & Karishma”">
             <Input name="householdName" required maxLength={80} placeholder="Home" />
           </Field>
+          <input type="hidden" name="picker" value="1" />
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium">What do you want to track? <span className="font-normal text-fg-muted">(change any time in Settings)</span></legend>
+            {[...new Set(modules.map((m) => m.group))].map((g) => (
+              <div key={g}>
+                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-fg-muted">{g}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {modules.filter((m) => m.group === g).map((m) => (
+                    <label key={m.key} className="flex cursor-pointer items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-sm has-[:checked]:border-accent has-[:checked]:bg-accent-soft">
+                      <input type="checkbox" name="modules" value={m.key} defaultChecked={m.defaultOn} className="sr-only" />
+                      <span aria-hidden>{m.icon}</span> {m.name}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </fieldset>
           <ActionMessage state={createState} />
           <SubmitButton className="w-full" pendingText="Creating…">Create household</SubmitButton>
         </form>
