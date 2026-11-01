@@ -8,16 +8,11 @@ You'll collect a handful of values along the way. Paste them into a private note
 
 ---
 
-## Part A · Put the code on the main branch (GitHub)
+## Part A · Check the code is on GitHub
 
-The app was built on the branch `claude/blissful-hawking-v4uppl`. Vercel deploys `main`, so merge it first.
+Open **github.com/knightfox1510/lifestyle**. The app lives on the branch `claude/blissful-hawking-v4uppl`. It's currently the repo's only (and therefore default) branch, so Vercel will deploy it automatically and the file links below open it by default. **Nothing to do here.**
 
-1. Open **github.com/knightfox1510/lifestyle** and sign in.
-2. Tap **Pull requests → New pull request**.
-3. Set **base: `main`** and **compare: `claude/blissful-hawking-v4uppl`**, then tap **Create pull request** twice.
-4. Tap **Merge pull request → Confirm merge**.
-
-> If `main` doesn't exist or GitHub says there's nothing to compare, skip this part. In Part D, step 4, set Vercel's production branch to `claude/blissful-hawking-v4uppl` instead.
+> If you later add a `main` branch, merge into it with **Pull requests → New pull request** (base `main`, compare `claude/blissful-hawking-v4uppl`) → **Create** → **Merge**, and make `main` the production branch in Vercel → Settings → Git.
 
 ---
 
@@ -160,7 +155,7 @@ Then redeploy.
 
 ## When the app gets updated later
 
-- **Code changes** deploy automatically when they're merged into `main` on GitHub (same as Part A).
+- **Code changes** deploy automatically when they're pushed to the production branch on GitHub.
 - **Database changes** come as a new file in `supabase/migrations/`. Open that one new file on GitHub → Raw → copy → Supabase SQL Editor → Run. **Don't** re-run `all-in-one.sql` on a live database; it's only for brand-new projects.
 
 ## If something goes wrong
