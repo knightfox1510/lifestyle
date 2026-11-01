@@ -1,5 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#2f6f5e"/>
-  <path d="M256 112 112 232v168h104v-96h80v96h104V232z" fill="#f7f6f3"/>
-  <path d="M256 268c-14-22-52-18-52 12 0 26 52 52 52 52s52-26 52-52c0-30-38-34-52-12z" fill="#e0785e"/>
+  <title>Hearth</title>
+  <defs>
+    <linearGradient id="hearth-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#357a67"/>
+      <stop offset="1" stop-color="#25594b"/>
+    </linearGradient>
+    <linearGradient id="hearth-flame" x1="0" y1="1" x2="0.2" y2="0">
+      <stop offset="0" stop-color="#e2674c"/>
+      <stop offset="0.55" stop-color="#f08a4b"/>
+      <stop offset="1" stop-color="#f7bd57"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="url(#hearth-bg)"/>
+  <path d="M256 102 L414 228 Q424 236 424 249 V388 Q424 414 398 414 H114 Q88 414 88 388 V249 Q88 236 98 228 Z" fill="#f8f3e9" stroke="#f8f3e9" stroke-width="10" stroke-linejoin="round"/>
+  <path d="M256 384 C204 384 172 349 172 305 C172 262 207 236 224 204 C231 229 243 244 256 252 C262 225 277 196 302 172 C308 212 340 246 340 302 C340 349 307 384 256 384 Z" fill="url(#hearth-flame)"/>
+  <path d="M256 352 C232 337 216 322 216 303 C216 290 226 281 238 281 C246 281 252 286 256 293 C260 286 266 281 274 281 C286 281 296 290 296 303 C296 322 280 337 256 352 Z" fill="#fff5e4"/>
 </svg>

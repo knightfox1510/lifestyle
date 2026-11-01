@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Button, Field, Input, Notice, Select } from "@/components/ui";
+import { LogoMark } from "@/components/logo";
 
 /**
  * Device-local app lock. Uses a platform passkey (fingerprint / face / device
@@ -136,8 +137,7 @@ export function AppLockGate() {
 
   return (
     <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-4 bg-bg/95 p-6 text-center backdrop-blur-xl" role="dialog" aria-modal="true" aria-label="App locked">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/icons/icon.svg" alt="" className="size-14" />
+      <LogoMark className="size-14" />
       <p className="text-lg font-semibold">Hearth is locked</p>
       {config.method === "pin" ? (
         <form onSubmit={(e) => { e.preventDefault(); void unlock(); }} className="flex gap-2">

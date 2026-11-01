@@ -4,10 +4,13 @@ import { z } from "zod";
 import { errorMessage, refreshModule, requireModule } from "@/lib/guards";
 import { getSession } from "@/lib/session";
 import { mealIdeaSchema, MEALS } from "@/lib/ai/phase2-schemas";
-import { GROCERY_CATEGORIES, type ActionResult } from "@/lib/types";
+import { GROCERY_CATEGORIES, type ActionResult, type Recipe } from "@/lib/types";
 import { guessCategory } from "@/modules/groceries/meta";
 import { normalizeName } from "@/modules/pantry/match";
-import { addFoodItems } from "@/app/(app)/food/actions";
+import { logFoodForPeople } from "@/app/(app)/food/actions";
+import { forGrams, scale, sum, type Nutrients } from "@/modules/nutrition/nutrients";
+import { cleanIrritants } from "@/modules/nutrition/irritants";
+import { addDays, todayIn } from "@/lib/dates";
 
 const ingredient = z.object({
   name: z.string().trim().min(1).max(80),
@@ -178,19 +181,154 @@ export async function removeFromPlan(id: string) {
   refreshModule("/recipes");
 }
 
+/** Per-serving nutrition for a recipe: calculated values if available, else the typed macros. */
+function recipeServingNutrients(r: Recipe): { nutrients: Nutrients; accuracy: "calculated" | "estimated" } {
+  if (r.nutrition && typeof r.nutrition.calories === "number") return { nutrients: r.nutrition as Nutrients, accuracy: "calculated" };
+  return {
+    nutrients: { calories: Number(r.calories_per_serving ?? 0), protein_g: Number(r.protein_g ?? 0), carbs_g: Number(r.carbs_g ?? 0), fat_g: Number(r.fat_g ?? 0) },
+    accuracy: "estimated",
+  };
+}
+
+/** Logs a recipe for one or more people, each with their own number of servings. */
+export async function logRecipeForPeople(recipeId: string, people: { ownerId: string; servings: number }[], meal: (typeof MEALS)[number]): Promise<ActionResult> {
+  const session = await getSession();
+  const { data } = await session.supabase.from("recipes").select("*").eq("id", recipeId).eq("household_id", session.household.id).maybeSingle();
+  if (!data) return { error: "Recipe not found." };
+  const r = data as Recipe;
+  const { nutrients, accuracy } = recipeServingNutrients(r);
+  const servingG = r.total_weight_g ? Number(r.total_weight_g) / r.servings : null;
+  const clean = people.filter((p) => p.servings > 0).map((p) => ({ ownerId: p.ownerId, factor: Math.min(5, Math.max(0.1, p.servings)) }));
+  if (!clean.length) return { error: "Choose how much each person ate." };
+  return logFoodForPeople(
+    clean,
+    meal,
+    [
+      {
+        description: r.title,
+        quantity: "1 serving",
+        grams: servingG ? Math.round(servingG) : null,
+        nutrients,
+        accuracy,
+        irritants: r.irritants ?? [],
+        recipe_id: r.id,
+        source: "recipe",
+      },
+    ],
+  );
+}
+
 /** Logs servings of a recipe to someone's food diary. */
 export async function logRecipe(recipeId: string, ownerId: string, meal: (typeof MEALS)[number], servings: number): Promise<ActionResult> {
+  return logRecipeForPeople(recipeId, [{ ownerId, servings: Number(servings) || 1 }], meal);
+}
+
+// -------------------------------------------------- nutrition calculator --
+
+const calcRowSchema = z.object({
+  index: z.number().int().min(0).max(99),
+  grams: z.number().min(0).max(20000),
+  ref: z
+    .union([
+      z.object({ kind: z.literal("staple"), key: z.string().max(40) }),
+      z.object({ kind: z.literal("custom"), id: z.uuid() }),
+      z.object({ kind: z.literal("usda"), id: z.string().regex(/^\d{1,10}$/) }),
+      z.object({ kind: z.literal("recipe"), id: z.uuid() }),
+    ])
+    .nullable(),
+  match_name: z.string().max(200).nullable(),
+  per100: z.record(z.string(), z.number().min(0).max(100000)).nullable(),
+});
+
+/**
+ * Saves the ingredient grams/matches and the resulting per-serving nutrition
+ * (macros + micronutrients). Nutrition is recomputed here from the rows.
+ */
+export async function saveRecipeNutrition(recipeId: string, input: unknown): Promise<ActionResult> {
+  const parsed = z
+    .object({ rows: z.array(calcRowSchema).max(60), total_weight_g: z.number().min(1).max(50000).nullable(), irritants: z.array(z.string()).max(8) })
+    .safeParse(input);
+  if (!parsed.success) return { error: "Some ingredient rows are invalid." };
+  const session = await requireModule("recipes");
+  const { data } = await session.supabase.from("recipes").select("*").eq("id", recipeId).eq("household_id", session.household.id).maybeSingle();
+  if (!data) return { error: "Recipe not found." };
+  const r = data as Recipe;
+
+  const byIndex = new Map(parsed.data.rows.map((row) => [row.index, row]));
+  const ingredients = r.ingredients.map((ing, i) => {
+    const row = byIndex.get(i);
+    return row ? { ...ing, grams: row.grams, ref: row.ref, match_name: row.match_name, per100: row.per100 } : ing;
+  });
+  const used = ingredients.filter((i) => (i.grams ?? 0) > 0);
+  const unmatched = used.filter((i) => !i.per100 || typeof i.per100.calories !== "number");
+  if (!used.length) return { error: "Add grams for at least one ingredient." };
+  if (unmatched.length) return { error: `Match a food for: ${unmatched.map((u) => u.name).join(", ")} (or set its grams to 0).` };
+
+  const total = sum(used.map((i) => forGrams(i.per100 as Nutrients, i.grams!)));
+  const perServing = scale(total, 1 / r.servings);
+  const { error } = await session.supabase
+    .from("recipes")
+    .update({
+      ingredients,
+      nutrition: perServing,
+      total_weight_g: parsed.data.total_weight_g,
+      irritants: cleanIrritants(parsed.data.irritants),
+      calories_per_serving: Math.round(perServing.calories ?? 0),
+      protein_g: perServing.protein_g ?? null,
+      carbs_g: perServing.carbs_g ?? null,
+      fat_g: perServing.fat_g ?? null,
+    })
+    .eq("id", recipeId);
+  if (error) return { error: "Couldn't save the nutrition." };
+  refreshModule("/recipes");
+  return { ok: true, message: `Calculated: ${Math.round(perServing.calories ?? 0)} kcal and ${perServing.protein_g ?? 0} g protein per serving.` };
+}
+
+// ----------------------------------------------------------- cooked + leftovers --
+
+/**
+ * "We cooked this": log what each person ate and put the remaining portions
+ * in the fridge as a leftover (2-day expiry by default).
+ */
+export async function cookedRecipe(recipeId: string, input: unknown): Promise<ActionResult> {
+  const parsed = z
+    .object({
+      meal: z.enum(MEALS),
+      made: z.number().min(0.5).max(40),
+      people: z.array(z.object({ ownerId: z.uuid(), servings: z.number().min(0).max(5) })).max(8),
+      leftoverDays: z.number().int().min(1).max(7),
+    })
+    .safeParse(input);
+  if (!parsed.success) return { error: "Check the portions." };
+  const { meal, made, people, leftoverDays } = parsed.data;
   const session = await getSession();
-  const { data: r } = await session.supabase.from("recipes").select("*").eq("id", recipeId).maybeSingle();
-  if (!r) return { error: "Recipe not found." };
-  const n = Math.min(10, Math.max(0.25, Number(servings) || 1));
-  const scale = (v: number | null) => (v == null ? 0 : Math.round(Number(v) * n * 10) / 10);
-  return addFoodItems(
-    ownerId,
-    meal,
-    [{ description: r.title, quantity: `${n} serving${n === 1 ? "" : "s"}`, calories: Math.round(scale(r.calories_per_serving)), protein_g: scale(r.protein_g), carbs_g: scale(r.carbs_g), fat_g: scale(r.fat_g), fiber_g: 0 }],
-    "recipe",
-    undefined,
-    recipeId,
-  );
+  const eaten = people.reduce((a, p) => a + p.servings, 0);
+  let logMsg = "";
+  if (eaten > 0) {
+    const res = await logRecipeForPeople(recipeId, people, meal);
+    if (res.error) return res;
+    logMsg = res.message ?? "";
+  }
+  const left = Math.round((made - eaten) * 100) / 100;
+  if (left > 0 && session.isModuleEnabled("pantry")) {
+    const { data: r } = await session.supabase.from("recipes").select("title").eq("id", recipeId).eq("household_id", session.household.id).single();
+    const today = todayIn(session.profile.timezone);
+    const { error } = await session.supabase.from("pantry_items").insert({
+      household_id: session.household.id,
+      created_by: session.userId,
+      name: `Leftover: ${r?.title ?? "dish"}`.slice(0, 120),
+      quantity: `${left} portion${left === 1 ? "" : "s"}`,
+      category: "other",
+      location: "fridge",
+      purchased_on: today,
+      expires_on: addDays(today, leftoverDays),
+      expiry_estimated: true,
+      recipe_id: recipeId,
+      portions: left,
+    });
+    if (error) return { error: "Logged, but couldn't save the leftovers." };
+    refreshModule("/pantry");
+    return { ok: true, message: `${logMsg} ${left} portion${left === 1 ? "" : "s"} saved to the fridge.`.trim() };
+  }
+  return { ok: true, message: logMsg || "Done." };
 }

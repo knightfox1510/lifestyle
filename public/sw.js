@@ -4,7 +4,7 @@
  *   then to /offline. Pages are cached per device and wiped on sign-out.
  * - API, auth and Supabase calls are never cached.
  */
-const VERSION = "v3";
+const VERSION = "v4";
 const SHELL_CACHE = `shell-${VERSION}`;
 const PAGE_CACHE = `pages-${VERSION}`;
 // Files shared into the app (Android share sheet), picked up by /dining/share.

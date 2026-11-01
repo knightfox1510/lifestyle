@@ -13,8 +13,9 @@ export async function loadDiary(session: AppSession, ownerId: string, days: numb
   const canSeeKegel = session.isModuleEnabled("pelvic_floor") && session.accessTo("pelvic_floor", ownerId) !== "none";
   const canSeeCheckin = session.isModuleEnabled("checkin") && session.accessTo("checkin", ownerId) !== "none";
   const canSeeFitness = session.isModuleEnabled("fitness") && session.accessTo("fitness", ownerId) !== "none";
+  const canSeeFood = session.isModuleEnabled("food_diary") && session.accessTo("food_diary", ownerId) !== "none";
 
-  const [ev, fl, pf, ci, wo] = await Promise.all([
+  const [ev, fl, pf, ci, wo, fd] = await Promise.all([
     session.supabase.from("bladder_events").select("*").eq("owner_id", ownerId).gte("occurred_at", from).order("occurred_at").limit(5000),
     session.supabase.from("fluid_intake").select("*").eq("owner_id", ownerId).gte("occurred_at", from).order("occurred_at").limit(5000),
     canSeeKegel
@@ -25,6 +26,9 @@ export async function loadDiary(session: AppSession, ownerId: string, days: numb
       : Promise.resolve({ data: [] }),
     canSeeFitness
       ? session.supabase.from("workout_logs").select("performed_on, kind, status").eq("owner_id", ownerId).gte("performed_on", dayList[0])
+      : Promise.resolve({ data: [] }),
+    canSeeFood
+      ? session.supabase.from("food_entries").select("eaten_at, irritants").eq("owner_id", ownerId).gte("eaten_at", from).neq("irritants", "{}")
       : Promise.resolve({ data: [] }),
   ]);
 
@@ -37,5 +41,6 @@ export async function loadDiary(session: AppSession, ownerId: string, days: numb
     sessions: (pf.data ?? []) as PelvicFloorSession[],
     checkins: (ci.data ?? []) as DailyCheckin[],
     workouts: (wo.data ?? []) as { performed_on: string; kind: string; status: string }[],
+    foods: (fd.data ?? []) as { eaten_at: string; irritants: string[] | null }[],
   };
 }

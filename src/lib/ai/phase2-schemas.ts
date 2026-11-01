@@ -146,3 +146,72 @@ export const menuExtractSchema = z.object({
   items: z.array(menuItemSchema).max(200),
   note: z.string().max(300).nullable().describe("Caveats, e.g. some prices unreadable"),
 });
+
+// ---------------------------------------------------------- Nutrition ----
+
+const irritantEnum = z.enum(["caffeine", "alcohol", "spicy", "citrus", "tomato", "carbonated", "sweetener", "chocolate"]);
+
+export const componentSchema = z.object({
+  name: z.string().min(1).max(80).describe("Ingredient, e.g. 'whole wheat flour', 'toor dal (raw)', 'ghee'"),
+  grams: z.number().min(0).max(3000).describe("Grams of this ingredient in the amount eaten (raw/dry weight for grains and pulses)"),
+  staple_key: z.string().max(40).nullable().describe("Key from the built-in staples list if one matches, else null"),
+  custom_food: z.string().max(120).nullable().describe("Exact name from the household's own foods if one matches, else null"),
+  search: z.string().max(80).nullable().describe("English search term for the USDA database if neither matches, e.g. 'paneer', 'basmati rice cooked'"),
+});
+
+export const mealCalcSchema = z.object({
+  meal: z.enum(MEALS),
+  items: z
+    .array(
+      z.object({
+        description: z.string().min(1).max(200),
+        quantity: z.string().max(60).nullable(),
+        recipe_title: z.string().max(150).nullable().describe("Exact title from the household's recipes if this item is one of them"),
+        recipe_servings: z.number().min(0.1).max(20).nullable().describe("Servings of that recipe eaten"),
+        components: z.array(componentSchema).max(15).describe("Ingredient breakdown with grams, when not a saved recipe"),
+        estimate: foodItemSchema.pick({ calories: true, protein_g: true, carbs_g: true, fat_g: true, fiber_g: true }).describe("Your own overall estimate, used only if ingredients can't be matched"),
+        irritants: z.array(irritantEnum).max(8).describe("Bladder irritants present: caffeine, alcohol, spicy (chilli-hot), citrus, tomato, carbonated, sweetener (artificial), chocolate"),
+      }),
+    )
+    .max(15),
+  note: z.string().max(300).nullable(),
+});
+export type MealCalc = z.infer<typeof mealCalcSchema>;
+
+export const recipeCalcSchema = z.object({
+  ingredients: z.array(componentSchema.extend({ index: z.number().int().min(0).max(99).describe("Position of the ingredient line this maps to") })).max(60),
+  estimated_cooked_weight_g: z.number().min(0).max(50000).nullable().describe("Rough total cooked weight, if water/absorption makes it predictable"),
+  irritants: z.array(irritantEnum).max(8),
+});
+
+const nutrientField = (max: number) => z.number().min(0).max(max).nullable();
+export const labelSchema = z.object({
+  name: z.string().min(1).max(120),
+  brand: z.string().max(80).nullable(),
+  serving_g: z.number().min(0).max(5000).nullable(),
+  serving_label: z.string().max(40).nullable(),
+  per100: z
+    .object({
+      calories: nutrientField(1000),
+      protein_g: nutrientField(100),
+      carbs_g: nutrientField(100),
+      fat_g: nutrientField(100),
+      fiber_g: nutrientField(100),
+      sugar_g: nutrientField(100),
+      sat_fat_g: nutrientField(100),
+      sodium_mg: nutrientField(40000),
+      potassium_mg: nutrientField(10000),
+      calcium_mg: nutrientField(5000),
+      iron_mg: nutrientField(500),
+      magnesium_mg: nutrientField(2000),
+      zinc_mg: nutrientField(500),
+      vit_a_mcg: nutrientField(50000),
+      vit_c_mg: nutrientField(5000),
+      vit_d_mcg: nutrientField(500),
+      b12_mcg: nutrientField(500),
+      folate_mcg: nutrientField(5000),
+    })
+    .describe("Values per 100 g/ml. Convert from per-serving using serving size if the label only shows per serving. Convert sodium from salt (salt ÷ 2.5) if needed. null if not printed."),
+  irritants: z.array(irritantEnum).max(8),
+  note: z.string().max(200).nullable(),
+});

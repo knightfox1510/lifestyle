@@ -7,6 +7,7 @@ import type { PantryItem, Recipe } from "@/lib/types";
 import { inPantry } from "@/modules/pantry/match";
 import { RecipeForm } from "../recipe-form";
 import { RecipeActions } from "./recipe-actions";
+import { RecipeNutrition } from "./recipe-nutrition";
 import { deleteRecipe, toggleFavorite } from "../actions";
 
 export default async function RecipePage({ params, searchParams }: PageProps<"/recipes/[id]">) {
@@ -61,11 +62,14 @@ export default async function RecipePage({ params, searchParams }: PageProps<"/r
         recipe={recipe}
         ingredients={ingredients}
         pantryTracked={tracked}
-        ownerId={session.userId}
+        people={session.members.filter((m) => session.accessTo("food_diary", m.user_id) === "write").map((m) => ({ id: m.user_id, name: m.user_id === session.userId ? "Me" : m.display_name }))}
+        pantryOn={session.isModuleEnabled("pantry")}
         canLog={session.isModuleEnabled("food_diary")}
         groceriesOn={session.isModuleEnabled("groceries")}
         today={todayIn(session.profile.timezone)}
       />
+
+      {recipe.ingredients.length ? <RecipeNutrition recipe={recipe} /> : null}
 
       {recipe.steps.length ? (
         <Card>

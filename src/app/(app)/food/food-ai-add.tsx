@@ -3,19 +3,29 @@
 import { useState, useTransition } from "react";
 import { Button, Card, Input, Notice, Select, Textarea } from "@/components/ui";
 import { VoiceButton } from "@/components/voice-input";
+import { AccuracyBadge, FoodSearch, PeoplePortions, type FoodHit, type PersonPortion } from "@/components/nutrition-ui";
 import { compressImage } from "@/lib/compress-image";
-import type { FoodItem } from "@/lib/ai/phase2-schemas";
 import type { Meal } from "@/lib/types";
 import { MEAL_META, MEAL_ORDER, mealForHour } from "@/modules/food/meta";
-import { addFoodItems } from "./actions";
+import { computeItem, type CalcItem } from "@/modules/nutrition/compute";
+import { IRRITANT_META, type Irritant } from "@/modules/nutrition/irritants";
+import { logFoodForPeople } from "./actions";
 
-export function FoodAiAdd({ ownerId }: { ownerId: string }) {
+type Item = CalcItem & { keep: boolean; open: boolean };
+
+/**
+ * Describe, say or photograph a meal → AI breaks it into your saved recipes or
+ * ingredients with grams → nutrition is calculated from food data (macros +
+ * micronutrients). Grams and matches are editable; log for one or both of you.
+ */
+export function FoodAiAdd({ ownerId, people }: { ownerId: string; people: PersonPortion[] }) {
   const [text, setText] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
-  const [items, setItems] = useState<(FoodItem & { keep: boolean })[] | null>(null);
+  const [items, setItems] = useState<Item[] | null>(null);
   const [meal, setMeal] = useState<Meal>(() => mealForHour(new Date().getHours()));
   const [note, setNote] = useState<string | null>(null);
+  const [who, setWho] = useState<Record<string, number>>({ [ownerId]: 1 });
   const [msg, setMsg] = useState<{ tone: "danger" | "accent"; text: string } | null>(null);
   const [saving, start] = useTransition();
 
@@ -30,7 +40,7 @@ export function FoodAiAdd({ ownerId }: { ownerId: string }) {
       const res = await fetch("/api/ai/food-estimate", { method: "POST", body: fd });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? "Estimate failed");
-      setItems(body.items.map((i: FoodItem) => ({ ...i, keep: true })));
+      setItems((body.items as CalcItem[]).map((i) => ({ ...i, keep: true, open: false })));
       setMeal(body.meal);
       setNote(body.note);
     } catch (e) {
@@ -40,13 +50,30 @@ export function FoodAiAdd({ ownerId }: { ownerId: string }) {
     }
   }
 
+  const update = (i: number, patch: Partial<Item>) => setItems(items!.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+  const updateComp = (i: number, c: number, patch: Partial<CalcItem["components"][number]>) =>
+    update(i, { components: items![i].components.map((x, k) => (k === c ? { ...x, ...patch } : x)) });
+
   function save() {
     if (!items) return;
+    const chosen = Object.entries(who).filter(([, f]) => f > 0).map(([id, f]) => ({ ownerId: id, factor: f }));
     start(async () => {
-      const keep = items
+      const payload = items
         .filter((i) => i.keep)
-        .map((i) => ({ description: i.description, quantity: i.quantity, calories: i.calories, protein_g: i.protein_g, carbs_g: i.carbs_g, fat_g: i.fat_g, fiber_g: i.fiber_g }));
-      const res = await addFoodItems(ownerId, meal, keep, photo ? "photo" : "ai_estimate");
+        .map((i) => {
+          const c = computeItem(i);
+          return {
+            description: i.description,
+            quantity: i.quantity,
+            grams: c.grams,
+            nutrients: c.nutrients as Record<string, number>,
+            accuracy: c.accuracy,
+            irritants: i.irritants,
+            recipe_id: i.recipe?.id ?? null,
+            source: photo ? ("photo" as const) : i.recipe ? ("recipe" as const) : ("ai_estimate" as const),
+          };
+        });
+      const res = await logFoodForPeople(chosen, meal, payload);
       if (res.error) setMsg({ tone: "danger", text: res.error });
       else {
         setMsg({ tone: "accent", text: res.message ?? "Added." });
@@ -57,16 +84,13 @@ export function FoodAiAdd({ ownerId }: { ownerId: string }) {
     });
   }
 
-  const update = (i: number, patch: Partial<FoodItem & { keep: boolean }>) => setItems(items!.map((x, j) => (j === i ? { ...x, ...patch } : x)));
-  const num = (v: string) => (v === "" ? 0 : Math.max(0, Number(v)));
-
   return (
     <Card className="space-y-3">
       <div className="flex gap-2">
         <Textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="What did you eat? e.g. “2 rotis, a katori of dal, cucumber salad and a cup of chai”"
+          placeholder="What did you eat? e.g. “2 rotis with ghee, a katori of toor dal, bhindi sabzi and a cup of chai”"
           className="min-h-12 flex-1"
           maxLength={1000}
         />
@@ -84,14 +108,15 @@ export function FoodAiAdd({ ownerId }: { ownerId: string }) {
         </p>
       ) : null}
       <Button onClick={estimate} disabled={loading || (!text.trim() && !photo)}>
-        {loading ? "Estimating…" : "✨ Estimate calories"}
+        {loading ? "Working it out…" : "✨ Calculate"}
       </Button>
+      <p className="text-xs text-fg-muted">Uses your saved recipes and foods first, then ingredients by weight. You can fix any grams before logging.</p>
       {msg ? <Notice tone={msg.tone}>{msg.text}</Notice> : null}
 
       {items ? (
-        <div className="space-y-2 rounded-xl border border-border p-3">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-sm font-medium">Check the estimate, then add</p>
+        <div className="space-y-3 rounded-xl border border-border p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-medium">Check and log</p>
             <Select value={meal} onChange={(e) => setMeal(e.target.value as Meal)} className="w-36" aria-label="Meal">
               {MEAL_ORDER.map((m) => (
                 <option key={m} value={m}>{MEAL_META[m].label}</option>
@@ -99,30 +124,75 @@ export function FoodAiAdd({ ownerId }: { ownerId: string }) {
             </Select>
           </div>
           {note ? <p className="text-xs text-fg-muted">{note}</p> : null}
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[520px] text-sm">
-              <thead className="text-xs text-fg-muted">
-                <tr><th /><th className="text-left font-medium">Food</th><th className="font-medium">kcal</th><th className="font-medium">Protein</th><th className="font-medium">Carbs</th><th className="font-medium">Fat</th></tr>
-              </thead>
-              <tbody>
-                {items.map((it, i) => (
-                  <tr key={i} className="border-t border-border">
-                    <td><input type="checkbox" className="size-4 accent-[var(--accent)]" checked={it.keep} onChange={(e) => update(i, { keep: e.target.checked })} aria-label={`Keep ${it.description}`} /></td>
-                    <td className="py-1 pr-2">
-                      <Input value={it.description} onChange={(e) => update(i, { description: e.target.value })} className="!h-8" aria-label="Food" />
-                    </td>
-                    {(["calories", "protein_g", "carbs_g", "fat_g"] as const).map((k) => (
-                      <td key={k} className="px-0.5">
-                        <Input type="number" min={0} value={it[k]} onChange={(e) => update(i, { [k]: num(e.target.value) })} className="!h-8 w-16 text-right" aria-label={k} />
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ul className="space-y-2">
+            {items.map((it, i) => {
+              const c = computeItem(it);
+              return (
+                <li key={i} className={`rounded-lg border border-border p-2 ${it.keep ? "" : "opacity-50"}`}>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input type="checkbox" className="size-4 accent-[var(--accent)]" checked={it.keep} onChange={(e) => update(i, { keep: e.target.checked })} aria-label={`Keep ${it.description}`} />
+                    <Input value={it.description} onChange={(e) => update(i, { description: e.target.value })} className="!h-8 min-w-40 flex-1" aria-label="Food" />
+                    <AccuracyBadge accuracy={c.accuracy} />
+                  </div>
+                  <p className="mt-1 text-xs text-fg-muted">
+                    <strong className="text-fg">{Math.round(c.nutrients.calories ?? 0)} kcal</strong> · P {c.nutrients.protein_g ?? 0} · C {c.nutrients.carbs_g ?? 0} · F {c.nutrients.fat_g ?? 0} · fibre {c.nutrients.fiber_g ?? 0} g
+                    {c.nutrients.iron_mg != null ? ` · iron ${c.nutrients.iron_mg} mg` : ""}
+                    {c.nutrients.calcium_mg != null ? ` · calcium ${Math.round(c.nutrients.calcium_mg)} mg` : ""}
+                    {c.grams ? ` · ${Math.round(c.grams)} g` : ""}
+                  </p>
+                  {it.irritants.length ? (
+                    <p className="text-xs text-fg-muted">Bladder irritants: {it.irritants.map((x) => `${IRRITANT_META[x as Irritant]?.icon ?? ""} ${IRRITANT_META[x as Irritant]?.label ?? x}`).join(", ")}</p>
+                  ) : null}
+                  {it.recipe ? (
+                    <div className="mt-1 flex items-center gap-2 text-xs">
+                      From your recipe <strong>{it.recipe.title}</strong> ·
+                      <Input
+                        type="number"
+                        min={0.25}
+                        step={0.25}
+                        value={it.recipe.servings}
+                        onChange={(e) => update(i, { recipe: { ...it.recipe!, servings: Math.max(0.25, Number(e.target.value) || 1) } })}
+                        className="!h-7 w-16"
+                        aria-label="Servings"
+                      />
+                      servings
+                    </div>
+                  ) : (
+                    <>
+                      <button type="button" className="mt-1 text-xs text-accent" onClick={() => update(i, { open: !it.open })}>
+                        {it.open ? "Hide" : "Show"} ingredients ({it.components.length})
+                      </button>
+                      {it.open ? (
+                        <div className="mt-1 space-y-1">
+                          {it.components.map((comp, k) => (
+                            <div key={k} className="flex flex-wrap items-center gap-1.5 text-xs">
+                              <Input type="number" min={0} value={comp.grams} onChange={(e) => updateComp(i, k, { grams: Math.max(0, Number(e.target.value) || 0) })} className="!h-7 w-20" aria-label={`${comp.name} grams`} />
+                              g <span className="font-medium">{comp.name}</span>
+                              <span className={comp.per100 ? "text-fg-muted" : "text-danger"}>→ {comp.matchName ? `${comp.matchName} (${comp.source})` : "not matched"}</span>
+                              <button type="button" className="text-fg-muted hover:text-danger" aria-label="Remove ingredient" onClick={() => update(i, { components: it.components.filter((_, x) => x !== k) })}>✕</button>
+                            </div>
+                          ))}
+                          <FoodSearch
+                            placeholder="Add or fix an ingredient…"
+                            onPick={(f: FoodHit) => {
+                              const unmatched = it.components.findIndex((x) => !x.per100);
+                              const per100 = f.per100 ?? null;
+                              if (unmatched >= 0) updateComp(i, unmatched, { per100, matchName: f.name, source: f.source, ref: f.ref });
+                              else update(i, { components: [...it.components, { name: f.name, grams: 100, per100, matchName: f.name, source: f.source, ref: f.ref }] });
+                            }}
+                          />
+                          <p className="text-[11px] text-fg-muted">Picking a food fills the first unmatched ingredient, or adds a new 100 g row.</p>
+                        </div>
+                      ) : null}
+                    </>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          <PeoplePortions people={people} value={who} onChange={setWho} />
           <div className="flex gap-2">
-            <Button size="sm" onClick={save} disabled={saving || !items.some((i) => i.keep)}>
+            <Button size="sm" onClick={save} disabled={saving || !items.some((i) => i.keep) || !Object.values(who).some((v) => v > 0)}>
               {saving ? "Adding…" : `Add to ${MEAL_META[meal].label.toLowerCase()}`}
             </Button>
             <Button size="sm" variant="ghost" onClick={() => setItems(null)}>Discard</Button>

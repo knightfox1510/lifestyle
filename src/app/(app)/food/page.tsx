@@ -4,6 +4,12 @@ import { addDays, localDate, localTime, shortDate, startOfLocalDayIso, todayIn }
 import { Card, buttonClass, cx } from "@/components/ui";
 import type { FluidIntake, FoodEntry, NutritionGoals } from "@/lib/types";
 import { MEAL_META, MEAL_ORDER, totals } from "@/modules/food/meta";
+import { MicroPanel } from "@/components/micro-panel";
+import { AccuracyBadge } from "@/components/nutrition-ui";
+import { dailyTargets, fromEntry, sum } from "@/modules/nutrition/nutrients";
+import { labNutrientLinks } from "@/modules/nutrition/labs-link";
+import { IRRITANT_META, type Irritant } from "@/modules/nutrition/irritants";
+import type { LabResult } from "@/lib/types";
 import { FoodAiAdd } from "./food-ai-add";
 import { ManualFoodForm } from "./manual-food-form";
 import { RestaurantPicker } from "./restaurant-picker";
@@ -33,11 +39,20 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
     diningOn ? session.supabase.from("dining_places").select("id, name").eq("household_id", session.household.id).order("favorite", { ascending: false }).order("name") : Promise.resolve({ data: [] }),
     diningOn ? session.supabase.from("dining_dishes").select("id, name, place_id, calories, section").eq("household_id", session.household.id).order("name") : Promise.resolve({ data: [] }),
   ]);
+  const medicalOn = session.isModuleEnabled("medical_records") && session.accessTo("medical_records", ownerId) !== "none";
+  const [{ data: mp }, { data: labRows }] = await Promise.all([
+    medicalOn ? session.supabase.from("medical_profiles").select("sex").eq("owner_id", ownerId).maybeSingle() : Promise.resolve({ data: null }),
+    medicalOn ? session.supabase.from("lab_results").select("marker, value, unit, flag, test_date").eq("owner_id", ownerId).neq("flag", "normal").order("test_date", { ascending: false }).limit(200) : Promise.resolve({ data: [] }),
+  ]);
   const restaurantPlaces = (rp.data ?? []) as { id: string; name: string }[];
   const restaurantDishes = (rd.data ?? []) as { id: string; name: string; place_id: string; calories: number | null; section: string | null }[];
   const entries = ((e ?? []) as FoodEntry[]).filter((x) => localDate(x.eaten_at, tz) === date);
   const goals = g as NutritionGoals | null;
   const t = totals(entries);
+  const dayNutrients = sum(entries.map((x) => fromEntry({ ...x, micros: x.micros ?? {} })));
+  const targets = dailyTargets((mp as { sex: "female" | "male" | "other" | null } | null)?.sex ?? null, goals?.calories ?? null);
+  const labLinks = labNutrientLinks((labRows ?? []) as Pick<LabResult, "marker" | "value" | "unit" | "flag" | "test_date">[]);
+  const withData = entries.filter((x) => x.accuracy && x.accuracy !== "estimated").length;
   const water = ((fl.data ?? []) as Pick<FluidIntake, "volume_ml" | "occurred_at">[])
     .filter((x) => localDate(x.occurred_at, tz) === date)
     .reduce((a, x) => a + x.volume_ml, 0);
@@ -98,11 +113,23 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
         ) : null}
       </Card>
 
+      {entries.length ? (
+        <Card>
+          <details open={labLinks.size > 0}>
+            <summary className="cursor-pointer text-sm font-semibold">Vitamins & minerals {labLinks.size ? <span className="text-xs font-normal text-danger">· linked to your blood work</span> : null}</summary>
+            <div className="mt-3">
+              <MicroPanel totals={dayNutrients} targets={targets} labLinks={labLinks} coverage={{ withData, total: entries.length }} />
+            </div>
+          </details>
+        </Card>
+      ) : null}
+
       {canWrite && date === today ? (
         <>
-          <FoodAiAdd ownerId={ownerId} />
+          <FoodAiAdd ownerId={ownerId} people={session.members.filter((m) => session.accessTo("food_diary", m.user_id) === "write").map((m) => ({ id: m.user_id, name: m.user_id === session.userId ? "Me" : m.display_name }))} />
           <div className="flex flex-wrap gap-x-6 gap-y-2">
             <ManualFoodForm ownerId={ownerId} />
+            <Link href="/food/product" className="text-sm text-fg-muted hover:text-fg">▥ Scan a packaged food</Link>
             {restaurantPlaces.length ? <RestaurantPicker ownerId={ownerId} places={restaurantPlaces} dishes={restaurantDishes} /> : null}
           </div>
         </>
@@ -125,7 +152,13 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
                       <span className="block truncate">{x.description}{x.quantity ? <span className="text-fg-muted"> · {x.quantity}</span> : null}</span>
                       <span className="text-xs text-fg-muted">
                         {localTime(x.eaten_at, tz)} · P {Math.round(Number(x.protein_g ?? 0))} · C {Math.round(Number(x.carbs_g ?? 0))} · F {Math.round(Number(x.fat_g ?? 0))}
-                        {x.source === "restaurant" ? " · restaurant" : x.source !== "manual" ? " · AI estimate" : ""}
+                        {x.grams ? ` · ${Math.round(Number(x.grams))} g` : ""}
+                        {x.source === "restaurant" ? " · restaurant" : ""}
+                        {(x.irritants ?? []).length ? ` · ${(x.irritants ?? []).map((i) => IRRITANT_META[i as Irritant]?.icon ?? "").join("")}` : ""}
+                        {x.group_id ? " · shared meal" : ""}
+                      </span>
+                      <span className="mt-0.5 block">
+                        <AccuracyBadge accuracy={x.accuracy} />
                       </span>
                     </span>
                     <span className="flex shrink-0 items-center gap-2">

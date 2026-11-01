@@ -1,3 +1,5 @@
+<p align="center"><img src="public/icons/icon.svg" width="96" alt="Hearth logo"></p>
+
 # Hearth: household lifestyle PWA
 
 An installable web app (phone and laptop) for tracking household and partner life: health, food, routines and more. Personal data is private by default, and each person chooses which features their partner can see or edit. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the full plan.
@@ -19,20 +21,27 @@ An installable web app (phone and laptop) for tracking household and partner lif
   - **Blood work & labs:** structured results (value, unit, reference range, low/high flag) from AI extraction or manual entry with a catalogue of common markers. Shows out-of-range markers first, latest vs previous per panel, and a trend chart per marker with the reference band.
 - **Medicines:** prescriptions and courses with daily schedules (times + weekdays, start/end), Take / Skip per dose, as-needed doses, stock that counts down automatically with refill warnings, 7/30-day adherence and a 14-day grid. A new medicine can also be added to the medical timeline.
 - **Supplement stack:** a daily checklist grouped by time of day that starts fresh each morning (history is kept), optional stock, and a 30-day adherence view.
-- **Bladder diary:** one-tap logging of leaks (amount, urgency, what you were doing, pad change), urges, bathroom visits and drinks (type, ml, caffeine), with a day-by-day view.
+- **Bladder diary:** foods and drinks are tagged as bladder irritants (spicy, citrus, tomato, caffeine, fizzy, sweeteners), and trends compare leaks on high-irritant days.
+  - One-tap logging of leaks (amount, urgency, what you were doing, pad change), urges, bathroom visits and drinks (type, ml, caffeine), with a day-by-day view.
   - **Trends & triggers:** leaks per day with a 7-day average, circumstances, time of day, and how much of it looks stress-type vs urge-type. Also simple comparisons (caffeine, Kegel days, fluids, alcohol, sleep), leaks within 2 h of caffeine, and whether it's improving.
   - **Doctor report:** a printable / Save-as-PDF report for 3, 7 or 30 days in the standard bladder-diary layout, with current medicines.
 - **Pelvic floor trainer:** guided squeeze/relax timer (sets, reps, hold, rest, quick flicks) with vibration and sound cues and the screen kept awake. Shows sessions, streaks and a 4-week calendar.
 - **Daily check-in:** sleep, mood, energy and stress (1–5, one tap each), plus hours slept and notes.
 - **Habits:** weekly targets, tap-to-tick for the last 7 days, streaks.
 - **Grocery list (shared, offline-first):** changes save to the device first and sync when back online. Partners see updates live (Supabase Realtime). Items are grouped by aisle (category guessed from the name), with a "who added / picked up" note and a cart you can clear.
-- **Food diary:** describe a meal, say it (voice) or snap a photo, and AI estimates calories and macros for you to check before saving. Manual entry, "have it again", and daily progress against calorie, macro, fibre and water goals.
+- **Food diary (accurate for home cooking):**
+  - Describe a meal, say it or snap it. AI breaks it into your **saved recipes** or **ingredients with grams** (it knows katori, roti, tbsp and so on), and the numbers are **calculated from food data**: built-in Indian staples, your own foods, and USDA FoodData Central. They are never just guessed.
+  - Each item shows whether it's ✓ calculated or ~ estimated, and you can fix grams or swap a match before logging.
+  - **Micronutrients:** iron, calcium, B12, vitamin D, folate, sodium, potassium, magnesium, zinc, vitamins A and C, sugar and saturated fat, shown against **ICMR-NIN 2020 targets** and flagged against low blood-test results.
+  - **Log one meal for both of you**, each with your own portion.
+  - **Packaged foods:** scan the barcode (Open Food Facts) or photograph the nutrition label; saved to **My foods** for reuse.
+  - **Weekly nutrition report:** averages, gaps, top sources and an AI review.
   - **Goals:** goal, diet type, activity, cooking style, cuisines and dislikes. AI suggests targets from weight, height, age, labs and conditions, and explains why; a maintenance estimate is shown alongside.
   - **Meal ideas:** 3 suggestions for a meal from what's in the pantry, what's expiring, or anything. Each fits the remaining calories and the person's health data and marks which ingredients you already have. Save as recipe, add missing items to the grocery list, or log it as eaten.
 - **Body recomposition:** weigh-ins, body fat and measurements. Shows progress to the target weight with milestones (e.g. every 1 kg to 60 kg), a weight trend line with the target, and weekly average calories next to weekly weight change. **Vitals:** blood pressure, resting heart rate and blood sugar, with charts.
 - **Pantry:** fridge / freezer / cupboard with expiry dates, opened state, "used up" and "used up + rebuy". Items expiring soon link to "cook something with these".
 - **Camera scan:** photograph a receipt or order screen, a fridge shelf, or a handwritten list or empty packet. AI lists the items with estimated (or printed) expiry; you confirm and send them to the pantry or the grocery list.
-- **Recipes & meal plan:** household recipe vault (manual or saved from AI ideas) with servings scaling, pantry check, log-as-eaten and add-to-plan. A weekly planner sends the rest of the week's missing ingredients to the grocery list.
+- **Recipes & meal plan:** a **nutrition calculator** works out each ingredient's grams and matches it to food data, giving per-serving macros and micronutrients. Weigh the cooked pot once to log by grams or katori. **We cooked this** logs everyone's portions and saves the **leftovers to the fridge**, and the pantry's "Eat a portion" logs them later. household recipe vault (manual or saved from AI ideas) with servings scaling, pantry check, log-as-eaten and add-to-plan. A weekly planner sends the rest of the week's missing ingredients to the grocery list.
 - **Quick log:** type or speak one sentence ("2 coffees, poha for breakfast, small leak during squats at 7:40, weighed 63.8"); AI splits it into food, drinks, bladder diary and weight entries for you to confirm.
 - **Fitness:** weekly class schedule (gym, yoga… with days, time, place) with reminders before each class, Done/Skipped per session, ad-hoc workouts and weekly minutes. The bladder diary now compares leaks on workout, gym and yoga days against rest days.
 - **Child routine** (opt-in): shared feed / sleep / nappy / medicine / temperature / milestone log. Warns with the last dose time and who gave it, to prevent double-dosing. IAP vaccination schedule from date of birth, and growth records.

@@ -56,6 +56,12 @@ Open **Project Settings** (gear icon) → **API Keys** (on some projects it's **
 2. Tap **Get API key → Create API key** (choose or create any Google Cloud project when asked).
 3. Copy it into your note as **`GEMINI_API_KEY`**.
 
+### C2. Food database key (optional, 2 minutes, recommended)
+1. Open **fdc.nal.usda.gov/api-key-signup**, enter your name and email, and submit.
+2. The key arrives by email. Save it as **`FDC_API_KEY`**.
+
+This makes ingredient search (USDA FoodData Central) reliable. Without it, a shared demo key is used, which runs out quickly. The built-in Indian staples work either way.
+
 ---
 
 ## Part D · Put the app online (Vercel)
@@ -70,6 +76,7 @@ Open **Project Settings** (gear icon) → **API Keys** (on some projects it's **
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `SUPABASE_SERVICE_ROLE_KEY`
    - `GEMINI_API_KEY`
+   - `FDC_API_KEY` (if you got one in C2)
 5. Tap **Deploy** and wait about 2 minutes for the confetti.
 6. Tap **Continue to Dashboard**. Your app address is shown under **Domains**, e.g. `lifestyle-abc.vercel.app`. Save it in your note as **YOUR-URL**.
    - Want a nicer address? Go to Settings → Domains → **Edit** to change it to something like `hearth-home.vercel.app` (if it's free), then save the new one in your note.
@@ -157,7 +164,7 @@ Then redeploy.
 
 - **Code changes** deploy automatically when they're pushed to the production branch on GitHub.
 - **Database changes** come as a new file in `supabase/migrations/`. Open that one new file on GitHub → Raw → copy → Supabase SQL Editor → Run. **Don't** re-run `all-in-one.sql` on a live database; it's only for brand-new projects.
-  - Example: if you set up before restaurant menus were added, paste `supabase/migrations/20261106000001_menus.sql` once. New setups already include it via `all-in-one.sql`.
+  - Example: if you set up before these features were added, paste each once, in order: `20261106000001_menus.sql` (restaurant menus), then `20261107000001_nutrition.sql` (ingredient nutrition, micronutrients, leftovers). New setups already include them via `all-in-one.sql`.
 
 ## If something goes wrong
 

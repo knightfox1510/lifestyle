@@ -6,6 +6,7 @@ import { addDays, todayIn } from "@/lib/dates";
 import { scanItemSchema } from "@/lib/ai/phase2-schemas";
 import { GROCERY_CATEGORIES, type ActionResult } from "@/lib/types";
 import { guessCategory } from "@/modules/groceries/meta";
+import { logRecipeForPeople } from "@/app/(app)/recipes/actions";
 
 const blank = (v: unknown) => (v === "" || v == null ? null : v);
 
@@ -108,4 +109,22 @@ export async function deletePantryItem(id: string) {
   const session = await requireModule("pantry");
   await session.supabase.from("pantry_items").delete().eq("id", id).eq("household_id", session.household.id);
   refreshModule("/pantry");
+}
+
+/** Eat portions of a leftover: logs them from its recipe and counts down; used up at 0. */
+export async function eatLeftover(pantryId: string, people: { ownerId: string; servings: number }[], meal: "breakfast" | "lunch" | "dinner" | "snack"): Promise<ActionResult> {
+  const session = await requireModule("pantry");
+  const { data: item } = await session.supabase.from("pantry_items").select("id, recipe_id, portions, name").eq("id", pantryId).eq("household_id", session.household.id).maybeSingle();
+  if (!item?.recipe_id) return { error: "This leftover isn't linked to a recipe." };
+  const eaten = people.reduce((a, p) => a + Math.max(0, p.servings), 0);
+  if (eaten <= 0) return { error: "Choose how much was eaten." };
+  const res = await logRecipeForPeople(item.recipe_id, people, meal);
+  if (res.error) return res;
+  const left = Math.max(0, Math.round((Number(item.portions ?? 0) - eaten) * 100) / 100);
+  await session.supabase
+    .from("pantry_items")
+    .update(left > 0 ? { portions: left, quantity: `${left} portion${left === 1 ? "" : "s"}` } : { portions: 0, used_up_at: new Date().toISOString() })
+    .eq("id", pantryId);
+  refreshModule("/pantry");
+  return { ok: true, message: `${res.message ?? "Logged."}${left > 0 ? ` ${left} left.` : " All gone."}` };
 }

@@ -14,6 +14,8 @@ export type DayStats = {
   kegel: boolean;
   /** Workout kinds done that day (gym, yoga…) from the fitness log. */
   workouts: string[];
+  /** Bladder irritants eaten or drunk that day (spicy, citrus, caffeine…). */
+  irritants: string[];
 };
 
 export function dailyStats(
@@ -23,9 +25,10 @@ export function dailyStats(
   tz: string,
   sessions: PelvicFloorSession[] = [],
   workouts: { performed_on: string; kind: string; status: string }[] = [],
+  foods: { eaten_at: string; irritants?: string[] | null }[] = [],
 ): DayStats[] {
   const map = new Map<string, DayStats>(
-    days.map((date) => [date, { date, leaks: 0, urges: 0, voids: 0, padChanges: 0, fluidMl: 0, caffeineMl: 0, alcoholMl: 0, kegel: false, workouts: [] as string[] }]),
+    days.map((date) => [date, { date, leaks: 0, urges: 0, voids: 0, padChanges: 0, fluidMl: 0, caffeineMl: 0, alcoholMl: 0, kegel: false, workouts: [] as string[], irritants: [] as string[] }]),
   );
   for (const e of events) {
     const d = map.get(localDate(e.occurred_at, tz));
@@ -35,12 +38,26 @@ export function dailyStats(
     if (e.kind === "void") d.voids += 1;
     if (e.pad_changed) d.padChanges += 1;
   }
+  const addIrritant = (d: DayStats, x: string) => {
+    if (!d.irritants.includes(x)) d.irritants.push(x);
+  };
   for (const f of fluids) {
     const d = map.get(localDate(f.occurred_at, tz));
     if (!d) continue;
     d.fluidMl += f.volume_ml;
-    if (f.caffeinated) d.caffeineMl += f.volume_ml;
-    if (f.drink === "alcohol") d.alcoholMl += f.volume_ml;
+    if (f.caffeinated) {
+      d.caffeineMl += f.volume_ml;
+      addIrritant(d, "caffeine");
+    }
+    if (f.drink === "alcohol") {
+      d.alcoholMl += f.volume_ml;
+      addIrritant(d, "alcohol");
+    }
+    if (f.drink === "soda") addIrritant(d, "carbonated");
+  }
+  for (const food of foods) {
+    const d = map.get(localDate(food.eaten_at, tz));
+    if (d) for (const x of food.irritants ?? []) addIrritant(d, x);
   }
   for (const s of sessions) {
     const d = map.get(localDate(s.performed_at, tz));
@@ -98,6 +115,13 @@ export function comparisons(stats: DayStats[], checkins: DailyCheckin[]): Compar
     if (stats.some((s) => s.workouts.includes("yoga"))) split("Yoga", (s) => s.workouts.includes("yoga"), "yoga days", "other days");
   }
   split("Caffeine", (s) => s.caffeineMl >= 250, "≥250 ml caffeinated", "less caffeine");
+  if (stats.some((s) => s.irritants.length)) {
+    split("Bladder irritants", (s) => s.irritants.length >= 2, "2+ irritants (food & drink)", "0–1 irritants");
+    for (const [key, label] of [["spicy", "Spicy food"], ["citrus", "Citrus"], ["tomato", "Tomato"], ["carbonated", "Fizzy drinks"], ["sweetener", "Artificial sweeteners"]] as const) {
+      const n = stats.filter((s) => s.irritants.includes(key)).length;
+      if (n >= 2) split(label, (s) => s.irritants.includes(key), `${label.toLowerCase()} days`, "other days");
+    }
+  }
   split("Pelvic floor exercises", (s) => s.kegel, "Kegel days", "no session");
   split("Fluid intake", (s) => s.fluidMl >= 2000, "≥2 L fluids", "under 2 L", "Too little fluid can also irritate the bladder; don't cut water without advice.");
   split("Alcohol", (s) => s.alcoholMl > 0, "with alcohol", "no alcohol");

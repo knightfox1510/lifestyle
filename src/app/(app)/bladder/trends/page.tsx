@@ -17,7 +17,7 @@ export default async function BladderTrendsPage({ searchParams }: PageProps<"/bl
   const ownerId = session.subject.user_id;
   const d = await loadDiary(session, ownerId, period);
 
-  const stats = dailyStats(d.days, d.events, d.fluids, d.tz, d.sessions, d.workouts);
+  const stats = dailyStats(d.days, d.events, d.fluids, d.tz, d.sessions, d.workouts, d.foods);
   const loggedDays = stats.filter((s) => s.leaks + s.urges + s.voids + s.fluidMl > 0).length;
   if (loggedDays === 0) {
     return <EmptyState title="No diary entries in this period">Log leaks, urges, bathroom visits and drinks for a few days to see patterns.</EmptyState>;

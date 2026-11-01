@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cx } from "@/components/ui";
+import { Logo } from "@/components/logo";
 
 export type NavItem = { href: string; label: string; icon: string };
 
@@ -17,13 +18,8 @@ export function AppNav({ items, mobileItems, householdName }: { items: NavItem[]
   return (
     <>
       <aside className="print:!hidden sticky top-0 hidden h-dvh flex-col gap-1 border-r border-border bg-surface px-3 py-5 md:flex">
-        <div className="mb-4 flex items-center gap-2 px-2">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/icons/icon.svg" alt="" className="size-8" />
-          <div className="min-w-0">
-            <p className="text-sm font-semibold leading-tight">Hearth</p>
-            <p className="truncate text-xs text-fg-muted">{householdName}</p>
-          </div>
+        <div className="mb-4 px-2">
+          <Logo size="sm" tagline={householdName} />
         </div>
         {items.map((item) => (
           <Link

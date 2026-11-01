@@ -69,6 +69,7 @@ Get the Gemini key at [aistudio.google.com](https://aistudio.google.com) → **G
    | `SUPABASE_SERVICE_ROLE_KEY` | service_role / secret key (**server only**) |
    | `GEMINI_API_KEY` | from AI Studio |
    | `GEMINI_MODEL` | optional, defaults to `gemini-flash-latest` |
+   | `FDC_API_KEY` | optional, free USDA FoodData Central key (fdc.nal.usda.gov/api-key-signup) for ingredient search |
    | `APP_ENCRYPTION_KEY` | generated above |
    | `CRON_SECRET` | generated above |
    | `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | generated above |

@@ -12,6 +12,7 @@ export default function manifest(): MetadataRoute.Manifest {
     orientation: "portrait",
     background_color: "#f7f6f3",
     theme_color: "#2f6f5e",
+    // Matches the logo: home + flame (the two of you) + heart.
     categories: ["health", "lifestyle", "productivity"],
     icons: [
       { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },

@@ -360,6 +360,11 @@ export type FoodEntry = {
   recipe_id: string | null;
   dish_id?: string | null;
   notes: string | null;
+  micros?: Record<string, number> | null;
+  grams?: number | null;
+  accuracy?: "calculated" | "label" | "estimated";
+  irritants?: string[];
+  group_id?: string | null;
 };
 
 export type BodyMetric = {
@@ -407,9 +412,26 @@ export type PantryItem = {
   notes: string | null;
   used_up_at: string | null;
   created_at: string;
+  recipe_id?: string | null;
+  portions?: number | null;
 };
 
-export type RecipeIngredient = { name: string; quantity: string | null; category: GroceryCategory };
+export type FoodRef =
+  | { kind: "staple"; key: string }
+  | { kind: "custom"; id: string }
+  | { kind: "usda"; id: string }
+  | { kind: "recipe"; id: string };
+
+export type RecipeIngredient = {
+  name: string;
+  quantity: string | null;
+  category: GroceryCategory;
+  /** Set by the nutrition calculator. */
+  grams?: number | null;
+  ref?: FoodRef | null;
+  match_name?: string | null;
+  per100?: Record<string, number> | null;
+};
 
 export type Recipe = {
   id: string;
@@ -431,6 +453,9 @@ export type Recipe = {
   ai_generated: boolean;
   favorite: boolean;
   updated_at: string;
+  nutrition?: Record<string, number> | null;
+  total_weight_g?: number | null;
+  irritants?: string[];
 };
 
 export type MealPlanEntry = {
@@ -686,4 +711,18 @@ export type WearableDay = {
   active_minutes: number | null;
   calories_burned: number | null;
   hrv_ms: number | null;
+};
+
+export type CustomFood = {
+  id: string;
+  household_id: string;
+  name: string;
+  brand: string | null;
+  barcode: string | null;
+  source: "manual" | "label" | "openfoodfacts" | "usda";
+  serving_g: number | null;
+  serving_label: string | null;
+  nutrients: Record<string, number>;
+  irritants: string[];
+  notes: string | null;
 };

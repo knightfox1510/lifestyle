@@ -6,6 +6,7 @@ import type { PantryItem, PantryLocation } from "@/lib/types";
 import { CATEGORY_META } from "@/modules/groceries/meta";
 import { daysUntil } from "@/modules/pantry/match";
 import { AddPantryForm } from "./add-form";
+import { LeftoverEat } from "./leftover-eat";
 import { deletePantryItem, markUsedUp, setExpiry, setOpened } from "./actions";
 
 export const metadata = { title: "Pantry" };
@@ -31,6 +32,8 @@ export default async function PantryPage() {
     return d !== null && d <= 3;
   });
   const groceriesOn = session.isModuleEnabled("groceries");
+  const canLogFood = session.isModuleEnabled("food_diary") && session.isModuleEnabled("recipes");
+  const eaters = session.members.filter((m) => session.accessTo("food_diary", m.user_id) === "write").map((m) => ({ id: m.user_id, name: m.user_id === session.userId ? "Me" : m.display_name }));
 
   return (
     <div className="space-y-4">
@@ -81,6 +84,7 @@ export default async function PantryPage() {
                           </div>
                         </div>
                         <div className="flex flex-wrap items-center gap-1">
+                          {canLogFood && i.recipe_id && (i.portions ?? 0) > 0 ? <LeftoverEat pantryId={i.id} people={eaters} me={session.userId} /> : null}
                           <form action={markUsedUp.bind(null, i.id, false)}>
                             <button className={buttonClass("ghost", "sm")}>Used up</button>
                           </form>

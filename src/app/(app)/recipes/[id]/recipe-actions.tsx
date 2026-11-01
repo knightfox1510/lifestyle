@@ -3,9 +3,11 @@
 import { useActionState, useState, useTransition } from "react";
 import { Button, Card, Field, Input, Notice, Select } from "@/components/ui";
 import { ActionMessage, SubmitButton } from "@/components/form-status";
-import type { Meal, Recipe, RecipeIngredient } from "@/lib/types";
-import { MEAL_META, MEAL_ORDER, mealForHour } from "@/modules/food/meta";
-import { addToGroceryList, addToPlan, logRecipe } from "../actions";
+import type { Recipe, RecipeIngredient } from "@/lib/types";
+import { MEAL_META, MEAL_ORDER } from "@/modules/food/meta";
+import { addToGroceryList, addToPlan } from "../actions";
+import { RecipeLog } from "./recipe-log";
+import type { PersonPortion } from "@/components/nutrition-ui";
 
 /** Scales a leading number in a quantity string ("200 g" × 1.5 → "300 g"). */
 function scaleQty(q: string | null, factor: number) {
@@ -20,7 +22,8 @@ export function RecipeActions({
   recipe,
   ingredients,
   pantryTracked,
-  ownerId,
+  people,
+  pantryOn,
   canLog,
   groceriesOn,
   today,
@@ -28,14 +31,13 @@ export function RecipeActions({
   recipe: Recipe;
   ingredients: (RecipeIngredient & { have: boolean })[];
   pantryTracked: boolean;
-  ownerId: string;
+  people: PersonPortion[];
+  pantryOn: boolean;
   canLog: boolean;
   groceriesOn: boolean;
   today: string;
 }) {
   const [servings, setServings] = useState(recipe.servings);
-  const [meal, setMeal] = useState<Meal>(() => mealForHour(new Date().getHours()));
-  const [eatServings, setEatServings] = useState(1);
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<{ tone: "accent" | "danger"; text: string } | null>(null);
   const [planState, planAction] = useActionState(addToPlan, null);
@@ -78,26 +80,7 @@ export function RecipeActions({
       </Card>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        {canLog && recipe.calories_per_serving ? (
-          <Card className="space-y-2">
-            <h3 className="text-sm font-semibold">I ate this</h3>
-            <div className="flex flex-wrap items-end gap-2">
-              <Field label="Servings" className="w-24">
-                <Input type="number" min={0.25} max={10} step={0.25} value={eatServings} onChange={(e) => setEatServings(Number(e.target.value) || 1)} />
-              </Field>
-              <Field label="Meal" className="w-32">
-                <Select value={meal} onChange={(e) => setMeal(e.target.value as Meal)}>
-                  {MEAL_ORDER.map((m) => (
-                    <option key={m} value={m}>{MEAL_META[m].label}</option>
-                  ))}
-                </Select>
-              </Field>
-              <Button size="sm" disabled={pending} onClick={() => start(async () => done(await logRecipe(recipe.id, ownerId, meal, eatServings)))}>
-                Log ~{Math.round(recipe.calories_per_serving * eatServings)} kcal
-              </Button>
-            </div>
-          </Card>
-        ) : null}
+        {canLog ? <RecipeLog recipe={recipe} people={people} pantryOn={pantryOn} /> : null}
         <Card>
           <form action={planAction} className="space-y-2">
             <h3 className="text-sm font-semibold">Plan it</h3>
