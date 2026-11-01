@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 // /api/cron and /api/ingest authenticate themselves (CRON_SECRET / per-user tokens).
-const PUBLIC_PATHS = ["/login", "/auth", "/offline", "/api/cron", "/api/ingest"];
+const PUBLIC_PATHS = ["/login", "/auth", "/offline", "/api/cron", "/api/ingest", "/setup-keys.html"];
 
 /** Refreshes the Supabase session cookie and gates private routes. */
 export async function updateSession(request: NextRequest) {

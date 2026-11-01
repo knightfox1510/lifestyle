@@ -1,5 +1,7 @@
 # Going live: Supabase + Vercel
 
+> **No terminal?** Follow [`SETUP-IN-BROWSER.md`](SETUP-IN-BROWSER.md) instead. It does everything from a web browser (one-paste database setup, in-browser key generator).
+
 This takes about 30–45 minutes the first time. You need accounts on **Supabase**, **Vercel**, **Google AI Studio** (Gemini key), and the GitHub repo `knightfox1510/lifestyle`. Free tiers are enough to start.
 
 ## 1. Supabase (database, login, file storage)
@@ -20,7 +22,7 @@ This takes about 30–45 minutes the first time. You need accounts on **Supabase
      ```bash
      npx supabase db push
      ```
-   - **SQL editor:** open each migration file in date order, paste it in and run it.
+   - **SQL editor:** paste `supabase/setup/all-in-one.sql` (all migrations combined) into a new query and run it once. After adding a migration, regenerate it with `node scripts/build-setup-sql.mjs`.
 
    The migrations create every table and the row-level security policies, the private `medical-documents` storage bucket, and the realtime feed for the shared grocery list.
 3. **Keys:** Project Settings → API. Copy the **Project URL**, the **anon / publishable** key and the **service_role / secret** key.
@@ -35,7 +37,7 @@ This takes about 30–45 minutes the first time. You need accounts on **Supabase
 
 ## 2. Secrets to generate
 
-Generate each value on your machine. These are for you to paste into Vercel; don't commit them.
+Generate each value on your machine (or open `https://YOUR-APP/setup-keys.html` after the first deploy, which generates them in the browser). These are for you to paste into Vercel; don't commit them.
 
 ```bash
 openssl rand -base64 32

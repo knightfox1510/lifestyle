@@ -29,10 +29,15 @@ run "$PG_BIN/pg_ctl" -D "$WORK/data" -o "-p $PORT -k $WORK -c listen_addresses='
 
 PSQL=("$PG_BIN/psql" -h "$WORK" -p "$PORT" -U postgres -d postgres -q -v ON_ERROR_STOP=1)
 "${PSQL[@]}" -f "$ROOT/supabase/tests/stubs.sql"
-for f in "$ROOT"/supabase/migrations/*.sql; do
-  echo "applying $(basename "$f")"
-  "${PSQL[@]}" -f "$f"
-done
+if [ "${USE_ALL_IN_ONE:-0}" = "1" ]; then
+  echo "applying supabase/setup/all-in-one.sql"
+  "${PSQL[@]}" -f "$ROOT/supabase/setup/all-in-one.sql"
+else
+  for f in "$ROOT"/supabase/migrations/*.sql; do
+    echo "applying $(basename "$f")"
+    "${PSQL[@]}" -f "$f"
+  done
+fi
 for t in "$ROOT"/supabase/tests/*.test.sql; do
   echo "running $(basename "$t")"
   "${PSQL[@]}" -f "$t"

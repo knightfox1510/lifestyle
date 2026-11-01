@@ -2,7 +2,7 @@
 
 An installable web app (phone and laptop) for tracking household and partner life: health, food, routines and more. Personal data is private by default, and each person chooses which features their partner can see or edit. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the full plan.
 
-**Status: all roadmap phases (0–4) built.** To go live on Vercel + Supabase, follow [`docs/DEPLOY.md`](docs/DEPLOY.md).
+**Status: all roadmap phases (0–4) built.** To go live: **[`docs/SETUP-IN-BROWSER.md`](docs/SETUP-IN-BROWSER.md)** (browser only, no terminal) or [`docs/DEPLOY.md`](docs/DEPLOY.md) (with the CLI).
 
 ## What's included
 

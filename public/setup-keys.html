@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Hearth setup keys</title>
+<style>
+  :root { --bg:#f7f6f3; --surface:#fff; --border:#e3e0d8; --fg:#1d1c1a; --muted:#6b675f; --accent:#2f6f5e; --accent-fg:#fff; color-scheme: light; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#141412; --surface:#1d1c1a; --border:#34322b; --fg:#ecebe6; --muted:#a39f94; --accent:#6cc1a6; --accent-fg:#0f1f1a; color-scheme: dark; } }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  main { max-width:640px; margin:0 auto; padding:24px 16px 48px; }
+  h1 { font-size:1.5rem; margin:0 0 4px; }
+  p.lead { color:var(--muted); margin:0 0 20px; }
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:16px; margin-bottom:12px; }
+  .name { font-family:ui-monospace,Menlo,monospace; font-weight:600; font-size:.9rem; }
+  .hint { color:var(--muted); font-size:.85rem; margin:2px 0 8px; }
+  .row { display:flex; gap:8px; align-items:stretch; }
+  code { flex:1; min-width:0; display:block; padding:10px; border-radius:10px; border:1px solid var(--border); background:var(--bg); font-size:.8rem; word-break:break-all; user-select:all; }
+  button { border:0; border-radius:10px; padding:0 14px; background:var(--accent); color:var(--accent-fg); font-weight:600; font-size:.9rem; cursor:pointer; min-height:40px; }
+  button.secondary { background:transparent; color:var(--fg); border:1px solid var(--border); }
+  .warn { border-color:#e0785e; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Hearth setup keys</h1>
+  <p class="lead">Your browser generates these keys. Nothing is sent anywhere. Copy each value into <strong>Vercel → your project → Settings → Environment Variables</strong>, then redeploy. Keep them private; don't post them anywhere.</p>
+
+  <div id="keys"></div>
+  <div class="card warn">
+    <strong>Generate only once.</strong>
+    <div class="hint">Changing <span class="name">APP_ENCRYPTION_KEY</span> later makes saved household Gemini keys unreadable. Changing the VAPID keys means each device has to turn notifications on again. Reloading this page creates new random values.</div>
+    <button class="secondary" onclick="location.reload()">Generate new values</button>
+  </div>
+</main>
+<script>
+(async () => {
+  const b64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
+  const b64url = (buf) => b64(buf).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  const rand = (n) => crypto.getRandomValues(new Uint8Array(n));
+
+  // VAPID key pair for web push (P-256): public = raw uncompressed point, private = JWK "d".
+  const pair = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]);
+  const pub = b64url(await crypto.subtle.exportKey("raw", pair.publicKey));
+  const priv = (await crypto.subtle.exportKey("jwk", pair.privateKey)).d;
+
+  const keys = [
+    ["APP_ENCRYPTION_KEY", b64(rand(32)), "Encrypts household Gemini keys stored in the database."],
+    ["CRON_SECRET", hex(rand(32)), "Protects the reminders endpoint. You'll also paste this into the Supabase reminders script."],
+    ["NEXT_PUBLIC_VAPID_PUBLIC_KEY", pub, "Web push public key."],
+    ["VAPID_PRIVATE_KEY", priv, "Web push private key. Keep secret."],
+  ];
+  const root = document.getElementById("keys");
+  for (const [name, value, hint] of keys) {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `<div class="name"></div><div class="hint"></div><div class="row"><code></code><button>Copy</button></div>`;
+    card.querySelector(".name").textContent = name;
+    card.querySelector(".hint").textContent = hint;
+    card.querySelector("code").textContent = value;
+    const btn = card.querySelector("button");
+    btn.onclick = async () => {
+      try { await navigator.clipboard.writeText(value); btn.textContent = "Copied ✓"; }
+      catch { btn.textContent = "Select & copy"; }
+      setTimeout(() => (btn.textContent = "Copy"), 2000);
+    };
+    root.appendChild(card);
+  }
+})();
+</script>
+</body>
+</html>
