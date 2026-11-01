@@ -331,7 +331,7 @@ export type LabResult = {
   include_in_ai: boolean;
 };
 
-export type Meal = "breakfast" | "lunch" | "dinner" | "snack";
+export type Meal = "breakfast" | "lunch" | "dinner" | "snack" | "other";
 
 export type NutritionGoals = {
   owner_id: string;

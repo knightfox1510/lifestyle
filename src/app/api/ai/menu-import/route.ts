@@ -5,6 +5,9 @@ import { AiError } from "@/lib/ai/gemini";
 import { aiHandler, imagePart, runJson } from "@/lib/ai/run";
 import { menuExtractSchema } from "@/lib/ai/phase2-schemas";
 
+/** Photo and long AI requests can take a while; allow up to a minute on Vercel. */
+export const maxDuration = 60;
+
 const MAX_IMAGES = 6;
 
 const PROMPT = `Extract the restaurant menu from these screenshots/photos and/or text (often Zomato or Swiggy screenshots, or a paper menu from an Indian restaurant).

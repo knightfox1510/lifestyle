@@ -9,6 +9,9 @@ import { addDays, localDate, startOfLocalDayIso, todayIn } from "@/lib/dates";
 import { totals } from "@/modules/food/meta";
 import type { DiningDish, DiningOrder, DiningPlace, FoodEntry } from "@/lib/types";
 
+/** Photo and long AI requests can take a while; allow up to a minute on Vercel. */
+export const maxDuration = 60;
+
 const body = z.object({
   people: z.array(z.uuid()).min(1).max(6),
   notes: z.string().trim().max(400).optional(),

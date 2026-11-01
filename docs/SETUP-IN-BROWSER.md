@@ -209,4 +209,6 @@ Then redeploy.
 | Vercel build failed | Deployments → open the failed one → **Build Logs**. A missing environment variable is the usual cause. |
 | "Invalid API key" on the sign-in page | The Supabase keys in Vercel are wrong or swapped: the **publishable** key goes in `NEXT_PUBLIC_SUPABASE_ANON_KEY` and the **secret** key in `SUPABASE_SERVICE_ROLE_KEY`. Fix and redeploy. |
 | Saving the language setting says "Couldn't save." | The database is missing the language change. Paste `20261109000001_language.sql` (see above). |
+| The app still looks old (a "More" tab, emoji icons) after an update | Vercel → **Deployments**: the newest one should be from `claude/blissful-hawking-v4uppl` and say **Ready** (if it failed, open **Build Logs**). Then close the app fully and reopen it, or tap **Reload** on the "new version" banner. **Settings** shows the version at the bottom. |
+| An AI feature fails | Settings → Household → **Test AI** shows the exact reason (free limit, Google busy, bad key). |
 | Anything else | Vercel → your project → **Logs** shows server errors as they happen. |

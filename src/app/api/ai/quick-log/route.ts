@@ -4,10 +4,13 @@ import { AiError } from "@/lib/ai/gemini";
 import { aiHandler, runJson } from "@/lib/ai/run";
 import { quickLogSchema } from "@/lib/ai/phase2-schemas";
 
+/** Photo and long AI requests can take a while; allow up to a minute on Vercel. */
+export const maxDuration = 60;
+
 const body = z.object({ text: z.string().trim().min(1).max(1000), localTime: z.string().regex(/^\d{2}:\d{2}$/) });
 
 const SYSTEM = `Turn a short spoken or typed note into structured log entries.
-- food: things eaten, with realistic calorie/macro estimates (Indian home portions by default); meal from context or time.
+- food: things eaten, with realistic calorie/macro estimates (Indian home portions by default); meal from context or time ("other" = drinks or bites outside the usual meals).
 - drinks: water, tea, coffee, etc. with ml (cup of tea/coffee ≈ 150 ml, glass ≈ 250 ml, bottle ≈ 500 ml unless stated). Tea, coffee and cola are caffeinated.
 - bladder: leaks (with amount drops/small/medium/large), urges, bathroom visits (void); triggers like cough, sneeze, laugh, lifting, exercise, yoga, running, jumping, standing_up, bending, urgency, during_sleep.
 - weight_kg if they mention weighing themselves.

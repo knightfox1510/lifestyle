@@ -3,16 +3,20 @@
 import { useActionState, useState } from "react";
 import { Card, Field, Input, Select } from "@/components/ui";
 import { ActionMessage, SubmitButton } from "@/components/form-status";
-import { MEAL_META, MEAL_ORDER, mealForHour } from "@/modules/food/meta";
+import { MEAL_META, MEAL_ORDER, eatenAtFor, mealForHour, type LogDay } from "@/modules/food/meta";
+import type { Meal } from "@/lib/types";
+import { useT } from "@/lib/i18n/client";
 import { addManualFood } from "./actions";
 
-export function ManualFoodForm({ ownerId }: { ownerId: string }) {
+export function ManualFoodForm({ ownerId, day, meal: preset }: { ownerId: string; day?: LogDay; meal?: Meal }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
+  const [meal, setMeal] = useState<Meal>(preset ?? mealForHour(new Date().getHours()));
   const [state, action] = useActionState(addManualFood, null);
   if (!open) {
     return (
       <button onClick={() => setOpen(true)} className="text-sm text-fg-muted hover:text-fg">
-        + Enter calories yourself
+        + {t("Enter calories yourself")}
       </button>
     );
   }
@@ -20,6 +24,7 @@ export function ManualFoodForm({ ownerId }: { ownerId: string }) {
     <Card>
       <form action={action} className="grid gap-3 sm:grid-cols-6">
         <input type="hidden" name="ownerId" value={ownerId} />
+        <input type="hidden" name="eaten_at" value={eatenAtFor(day, meal) ?? ""} />
         <Field label="Food" className="sm:col-span-3">
           <Input name="description" required maxLength={200} />
         </Field>
@@ -27,9 +32,9 @@ export function ManualFoodForm({ ownerId }: { ownerId: string }) {
           <Input name="quantity" maxLength={60} placeholder="1 bowl" />
         </Field>
         <Field label="Meal" className="sm:col-span-2">
-          <Select name="meal" defaultValue={mealForHour(new Date().getHours())}>
+          <Select name="meal" value={meal} onChange={(e) => setMeal(e.target.value as Meal)}>
             {MEAL_ORDER.map((m) => (
-              <option key={m} value={m}>{MEAL_META[m].label}</option>
+              <option key={m} value={m}>{t(MEAL_META[m].label)}</option>
             ))}
           </Select>
         </Field>

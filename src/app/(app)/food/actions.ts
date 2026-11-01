@@ -85,10 +85,10 @@ export async function addManualFood(_: ActionResult | null, form: FormData): Pro
 }
 
 /** Logs a previous entry again, now. */
-export async function repeatFood(entryId: string, ownerId: string, meal: (typeof MEALS)[number]) {
+export async function repeatFood(entryId: string, ownerId: string, meal: (typeof MEALS)[number], eatenAt?: string) {
   const session = await requireWrite(MODULE, ownerId);
   const { data } = await session.supabase.from("food_entries").select("*").eq("id", entryId).single();
-  if (!data || !MEALS.includes(meal)) return;
+  if (!data || !MEALS.includes(meal) || !when.safeParse(eatenAt).success) return;
   await session.supabase.from("food_entries").insert({
     owner_id: ownerId,
     created_by: session.userId,
@@ -103,6 +103,11 @@ export async function repeatFood(entryId: string, ownerId: string, meal: (typeof
     fiber_g: data.fiber_g,
     recipe_id: data.recipe_id,
     source: data.source,
+    micros: data.micros ?? {},
+    grams: data.grams,
+    accuracy: data.accuracy ?? "estimated",
+    irritants: data.irritants ?? [],
+    ...(eatenAt ? { eaten_at: eatenAt } : {}),
   });
   refreshModule("/food");
 }

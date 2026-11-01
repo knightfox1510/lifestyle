@@ -4,15 +4,17 @@
  *   then to /offline. Pages are cached per device and wiped on sign-out.
  * - API, auth and Supabase calls are never cached.
  */
-const VERSION = "v5";
+const VERSION = "v6";
 const SHELL_CACHE = `shell-${VERSION}`;
 const PAGE_CACHE = `pages-${VERSION}`;
 // Files shared into the app (Android share sheet), picked up by /dining/share.
 const SHARE_CACHE = "share-inbox";
 const SHELL = ["/offline", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon.svg"];
 
+// A new version waits until the user taps "Reload" on the update banner (or
+// all tabs close), so the page never reloads under someone mid-entry.
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(SHELL_CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  event.waitUntil(caches.open(SHELL_CACHE).then((c) => c.addAll(SHELL)));
 });
 
 self.addEventListener("activate", (event) => {
@@ -137,4 +139,9 @@ self.addEventListener("notificationclick", (event) => {
       return self.clients.openWindow(url);
     }),
   );
+});
+
+// The page asks a freshly installed version to take over ("Reload" on the update banner).
+self.addEventListener("message", (event) => {
+  if (event.data === "SKIP_WAITING") self.skipWaiting();
 });

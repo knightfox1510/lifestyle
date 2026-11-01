@@ -6,7 +6,7 @@ import { VoiceButton } from "@/components/voice-input";
 import { AccuracyBadge, FoodSearch, PeoplePortions, type FoodHit, type PersonPortion } from "@/components/nutrition-ui";
 import { compressImage } from "@/lib/compress-image";
 import type { Meal } from "@/lib/types";
-import { MEAL_META, MEAL_ORDER, mealForHour } from "@/modules/food/meta";
+import { MEAL_DEFAULT_TIME, MEAL_META, MEAL_ORDER, eatenAtFor, mealForHour, type LogDay } from "@/modules/food/meta";
 import { computeItem, type CalcItem } from "@/modules/nutrition/compute";
 import { IRRITANT_META, type Irritant } from "@/modules/nutrition/irritants";
 import { logFoodForPeople } from "./actions";
@@ -19,12 +19,12 @@ type Item = CalcItem & { keep: boolean; open: boolean };
  * ingredients with grams → nutrition is calculated from food data (macros +
  * micronutrients). Grams and matches are editable; log for one or both of you.
  */
-export function FoodAiAdd({ ownerId, people }: { ownerId: string; people: PersonPortion[] }) {
+export function FoodAiAdd({ ownerId, people, day, meal: preset }: { ownerId: string; people: PersonPortion[]; day?: LogDay; meal?: Meal }) {
   const [text, setText] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<Item[] | null>(null);
-  const [meal, setMeal] = useState<Meal>(() => mealForHour(new Date().getHours()));
+  const [meal, setMeal] = useState<Meal>(() => preset ?? mealForHour(new Date().getHours()));
   const [note, setNote] = useState<string | null>(null);
   const [who, setWho] = useState<Record<string, number>>({ [ownerId]: 1 });
   const [msg, setMsg] = useState<{ tone: "danger" | "accent"; text: string } | null>(null);
@@ -36,14 +36,15 @@ export function FoodAiAdd({ ownerId, people }: { ownerId: string; people: Person
     setMsg(null);
     const fd = new FormData();
     fd.set("text", text);
-    fd.set("time", new Date().toTimeString().slice(0, 5));
+    fd.set("time", day && day.date !== day.today ? `${MEAL_DEFAULT_TIME[meal]} on ${day.date}` : new Date().toTimeString().slice(0, 5));
     if (photo) fd.set("photo", await compressImage(photo, 1600));
     try {
       const res = await fetch("/api/ai/food-estimate", { method: "POST", body: fd });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? "Estimate failed");
       setItems((body.items as CalcItem[]).map((i) => ({ ...i, keep: true, open: false })));
-      setMeal(body.meal);
+      // A meal chosen with "＋ Add" (or an earlier day) wins over the AI's guess from the clock.
+      if (!preset && (!day || day.date === day.today)) setMeal(body.meal);
       setNote(body.note);
     } catch (e) {
       setMsg({ tone: "danger", text: (e as Error).message });
@@ -75,7 +76,7 @@ export function FoodAiAdd({ ownerId, people }: { ownerId: string; people: Person
             source: photo ? ("photo" as const) : i.recipe && i.recipe.kind !== "dish" ? ("recipe" as const) : ("ai_estimate" as const),
           };
         });
-      const res = await logFoodForPeople(chosen, meal, payload);
+      const res = await logFoodForPeople(chosen, meal, payload, eatenAtFor(day, meal));
       if (res.error) setMsg({ tone: "danger", text: res.error });
       else {
         setMsg({ tone: "accent", text: res.message ?? "Added." });

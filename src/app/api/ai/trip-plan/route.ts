@@ -6,6 +6,9 @@ import { tripPlanSchema } from "@/lib/ai/phase2-schemas";
 import { buildAiContext } from "@/lib/ai/context";
 import type { Trip, TripItem } from "@/lib/types";
 
+/** Photo and long AI requests can take a while; allow up to a minute on Vercel. */
+export const maxDuration = 60;
+
 const body = z.object({ tripId: z.uuid(), notes: z.string().trim().max(600).optional(), useMedicalHistory: z.boolean().optional() });
 
 export async function POST(request: Request) {

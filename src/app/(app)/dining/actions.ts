@@ -155,7 +155,7 @@ export async function importMenu(placeId: string, items: unknown): Promise<Actio
 }
 
 /** Logs a saved restaurant dish to someone's food diary with a portion factor. */
-export async function logDish(dishId: string, ownerId: string, meal: (typeof MEALS)[number], factor: number): Promise<ActionResult> {
+export async function logDish(dishId: string, ownerId: string, meal: (typeof MEALS)[number], factor: number, eatenAt?: string): Promise<ActionResult> {
   if (!z.uuid().safeParse(dishId).success || !(factor > 0 && factor <= 5)) return { error: "Invalid portion." };
   const session = await getSession();
   const { data } = await session.supabase
@@ -166,7 +166,7 @@ export async function logDish(dishId: string, ownerId: string, meal: (typeof MEA
     .maybeSingle();
   if (!data) return { error: "Dish not found." };
   const dish = data as unknown as Pick<DiningDish, "id" | "name" | "calories" | "protein_g" | "carbs_g" | "fat_g"> & { dining_places: { name: string } | null };
-  const res = await addFoodItems(ownerId, meal, [scaleDish(dish, factor, dish.dining_places?.name)], "restaurant", undefined, null, dish.id);
+  const res = await addFoodItems(ownerId, meal, [scaleDish(dish, factor, dish.dining_places?.name)], "restaurant", eatenAt, null, dish.id);
   if (res.ok) refreshModule("/dining");
   return res.ok ? { ok: true, message: `Logged ${dish.name}${dish.calories ? ` (~${Math.round(Number(dish.calories) * factor)} kcal)` : ""}.` } : res;
 }

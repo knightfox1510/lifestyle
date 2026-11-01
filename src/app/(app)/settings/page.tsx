@@ -31,6 +31,9 @@ export default async function SettingsPage() {
         />
         <InstallPrompt />
         <SignOutButton />
+        <p className="pt-2 text-center text-[12px] text-fg-muted">
+          {t("Version")} {(process.env.VERCEL_GIT_COMMIT_SHA ?? "dev").slice(0, 7)}
+        </p>
       </div>
     </>
   );

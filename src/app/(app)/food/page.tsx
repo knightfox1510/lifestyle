@@ -3,9 +3,10 @@ import { WaterButtons } from "@/components/water-buttons";
 import { getT } from "@/lib/i18n/server";
 import { getSession } from "@/lib/session";
 import { addDays, localDate, localTime, shortDate, startOfLocalDayIso, todayIn } from "@/lib/dates";
-import { Card, buttonClass, cx } from "@/components/ui";
+import { Card, buttonClass, cx, Notice } from "@/components/ui";
 import type { FluidIntake, FoodEntry, NutritionGoals } from "@/lib/types";
-import { MEAL_META, MEAL_ORDER, totals } from "@/modules/food/meta";
+import { MEAL_META, MEAL_ORDER, eatenAtFor, totals } from "@/modules/food/meta";
+import { DateJump } from "./date-jump";
 import { MicroPanel } from "@/components/micro-panel";
 import { AccuracyBadge } from "@/components/nutrition-ui";
 import { dailyTargets, fromEntry, sum } from "@/modules/nutrition/nutrients";
@@ -25,8 +26,10 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
   const ownerId = session.subject.user_id;
   const tz = session.profile.timezone;
   const today = todayIn(tz);
-  const { date: dParam } = await searchParams;
+  const { date: dParam, meal: mParam } = await searchParams;
   const date = typeof dParam === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dParam) && dParam <= today ? dParam : today;
+  const presetMeal = MEAL_ORDER.find((m) => m === mParam);
+  const day = { date, today, tz };
   const canWrite = session.accessTo("food_diary", ownerId) === "write";
   const isOwner = ownerId === session.userId;
   // Your own drinks always show (water reminders); a partner's only with bladder-diary access.
@@ -82,7 +85,7 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <Link href={`/food?date=${addDays(date, -1)}`} className={buttonClass("ghost", "sm")}>← {shortDate(addDays(date, -1))}</Link>
-        <p className="font-semibold">{date === today ? t("Today") : shortDate(date)}</p>
+        <DateJump date={date} today={today} label={date === today ? t("Today") : shortDate(date)} />
         {date < today ? (
           <Link href={date === addDays(today, -1) ? "/food" : `/food?date=${addDays(date, 1)}`} className={buttonClass("ghost", "sm")}>{shortDate(addDays(date, 1))} →</Link>
         ) : (
@@ -129,16 +132,25 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
         </Card>
       ) : null}
 
-      {canWrite && date === today ? (
-        <>
-          <FoodAiAdd ownerId={ownerId} people={session.members.filter((m) => session.accessTo("food_diary", m.user_id) === "write").map((m) => ({ id: m.user_id, name: m.user_id === session.userId ? "Me" : m.display_name }))} />
+      {canWrite ? (
+        <div id="add" className="scroll-mt-20 space-y-3">
+          {date !== today ? (
+            <Notice tone="accent">{t("Adding to {date}. Entries are saved at the meal's usual time.", { date: shortDate(date) })}</Notice>
+          ) : null}
+          <FoodAiAdd
+            key={`${date}-${presetMeal ?? ""}`}
+            ownerId={ownerId}
+            day={day}
+            meal={presetMeal}
+            people={session.members.filter((m) => session.accessTo("food_diary", m.user_id) === "write").map((m) => ({ id: m.user_id, name: m.user_id === session.userId ? "Me" : m.display_name }))}
+          />
           <div className="flex flex-wrap gap-x-6 gap-y-2">
-            <ManualFoodForm ownerId={ownerId} />
+            <ManualFoodForm key={`m-${date}-${presetMeal ?? ""}`} ownerId={ownerId} day={day} meal={presetMeal} />
             <Link href="/food/product" className="text-sm text-fg-muted hover:text-fg">▥ {t("Scan a packaged food")}</Link>
             <Link href="/food/dishes" className="text-sm text-fg-muted hover:text-fg">🍛 {t("Indian dishes")}</Link>
-            {restaurantPlaces.length ? <RestaurantPicker ownerId={ownerId} places={restaurantPlaces} dishes={restaurantDishes} /> : null}
+            {restaurantPlaces.length ? <RestaurantPicker ownerId={ownerId} places={restaurantPlaces} dishes={restaurantDishes} day={day} /> : null}
           </div>
-        </>
+        </div>
       ) : null}
 
       {MEAL_ORDER.map((meal) => {
@@ -147,8 +159,15 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
         return (
           <Card key={meal} className="!p-4">
             <div className="mb-1 flex items-baseline justify-between">
-              <h2 className="font-semibold">{MEAL_META[meal].icon} {MEAL_META[meal].label}</h2>
-              <span className="text-sm tabular-nums text-fg-muted">{mt.calories} kcal</span>
+              <h2 className="font-semibold">{MEAL_META[meal].icon} {t(MEAL_META[meal].label)}</h2>
+              <span className="flex items-center gap-3">
+                <span className="text-sm tabular-nums text-fg-muted">{mt.calories} kcal</span>
+                {canWrite ? (
+                  <Link href={`/food?date=${date}&meal=${meal}#add`} scroll={false} className={buttonClass("soft", "sm")}>
+                    ＋ {t("Add")}
+                  </Link>
+                ) : null}
+              </span>
             </div>
             {list.length ? (
               <ul className="divide-y divide-border">
@@ -179,18 +198,18 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-fg-muted">Nothing logged.</p>
+              <p className="text-sm text-fg-muted">{t("Nothing logged.")}</p>
             )}
           </Card>
         );
       })}
 
-      {canWrite && date === today && favourites.length ? (
+      {canWrite && favourites.length ? (
         <Card>
-          <h2 className="mb-2 text-sm font-semibold">Have it again</h2>
+          <h2 className="mb-2 text-sm font-semibold">{t("Have it again")}</h2>
           <div className="flex flex-wrap gap-1.5">
             {favourites.map((f) => (
-              <form key={f.id} action={repeatFood.bind(null, f.id, ownerId, f.meal)}>
+              <form key={f.id} action={repeatFood.bind(null, f.id, ownerId, f.meal, eatenAtFor(day, f.meal))}>
                 <button className="rounded-full border border-border px-3 py-1 text-sm hover:bg-surface-2">
                   + {f.description} <span className="text-fg-muted">{f.calories ?? ""}</span>
                 </button>

@@ -7,6 +7,9 @@ import { householdFoods, matchIngredient } from "@/lib/nutrition/resolve";
 import { MEASURE_HINTS, STAPLES } from "@/modules/nutrition/staples";
 import type { Recipe } from "@/lib/types";
 
+/** Photo and long AI requests can take a while; allow up to a minute on Vercel. */
+export const maxDuration = 60;
+
 /** Works out grams for each recipe ingredient line and matches it to food data. */
 export async function POST(request: Request) {
   return aiHandler(async () => {

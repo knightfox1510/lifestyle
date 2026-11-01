@@ -2,7 +2,8 @@
 -- Paste this whole file into Supabase → SQL Editor → New query → Run.
 -- Safe to run more than once: anything already there is left as it is.
 -- Adds: Home view choice, "close your day" and partner-update settings,
--- partner cheers, milestones, the streak calendar function and the AI model setting.
+-- partner cheers, milestones, the streak calendar function, the AI model setting
+-- and the "Other / misc" meal.
 -- (New projects don't need this; all-in-one.sql already includes it.)
 
 -- ---------------------------------------------------------------- profiles --
@@ -92,3 +93,9 @@ do $$ begin
   alter table public.households add constraint households_ai_model_check check (ai_model in ('standard', 'best'));
 exception when duplicate_object then null;
 end $$;
+
+-- --------------------------------------------------- "Other / misc" meal --
+alter table public.food_entries drop constraint if exists food_entries_meal_check;
+alter table public.food_entries add constraint food_entries_meal_check check (meal in ('breakfast', 'lunch', 'dinner', 'snack', 'other'));
+alter table public.meal_plan drop constraint if exists meal_plan_meal_check;
+alter table public.meal_plan add constraint meal_plan_meal_check check (meal in ('breakfast', 'lunch', 'dinner', 'snack', 'other'));

@@ -6,6 +6,9 @@ import { AiError, assertQuota, generate, recordUsage } from "@/lib/ai/gemini";
 import { medicalExtractionSchema, toGeminiSchema } from "@/lib/ai/schemas";
 import type { MedicalDocument } from "@/lib/types";
 
+/** Photo and long AI requests can take a while; allow up to a minute on Vercel. */
+export const maxDuration = 60;
+
 const bodySchema = z.object({ documentId: z.uuid() });
 
 const PROMPT = `You are reading a patient's medical document (hospital paper, discharge summary, prescription, lab report or similar).

@@ -71,6 +71,15 @@ do $$ begin
   assert (select count(*) from public.custom_foods) = 0, 'stranger: no foods';
 end $$;
 
+-- "Other / misc" meal is accepted; unknown meals are not.
+select set_config('request.jwt.claim.sub', :s, false);
+insert into public.food_entries (household_id, meal, description) values (:'hid', 'other', 'Evening chai');
+do $$ begin
+  insert into public.food_entries (household_id, meal, description) values ((select id from public.households where name = 'Nutri home'), 'brunch', 'x');
+  raise exception 'SHOULD_FAIL: unknown meal';
+exception when check_violation then null;
+end $$;
+
 -- App language: en / hi / mr only.
 select set_config('request.jwt.claim.sub', :s, false);
 update public.profiles set language = 'mr' where id = auth.uid();

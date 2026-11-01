@@ -4,6 +4,9 @@ import { getSession } from "@/lib/session";
 import { AiError, assertQuota, generate, recordUsage } from "@/lib/ai/gemini";
 import { SAFETY_INSTRUCTIONS, buildAiContext } from "@/lib/ai/context";
 
+/** Photo and long AI requests can take a while; allow up to a minute on Vercel. */
+export const maxDuration = 60;
+
 const bodySchema = z.object({
   prompt: z.string().trim().min(1).max(4000),
   subjectId: z.uuid().optional(),

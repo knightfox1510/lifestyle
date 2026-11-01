@@ -4,7 +4,7 @@ import { z } from "zod";
 import { errorMessage, refreshModule, requireModule } from "@/lib/guards";
 import { addDays, todayIn } from "@/lib/dates";
 import { scanItemSchema } from "@/lib/ai/phase2-schemas";
-import { GROCERY_CATEGORIES, type ActionResult } from "@/lib/types";
+import { GROCERY_CATEGORIES, type ActionResult, type Meal } from "@/lib/types";
 import { guessCategory } from "@/modules/groceries/meta";
 import { logRecipeForPeople } from "@/app/(app)/recipes/actions";
 
@@ -112,7 +112,7 @@ export async function deletePantryItem(id: string) {
 }
 
 /** Eat portions of a leftover: logs them from its recipe and counts down; used up at 0. */
-export async function eatLeftover(pantryId: string, people: { ownerId: string; servings: number }[], meal: "breakfast" | "lunch" | "dinner" | "snack"): Promise<ActionResult> {
+export async function eatLeftover(pantryId: string, people: { ownerId: string; servings: number }[], meal: Meal): Promise<ActionResult> {
   const session = await requireModule("pantry");
   const { data: item } = await session.supabase.from("pantry_items").select("id, recipe_id, portions, name").eq("id", pantryId).eq("household_id", session.household.id).maybeSingle();
   if (!item?.recipe_id) return { error: "This leftover isn't linked to a recipe." };

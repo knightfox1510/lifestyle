@@ -2326,3 +2326,13 @@ grant execute on function public.activity_days(uuid, date) to authenticated;
 -- or best (Pro: smarter, slower, fewer free requests).
 alter table public.households
   add column ai_model text not null default 'standard' check (ai_model in ('standard', 'best'));
+
+-- ============================================================
+-- 20261112000001_meal_other.sql
+-- ============================================================
+
+-- A fifth meal: "other" (misc: drinks or bites outside the usual meals).
+alter table public.food_entries drop constraint if exists food_entries_meal_check;
+alter table public.food_entries add constraint food_entries_meal_check check (meal in ('breakfast', 'lunch', 'dinner', 'snack', 'other'));
+alter table public.meal_plan drop constraint if exists meal_plan_meal_check;
+alter table public.meal_plan add constraint meal_plan_meal_check check (meal in ('breakfast', 'lunch', 'dinner', 'snack', 'other'));

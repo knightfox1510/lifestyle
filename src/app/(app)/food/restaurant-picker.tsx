@@ -3,14 +3,14 @@
 import { useMemo, useState, useTransition } from "react";
 import { Button, Card, Field, Notice, Select } from "@/components/ui";
 import type { Meal } from "@/lib/types";
-import { MEAL_META, MEAL_ORDER, mealForHour } from "@/modules/food/meta";
+import { MEAL_META, MEAL_ORDER, mealForHour, eatenAtFor, type LogDay } from "@/modules/food/meta";
 import { portionOptions } from "@/modules/dining/menu";
 import { logDish } from "@/app/(app)/dining/actions";
 
 type Dish = { id: string; name: string; place_id: string; calories: number | null; section: string | null };
 
 /** Log a saved restaurant dish (from Dining menus) to the food diary. */
-export function RestaurantPicker({ ownerId, places, dishes }: { ownerId: string; places: { id: string; name: string }[]; dishes: Dish[] }) {
+export function RestaurantPicker({ ownerId, places, dishes, day }: { ownerId: string; places: { id: string; name: string }[]; dishes: Dish[]; day?: LogDay }) {
   const [open, setOpen] = useState(false);
   const [placeId, setPlaceId] = useState(places[0]?.id ?? "");
   const [dishId, setDishId] = useState("");
@@ -69,7 +69,7 @@ export function RestaurantPicker({ ownerId, places, dishes }: { ownerId: string;
           disabled={!dishId || pending}
           onClick={() =>
             start(async () => {
-              const r = await logDish(dishId, ownerId, meal, portions.find((p) => p.key === portion)?.factor ?? 1);
+              const r = await logDish(dishId, ownerId, meal, portions.find((p) => p.key === portion)?.factor ?? 1, eatenAtFor(day, meal));
               setMsg(r.error ? { tone: "danger", text: r.error } : { tone: "accent", text: r.message ?? "Logged." });
               if (!r.error) setDishId("");
             })

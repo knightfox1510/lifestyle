@@ -6,6 +6,9 @@ import { SAFETY_INSTRUCTIONS, buildAiContext } from "@/lib/ai/context";
 import { weekNutrition } from "@/lib/nutrition/week";
 import { NUTRIENT_META, formatNutrient, type NutrientKey } from "@/modules/nutrition/nutrients";
 
+/** Photo and long AI requests can take a while; allow up to a minute on Vercel. */
+export const maxDuration = 60;
+
 const schema = z.object({ summary: z.string().max(600), tips: z.array(z.string().max(300)).min(1).max(4) });
 
 export async function POST(request: Request) {

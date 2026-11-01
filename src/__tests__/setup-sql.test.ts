@@ -11,7 +11,7 @@ describe("supabase/setup/all-in-one.sql", () => {
 describe("supabase/setup/update-existing-database.sql", () => {
   const update = readFileSync(new URL("../../supabase/setup/update-existing-database.sql", import.meta.url), "utf8");
   it("covers everything added after the language migration", () => {
-    for (const thing of ["home_view", "close_day", "close_day_time", "partner_updates", "public.cheers", "public.milestones", "public.activity_days", "ai_model"]) {
+    for (const thing of ["home_view", "close_day", "close_day_time", "partner_updates", "public.cheers", "public.milestones", "public.activity_days", "ai_model", "'other'"]) {
       expect(update, thing).toContain(thing);
     }
   });

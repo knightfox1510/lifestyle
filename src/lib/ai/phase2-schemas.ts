@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { BLADDER_TRIGGERS, DRINKS, GROCERY_CATEGORIES, LEAK_AMOUNTS } from "@/lib/types";
 
-export const MEALS = ["breakfast", "lunch", "dinner", "snack"] as const;
+export const MEALS = ["breakfast", "lunch", "dinner", "snack", "other"] as const;
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 export const foodItemSchema = z.object({

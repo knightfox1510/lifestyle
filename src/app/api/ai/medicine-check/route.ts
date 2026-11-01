@@ -7,6 +7,9 @@ import { medicineCheckSchema } from "@/lib/ai/health-schemas";
 import { medicineChecksFor } from "@/lib/medicine-checks";
 import { aiLanguageLine } from "@/lib/i18n/server";
 
+/** Photo and long AI requests can take a while; allow up to a minute on Vercel. */
+export const maxDuration = 60;
+
 /**
  * AI second look at a medicine list, with the person's conditions, allergies
  * and lab results. Complements the rule-based checks; never a prescription.

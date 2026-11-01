@@ -10,6 +10,9 @@ import { computeItem, type CalcItem } from "@/modules/nutrition/compute";
 import { cleanIrritants } from "@/modules/nutrition/irritants";
 import type { Nutrients } from "@/modules/nutrition/nutrients";
 
+/** Photo and long AI requests can take a while; allow up to a minute on Vercel. */
+export const maxDuration = 60;
+
 /**
  * Turns a description/photo of a meal into nutrition. AI only breaks it down
  * (saved recipe + servings, or ingredients + grams); the numbers come from

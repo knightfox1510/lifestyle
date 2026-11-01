@@ -89,3 +89,19 @@ describe("food helpers", () => {
     expect(mealForHour(21)).toBe("dinner");
   });
 });
+
+describe("mealTimeOn", () => {
+  it("uses the meal's usual local time in the person's timezone", async () => {
+    const { mealTimeOn } = await import("@/modules/food/meta");
+    const later = new Date("2030-01-01T00:00:00Z");
+    expect(mealTimeOn("2026-11-05", "lunch", "Asia/Kolkata", later)).toBe("2026-11-05T08:00:00.000Z"); // 13:30 IST
+    expect(mealTimeOn("2026-11-05", "breakfast", "Asia/Kolkata", later)).toBe("2026-11-05T03:00:00.000Z");
+    expect(mealTimeOn("2026-07-01", "dinner", "Europe/London", later)).toBe("2026-07-01T19:30:00.000Z"); // BST
+    expect(mealTimeOn("2026-11-05", "other", "UTC", later)).toBe("2026-11-05T11:00:00.000Z");
+  });
+  it("never returns a time after now", async () => {
+    const { mealTimeOn } = await import("@/modules/food/meta");
+    const now = new Date("2026-11-05T04:00:00Z"); // 09:30 IST
+    expect(mealTimeOn("2026-11-05", "dinner", "Asia/Kolkata", now)).toBe(now.toISOString());
+  });
+});

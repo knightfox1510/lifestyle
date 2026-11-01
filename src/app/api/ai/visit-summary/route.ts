@@ -5,6 +5,9 @@ import { aiHandler, runJson } from "@/lib/ai/run";
 import { visitSummarySchema } from "@/lib/ai/health-schemas";
 import { loadVisitData, visitDataText, VISIT_PERIODS } from "@/lib/visit-summary";
 
+/** Photo and long AI requests can take a while; allow up to a minute on Vercel. */
+export const maxDuration = 60;
+
 /** Short doctor-facing overview of the visit summary data. */
 export async function POST(request: Request) {
   return aiHandler(async () => {

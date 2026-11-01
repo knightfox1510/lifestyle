@@ -6,6 +6,9 @@ import { nutritionGoalSchema } from "@/lib/ai/phase2-schemas";
 import { SAFETY_INSTRUCTIONS, buildAiContext } from "@/lib/ai/context";
 import { personFacts } from "@/lib/ai/person-facts";
 
+/** Photo and long AI requests can take a while; allow up to a minute on Vercel. */
+export const maxDuration = 60;
+
 const body = z.object({
   subjectId: z.uuid(),
   goal: z.enum(["lose", "maintain", "gain", "recomp"]),

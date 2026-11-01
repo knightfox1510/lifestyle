@@ -581,4 +581,13 @@ export const PHRASES: Record<string, { hi: string; mr: string }> = {
   "We sent a code and a link to {email}. Type the code here, or tap the link in the email.": { hi: "हमने {email} पर एक कोड और लिंक भेजा है। कोड यहाँ लिखें, या ईमेल में लिंक पर टैप करें।", mr: "आम्ही {email} वर कोड आणि लिंक पाठवली आहे. कोड इथे टाका किंवा ईमेलमधील लिंकवर टॅप करा." },
   "Welcome to Hearth": { hi: "Hearth में आपका स्वागत है", mr: "Hearth मध्ये स्वागत आहे" },
   "or": { hi: "या", mr: "किंवा" },
+  "A new version of Hearth is ready.": { hi: "Hearth का नया वर्ज़न तैयार है।", mr: "Hearth ची नवीन आवृत्ती तयार आहे." },
+  "Adding to {date}. Entries are saved at the meal's usual time.": { hi: "{date} में जोड़ रहे हैं। नोट भोजन के सामान्य समय पर सहेजे जाते हैं।", mr: "{date} मध्ये जोडत आहात. नोंदी जेवणाच्या नेहमीच्या वेळेला जतन होतात." },
+  "Enter calories yourself": { hi: "कैलोरी ख़ुद लिखें", mr: "कॅलरी स्वतः लिहा" },
+  "Have it again": { hi: "फिर से लें", mr: "पुन्हा घ्या" },
+  "Nothing logged.": { hi: "कुछ दर्ज नहीं।", mr: "काही नोंदले नाही." },
+  "Other / misc": { hi: "अन्य / फुटकर", mr: "इतर / किरकोळ" },
+  "Pick a day": { hi: "दिन चुनें", mr: "दिवस निवडा" },
+  "Reload": { hi: "दोबारा लोड करें", mr: "पुन्हा लोड करा" },
+  "Version": { hi: "वर्ज़न", mr: "आवृत्ती" },
 };

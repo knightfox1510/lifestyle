@@ -2,7 +2,7 @@ import { z } from "zod";
 import { getSession } from "@/lib/session";
 import { AiError } from "@/lib/ai/gemini";
 import { aiHandler, runJson } from "@/lib/ai/run";
-import { mealIdeasSchema } from "@/lib/ai/phase2-schemas";
+import { MEALS, mealIdeasSchema } from "@/lib/ai/phase2-schemas";
 import { SAFETY_INSTRUCTIONS, buildAiContext } from "@/lib/ai/context";
 import { personFacts } from "@/lib/ai/person-facts";
 import { addDays, localDate, startOfLocalDayIso, todayIn } from "@/lib/dates";
@@ -10,9 +10,12 @@ import { totals } from "@/modules/food/meta";
 import { daysUntil, inPantry } from "@/modules/pantry/match";
 import type { FoodEntry, PantryItem } from "@/lib/types";
 
+/** Photo and long AI requests can take a while; allow up to a minute on Vercel. */
+export const maxDuration = 60;
+
 const body = z.object({
   subjectId: z.uuid(),
-  meal: z.enum(["breakfast", "lunch", "dinner", "snack"]),
+  meal: z.enum(MEALS),
   mode: z.enum(["pantry", "expiring", "any"]),
   maxMinutes: z.number().int().min(5).max(240),
   servings: z.number().int().min(1).max(12),
