@@ -7,6 +7,7 @@ import { Card, buttonClass, cx, Notice } from "@/components/ui";
 import type { FluidIntake, FoodEntry, NutritionGoals } from "@/lib/types";
 import { MEAL_META, MEAL_ORDER, eatenAtFor, totals } from "@/modules/food/meta";
 import { DateJump } from "./date-jump";
+import { supplementNutrientsByDay } from "@/lib/supplement-nutrients";
 import { MicroPanel } from "@/components/micro-panel";
 import { AccuracyBadge } from "@/components/nutrition-ui";
 import { dailyTargets, fromEntry, sum } from "@/modules/nutrition/nutrients";
@@ -55,7 +56,10 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
   const restaurantDishes = (rd.data ?? []) as { id: string; name: string; place_id: string; calories: number | null; section: string | null }[];
   const entries = ((e ?? []) as FoodEntry[]).filter((x) => localDate(x.eaten_at, tz) === date);
   const goals = g as NutritionGoals | null;
-  const tot = totals(entries);
+  const supp = (await supplementNutrientsByDay(session, ownerId, date, date))[date] ?? {};
+  const foodTot = totals(entries);
+  // Protein/calories from supplements (e.g. whey) count towards the day too.
+  const tot = { ...foodTot, calories: foodTot.calories + Math.round(supp.calories ?? 0), protein_g: Math.round((foodTot.protein_g + (supp.protein_g ?? 0)) * 10) / 10 };
   const dayNutrients = sum(entries.map((x) => fromEntry({ ...x, micros: x.micros ?? {} })));
   const targets = dailyTargets((mp as { sex: "female" | "male" | "other" | null } | null)?.sex ?? null, goals?.calories ?? null);
   const labLinks = labNutrientLinks((labRows ?? []) as Pick<LabResult, "marker" | "value" | "unit" | "flag" | "test_date">[]);
@@ -121,12 +125,12 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
         ) : null}
       </Card>
 
-      {entries.length ? (
+      {entries.length || Object.keys(supp).length ? (
         <Card>
           <details open={labLinks.size > 0}>
             <summary className="cursor-pointer text-sm font-semibold">{t("Vitamins & minerals")} {labLinks.size ? <span className="text-xs font-normal text-danger">· {t("linked to your blood work")}</span> : null}</summary>
             <div className="mt-3">
-              <MicroPanel totals={dayNutrients} targets={targets} labLinks={labLinks} coverage={{ withData, total: entries.length }} />
+              <MicroPanel totals={dayNutrients} targets={targets} labLinks={labLinks} coverage={{ withData, total: entries.length }} supplements={supp} />
             </div>
           </details>
         </Card>

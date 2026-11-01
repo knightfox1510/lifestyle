@@ -4,6 +4,8 @@ import { z } from "zod";
 import { errorMessage, refreshModule, requireWrite } from "@/lib/guards";
 import { getSession } from "@/lib/session";
 import { SUPPLEMENT_TIMINGS, type ActionResult } from "@/lib/types";
+import { NUTRIENT_KEYS } from "@/modules/nutrition/nutrients";
+import { confidentCatalogMatch } from "@/modules/nutrition/supplements";
 
 const MODULE = "supplements";
 
@@ -25,9 +27,16 @@ export async function addSupplement(_: ActionResult | null, form: FormData): Pro
   try {
     const session = await requireWrite(MODULE, ownerId);
     const { count } = await session.supabase.from("supplements").select("id", { count: "exact", head: true }).eq("owner_id", ownerId);
-    const { error } = await session.supabase
-      .from("supplements")
-      .insert({ ...values, owner_id: ownerId, created_by: session.userId, household_id: session.household.id, sort: count ?? 0 });
+    // A clear match with a common product fills in its nutrients (editable later).
+    const match = confidentCatalogMatch(values.name);
+    const { error } = await session.supabase.from("supplements").insert({
+      ...values,
+      owner_id: ownerId,
+      created_by: session.userId,
+      household_id: session.household.id,
+      sort: count ?? 0,
+      ...(match ? { nutrients: match.nutrients, serving_label: match.serving, nutrients_source: "catalog" } : {}),
+    });
     if (error) return { error: "Couldn't add it." };
   } catch (e) {
     return { error: errorMessage(e) };
@@ -84,4 +93,30 @@ export async function deleteSupplement(id: string) {
   const session = await getSession();
   await session.supabase.from("supplements").delete().eq("id", id).eq("owner_id", session.userId);
   refreshModule("/supplements");
+}
+
+const nutrientsSchema = z
+  .record(z.string(), z.number().min(0).max(100000))
+  .transform((n) => Object.fromEntries(Object.entries(n).filter(([k, v]) => (NUTRIENT_KEYS as readonly string[]).includes(k) && v > 0)));
+
+/** Saves what one dose contains (counted on days it's ticked). */
+export async function saveSupplementNutrients(id: string, ownerId: string, input: unknown): Promise<ActionResult> {
+  const parsed = z
+    .object({ nutrients: nutrientsSchema, serving_label: z.string().trim().max(40).nullable(), source: z.enum(["manual", "label", "catalog"]) })
+    .safeParse(input);
+  if (!parsed.success || !z.uuid().safeParse(id).success) return { error: "Check the amounts." };
+  try {
+    const session = await requireWrite(MODULE, ownerId);
+    const { error } = await session.supabase
+      .from("supplements")
+      .update({ nutrients: parsed.data.nutrients, serving_label: parsed.data.serving_label, nutrients_source: parsed.data.source })
+      .eq("id", id)
+      .eq("owner_id", ownerId);
+    if (error) return { error: "Couldn't save. If you set up Hearth earlier, run update-existing-database.sql in Supabase first." };
+  } catch (e) {
+    return { error: errorMessage(e) };
+  }
+  refreshModule("/supplements");
+  refreshModule("/food");
+  return { ok: true, message: "Saved." };
 }

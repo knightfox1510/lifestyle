@@ -6,6 +6,7 @@ import type { PersonPortion } from "@/components/nutrition-ui";
 import type { Meal, Recipe } from "@/lib/types";
 import { MEAL_META, MEAL_ORDER, mealForHour } from "@/modules/food/meta";
 import { cookedRecipe, logRecipeForPeople } from "../actions";
+import { PantryUsePrompt } from "@/components/pantry-use-prompt";
 
 const KATORI_G = 150;
 
@@ -22,6 +23,8 @@ export function RecipeLog({ recipe, people, pantryOn }: { recipe: Recipe; people
   const [made, setMade] = useState(recipe.servings);
   const [days, setDays] = useState(2);
   const [msg, setMsg] = useState<{ tone: "accent" | "danger"; text: string } | null>(null);
+  // After cooking: ask which pantry ingredients were used (nothing changes until tapped).
+  const [usedNames, setUsedNames] = useState<string[] | null>(null);
   const [pending, start] = useTransition();
 
   const toServings = (v: number) => (unit === "serving" ? v : unit === "gram" ? v / (servingG ?? 1) : (v * KATORI_G) / (servingG ?? 1));
@@ -36,6 +39,7 @@ export function RecipeLog({ recipe, people, pantryOn }: { recipe: Recipe; people
         ? await cookedRecipe(recipe.id, { meal, made, people: entries, leftoverDays: days })
         : await logRecipeForPeople(recipe.id, entries, meal);
       setMsg(res.error ? { tone: "danger", text: res.error } : { tone: "accent", text: res.message ?? "Logged." });
+      if (!res.error && cooked) setUsedNames((recipe.ingredients ?? []).map((i) => i.name));
     });
   }
 
@@ -88,6 +92,7 @@ export function RecipeLog({ recipe, people, pantryOn }: { recipe: Recipe; people
         </div>
       ) : null}
       {msg ? <Notice tone={msg.tone}>{msg.text}</Notice> : null}
+      {usedNames ? <PantryUsePrompt names={usedNames} onDone={() => setUsedNames(null)} /> : null}
       <Button size="sm" disabled={pending || (!entries.length && !cooked)} onClick={submit}>
         {pending ? "Saving…" : cooked ? "Log & save leftovers" : "Log"}
       </Button>

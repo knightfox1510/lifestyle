@@ -3,6 +3,7 @@ import type { GroceryItem } from "@/lib/types";
 import Link from "next/link";
 import { buttonClass } from "@/components/ui";
 import { GroceryList } from "./grocery-list";
+import { RunningOut } from "./running-out";
 
 export const metadata = { title: "Grocery list" };
 
@@ -14,12 +15,18 @@ function recentCutoff() {
 export default async function GroceriesPage() {
   const session = await getSession();
   const since = recentCutoff();
-  const { data } = await session.supabase
-    .from("grocery_items")
-    .select("*")
-    .eq("household_id", session.household.id)
-    .or(`deleted_at.is.null,updated_at.gt.${since}`)
-    .order("created_at");
+  const pantryOn = session.isModuleEnabled("pantry");
+  const [{ data }, pantry] = await Promise.all([
+    session.supabase
+      .from("grocery_items")
+      .select("*")
+      .eq("household_id", session.household.id)
+      .or(`deleted_at.is.null,updated_at.gt.${since}`)
+      .order("created_at"),
+    pantryOn
+      ? session.supabase.from("pantry_items").select("id, name, staple, running_low").eq("household_id", session.household.id).is("used_up_at", null).is("recipe_id", null).order("name").limit(400)
+      : Promise.resolve({ data: [] }),
+  ]);
 
   return (
     <>
@@ -29,7 +36,13 @@ export default async function GroceriesPage() {
         {session.isModuleEnabled("recipes") ? <Link href="/recipes/plan" className={buttonClass("ghost", "sm")}>From this week&apos;s meal plan</Link> : null}
       </div>
     ) : null}
+    {pantryOn ? (
+      <div className="mb-3">
+        <RunningOut items={((pantry.data ?? []) as { id: string; name: string; staple?: boolean; running_low?: boolean }[]).map((p) => ({ id: p.id, name: p.name, staple: Boolean(p.staple), running_low: Boolean(p.running_low) }))} />
+      </div>
+    ) : null}
     <GroceryList
+      pantryOn={pantryOn}
       householdId={session.household.id}
       userId={session.userId}
       initialItems={(data ?? []) as GroceryItem[]}

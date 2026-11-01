@@ -105,3 +105,19 @@ describe("mealTimeOn", () => {
     expect(mealTimeOn("2026-11-05", "dinner", "Asia/Kolkata", now)).toBe(now.toISOString());
   });
 });
+
+describe("matchPantry", () => {
+  it("matches whole words, not fragments", async () => {
+    const { matchPantry, namesMatch } = await import("@/modules/pantry/match");
+    const pantry = [
+      { id: "1", name: "Malai Paneer 200g", used_up_at: null },
+      { id: "2", name: "Spinach (palak)", used_up_at: null },
+      { id: "3", name: "Toilet roll", used_up_at: null },
+      { id: "4", name: "Milk", used_up_at: "2026-11-01T00:00:00Z" },
+      { id: "5", name: "Sunflower oil", used_up_at: null },
+    ];
+    expect(matchPantry(["paneer", "spinach", "oil", "milk", "water"], pantry).map((p) => p.id)).toEqual(["1", "2", "5"]);
+    expect(namesMatch("oil", "Toilet roll")).toBe(false);
+    expect(namesMatch("palak", "Spinach")).toBe(false);
+  });
+});

@@ -10,6 +10,8 @@ import { DISHES } from "@/modules/nutrition/dishes";
 import { TRIGGER_LABEL } from "@/modules/bladder/meta";
 import { checkMedicines, type CheckMed } from "@/modules/medicines/checks";
 import { MILESTONES } from "@/modules/engagement/rings";
+import { NUTRIENT_META } from "@/modules/nutrition/nutrients";
+import { SUPPLEMENT_KEYS } from "@/modules/nutrition/supplements";
 
 function files(dir: string): string[] {
   return readdirSync(dir).flatMap((f) => {
@@ -49,6 +51,7 @@ describe("translations", () => {
       ...MILESTONES.flatMap((m) => [m.title, m.detail]),
       "Water", "Meals", "Medicines", "Check-in",
       "Health", "Food", "Family & home", "Leisure", "Admin",
+      ...SUPPLEMENT_KEYS.map((k) => NUTRIENT_META[k].label),
     ];
     expect(labels.filter((l) => !PHRASES[l])).toEqual([]);
   });

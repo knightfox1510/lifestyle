@@ -7,7 +7,8 @@ import { CATEGORY_META } from "@/modules/groceries/meta";
 import { daysUntil } from "@/modules/pantry/match";
 import { AddPantryForm } from "./add-form";
 import { LeftoverEat } from "./leftover-eat";
-import { deletePantryItem, markUsedUp, setExpiry, setOpened } from "./actions";
+import { deletePantryItem, setExpiry, setOpened } from "./actions";
+import { PantryItemActions } from "./item-actions";
 
 export const metadata = { title: "Pantry" };
 
@@ -81,18 +82,13 @@ export default async function PantryPage() {
                               </Badge>
                             ) : null}
                             {i.opened ? <Badge>opened</Badge> : null}
+                            {i.running_low ? <Badge tone="warn">running low</Badge> : null}
+                            {i.staple ? <Badge>★ staple</Badge> : null}
                           </div>
                         </div>
                         <div className="flex flex-wrap items-center gap-1">
                           {canLogFood && i.recipe_id && (i.portions ?? 0) > 0 ? <LeftoverEat pantryId={i.id} people={eaters} me={session.userId} /> : null}
-                          <form action={markUsedUp.bind(null, i.id, false)}>
-                            <button className={buttonClass("ghost", "sm")}>Used up</button>
-                          </form>
-                          {groceriesOn ? (
-                            <form action={markUsedUp.bind(null, i.id, true)}>
-                              <button className={buttonClass("ghost", "sm")} title="Mark used up and add to the grocery list">Used up + rebuy</button>
-                            </form>
-                          ) : null}
+                          <PantryItemActions id={i.id} staple={Boolean(i.staple)} runningLow={Boolean(i.running_low)} groceriesOn={groceriesOn} />
                           <details className="relative">
                             <summary className={cx(buttonClass("ghost", "sm"), "list-none")}>⋯</summary>
                             <div className="absolute right-0 z-10 mt-1 w-56 space-y-2 rounded-xl border border-border bg-surface p-3 shadow-lg">

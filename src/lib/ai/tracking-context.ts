@@ -58,7 +58,10 @@ export async function buildTrackingContext(session: AppSession, subjectId: strin
 
   const supList = (sups?.data ?? []) as Supplement[];
   if (supList.length) {
-    lines.push("", `Daily supplements: ${supList.map((s) => `${s.name}${s.dose ? ` ${s.dose}` : ""} (${TIMING_LABEL[s.timing].toLowerCase()})`).join("; ")}.`);
+    lines.push("", `Daily supplements: ${supList.map((s) => {
+      const n = Object.entries(s.nutrients ?? {}).filter(([, v]) => Number(v) > 0).map(([k, v]) => `${k.replace(/_(mg|mcg|g)$/, "")} ${v}${k.match(/_(mg|mcg|g)$/)?.[1] ?? ""}`);
+      return `${s.name}${s.dose ? ` ${s.dose}` : ""} (${TIMING_LABEL[s.timing].toLowerCase()}${n.length ? `; per dose: ${n.join(", ")}` : ""})`;
+    }).join("; ")}. Count these toward vitamin/mineral needs; don't push foods or extra supplements for nutrients already covered.`);
   }
 
   const ev = (events?.data ?? []) as BladderEvent[];

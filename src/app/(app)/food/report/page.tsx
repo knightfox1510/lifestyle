@@ -5,6 +5,8 @@ import { Card, EmptyState, buttonClass } from "@/components/ui";
 import { ColumnChart } from "@/components/charts";
 import { MicroPanel } from "@/components/micro-panel";
 import { weekNutrition } from "@/lib/nutrition/week";
+import { supplementNutrientsByDay } from "@/lib/supplement-nutrients";
+import { supplementTotals } from "@/modules/nutrition/supplements";
 import { NUTRIENT_META, formatNutrient } from "@/modules/nutrition/nutrients";
 import { ReportTips } from "./tips";
 
@@ -14,6 +16,8 @@ export default async function NutritionReportPage({ searchParams }: PageProps<"/
   const session = await getSession();
   const { week } = await searchParams;
   const r = await weekNutrition(session, session.subject.user_id, typeof week === "string" ? week : undefined);
+  const suppByDay = await supplementNutrientsByDay(session, session.subject.user_id, r.days[0], r.days[r.days.length - 1]);
+  const suppWeek = supplementTotals(Object.values(suppByDay).map((n) => ({ nutrients: n as Record<string, unknown> })));
 
   return (
     <div className="space-y-4">
@@ -54,7 +58,7 @@ export default async function NutritionReportPage({ searchParams }: PageProps<"/
 
           <Card>
             <h2 className="mb-2 text-sm font-semibold">Vitamins & minerals</h2>
-            <MicroPanel totals={r.total} targets={r.targets} labLinks={r.labLinks} coverage={r.coverage} days={Math.max(1, r.logged)} />
+            <MicroPanel totals={r.total} targets={r.targets} labLinks={r.labLinks} coverage={r.coverage} days={Math.max(1, r.logged)} supplements={suppWeek} />
           </Card>
 
           <div className="grid gap-4 md:grid-cols-2">

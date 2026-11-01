@@ -6,11 +6,15 @@ import { TIMING_LABEL } from "@/modules/supplements/meta";
 import { SupplementChecklist } from "./checklist";
 import { AddSupplementForm } from "./add-form";
 import { deleteSupplement, setSupplementActive, setSupplementAi } from "./actions";
+import { SupplementNutrientsEditor } from "./nutrients-editor";
+import { NUTRIENT_META, formatNutrient, type NutrientKey } from "@/modules/nutrition/nutrients";
+import { getT } from "@/lib/i18n/server";
 
 export const metadata = { title: "Supplements" };
 
 export default async function SupplementsPage() {
   const session = await getSession();
+  const t = await getT(session);
   const ownerId = session.subject.user_id;
   const canWrite = session.accessTo("supplements", ownerId) === "write";
   const isOwner = ownerId === session.userId;
@@ -100,6 +104,42 @@ export default async function SupplementsPage() {
               ))}
             </tbody>
           </table>
+        </Card>
+      ) : null}
+
+      {all.length ? (
+        <Card className="space-y-3">
+          <div>
+            <h2 className="font-semibold">{t("What's in each dose")}</h2>
+            <p className="text-sm text-fg-muted">{t("Counted in your daily vitamins & minerals (and protein) on the days you tick it.")}</p>
+          </div>
+          <ul className="divide-y divide-border">
+            {all.map((s) => {
+              const n = Object.entries(s.nutrients ?? {}).filter(([, v]) => Number(v) > 0);
+              return (
+                <li key={s.id} className="py-3">
+                  <details>
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-2">
+                      <span className="min-w-0">
+                        <span className="font-medium">{s.name}</span>
+                        <span className="block truncate text-xs text-fg-muted">
+                          {n.length
+                            ? n.map(([k, v]) => `${t(NUTRIENT_META[k as NutrientKey]?.label ?? k)} ${formatNutrient(k as NutrientKey, Number(v))}`).join(" · ")
+                            : t("Nutrients not added yet")}
+                        </span>
+                      </span>
+                      {canWrite ? <span className={buttonClass("soft", "sm")}>{n.length ? t("Edit") : t("Add nutrients")}</span> : null}
+                    </summary>
+                    {canWrite ? (
+                      <div className="mt-3">
+                        <SupplementNutrientsEditor id={s.id} ownerId={ownerId} name={s.name} initial={s.nutrients} initialServing={s.serving_label} />
+                      </div>
+                    ) : null}
+                  </details>
+                </li>
+              );
+            })}
+          </ul>
         </Card>
       ) : null}
     </div>

@@ -10,6 +10,7 @@ import { MEAL_DEFAULT_TIME, MEAL_META, MEAL_ORDER, eatenAtFor, mealForHour, type
 import { computeItem, type CalcItem } from "@/modules/nutrition/compute";
 import { IRRITANT_META, type Irritant } from "@/modules/nutrition/irritants";
 import { logFoodForPeople } from "./actions";
+import { PantryUsePrompt } from "@/components/pantry-use-prompt";
 import { useT } from "@/lib/i18n/client";
 
 type Item = CalcItem & { keep: boolean; open: boolean };
@@ -29,6 +30,7 @@ export function FoodAiAdd({ ownerId, people, day, meal: preset }: { ownerId: str
   const [who, setWho] = useState<Record<string, number>>({ [ownerId]: 1 });
   const [msg, setMsg] = useState<{ tone: "danger" | "accent"; text: string } | null>(null);
   const [saving, start] = useTransition();
+  const [usedNames, setUsedNames] = useState<string[] | null>(null);
   const t = useT();
 
   async function estimate() {
@@ -80,6 +82,9 @@ export function FoodAiAdd({ ownerId, people, day, meal: preset }: { ownerId: str
       if (res.error) setMsg({ tone: "danger", text: res.error });
       else {
         setMsg({ tone: "accent", text: res.message ?? "Added." });
+        // Home-cooked meals: offer to update the pantry for the ingredients used.
+        const names = items.filter((i) => i.keep).flatMap((i) => (i.components.length ? i.components.flatMap((c) => [c.name, c.matchName ?? ""]) : [i.description]));
+        if (names.length) setUsedNames(names);
         setItems(null);
         setText("");
         setPhoto(null);
@@ -115,6 +120,7 @@ export function FoodAiAdd({ ownerId, people, day, meal: preset }: { ownerId: str
       </Button>
       <p className="text-xs text-fg-muted">{t("Uses your saved recipes and foods first, then ingredients by weight. You can fix any grams before logging.")}</p>
       {msg ? <Notice tone={msg.tone}>{msg.text}</Notice> : null}
+      {usedNames ? <PantryUsePrompt names={usedNames} onDone={() => setUsedNames(null)} /> : null}
 
       {items ? (
         <div className="space-y-3 rounded-xl border border-border p-3">

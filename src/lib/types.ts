@@ -195,6 +195,10 @@ export type Supplement = {
   stock_count: number | null;
   active: boolean;
   include_in_ai: boolean;
+  /** Per one dose, app units (missing on databases not yet updated). */
+  nutrients?: Record<string, number> | null;
+  serving_label?: string | null;
+  nutrients_source?: "manual" | "label" | "catalog" | null;
 };
 
 export type SupplementLog = { supplement_id: string; owner_id: string; log_date: string; taken_at: string };
@@ -307,6 +311,9 @@ export type GroceryItem = {
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
+  /** Why it's on the list when it came from the pantry. */
+  reason?: "used_up" | "running_low" | "staple" | null;
+  pantry_item_id?: string | null;
 };
 
 // ------------------------------------------------------------- Phase 2 ----
@@ -420,6 +427,8 @@ export type PantryItem = {
   created_at: string;
   recipe_id?: string | null;
   portions?: number | null;
+  staple?: boolean;
+  running_low?: boolean;
 };
 
 export type FoodRef =

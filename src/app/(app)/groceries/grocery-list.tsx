@@ -1,6 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { useT } from "@/lib/i18n/client";
+import { useToast } from "@/components/toaster";
+import { restockFromGroceries } from "@/app/(app)/pantry/actions";
 import { createClient } from "@/lib/supabase/client";
 import { cacheGetAll, cachePutMany, outboxAdd, outboxAll, outboxRemove } from "@/lib/offline/idb";
 import { Badge, Button, Card, EmptyState, Input, Select, cx } from "@/components/ui";
@@ -35,12 +39,18 @@ export function GroceryList({
   userId,
   initialItems,
   names,
+  pantryOn = false,
 }: {
   householdId: string;
   userId: string;
   initialItems: GroceryItem[];
   names: Record<string, string>;
+  pantryOn?: boolean;
 }) {
+  const t = useT();
+  const { toast } = useToast();
+  const router = useRouter();
+  const [restocking, startRestock] = useTransition();
   const [items, setItems] = useState<Map<string, GroceryItem>>(() => new Map(initialItems.map((i) => [i.id, i])));
   const [status, setStatus] = useState<Status>("synced");
   const [pending, setPending] = useState(0);
@@ -257,15 +267,37 @@ export function GroceryList({
             <button className="text-sm font-medium text-fg-muted" onClick={() => setShowChecked(!showChecked)} aria-expanded={showChecked}>
               {showChecked ? "▾" : "▸"} In the cart ({done.length})
             </button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                for (const i of done) void change({ ...i, deleted_at: new Date().toISOString() });
-              }}
-            >
-              Clear cart
-            </Button>
+            <span className="flex flex-wrap justify-end gap-1">
+              {pantryOn ? (
+                <Button
+                  size="sm"
+                  variant="soft"
+                  pending={restocking}
+                  onClick={() =>
+                    startRestock(async () => {
+                      if (!navigator.onLine) return toast(t("You're offline. Put things in the pantry once you're back online."), { tone: "error" });
+                      const r = await restockFromGroceries(done.map((i) => i.id));
+                      if (r.error) return toast(r.error, { tone: "error" });
+                      const now = new Date().toISOString();
+                      setItems((m) => new Map([...m].map(([id, i]) => [id, done.some((d) => d.id === id) ? { ...i, deleted_at: now, updated_at: now } : i])));
+                      toast(r.message ?? t("Put in the pantry."));
+                      router.refresh();
+                    })
+                  }
+                >
+                  {t("Put in pantry & clear")}
+                </Button>
+              ) : null}
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  for (const i of done) void change({ ...i, deleted_at: new Date().toISOString() });
+                }}
+              >
+                {pantryOn ? t("Just clear") : t("Clear cart")}
+              </Button>
+            </span>
           </div>
           {showChecked ? (
             <ul className="space-y-1.5">
@@ -318,7 +350,12 @@ function Row({
         <p className={cx("truncate", item.checked && "line-through")}>
           {item.name} {item.quantity ? <span className="text-fg-muted">· {item.quantity}</span> : null}
         </p>
-        {who ? <p className="text-xs text-fg-muted">{item.checked ? `picked up by ${who}` : `added by ${who}`}</p> : null}
+        {who || item.reason ? (
+          <p className="text-xs text-fg-muted">
+            {item.reason ? <span className="mr-1.5 rounded-full bg-surface-2 px-1.5 py-0.5">{item.reason === "staple" ? "★ staple" : item.reason === "running_low" ? "running low" : "ran out"}</span> : null}
+            {who ? (item.checked ? `picked up by ${who}` : `added by ${who}`) : null}
+          </p>
+        ) : null}
       </div>
       <button
         type="button"
