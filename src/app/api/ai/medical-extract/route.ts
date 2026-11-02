@@ -3,7 +3,7 @@ import { z } from "zod";
 import { createPartFromBase64 } from "@google/genai";
 import { getSession } from "@/lib/session";
 import { AiError, assertQuota, generate, recordUsage } from "@/lib/ai/gemini";
-import { medicalExtractionSchema, toGeminiSchema } from "@/lib/ai/schemas";
+import { clampToSchema, medicalExtractionSchema, toGeminiSchema } from "@/lib/ai/schemas";
 import type { MedicalDocument } from "@/lib/types";
 
 /** Photo and long AI requests can take a while; allow up to a minute on Vercel. */
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
     });
     await recordUsage(session, "medical_extract", false, res.usageMetadata);
 
-    const extraction = medicalExtractionSchema.safeParse(JSON.parse(res.text ?? "{}"));
+    const extraction = medicalExtractionSchema.safeParse(clampToSchema(JSON.parse(res.text ?? "{}"), medicalExtractionSchema));
     if (!extraction.success) throw new AiError("The AI response couldn't be read. Try again.", 502);
 
     const { summary, document_date, provider, events, lab_results } = extraction.data;

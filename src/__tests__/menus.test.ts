@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { matchDish, portionOptions, scaleDish } from "@/modules/dining/menu";
-import { menuExtractSchema } from "@/lib/ai/phase2-schemas";
-import { toGeminiSchema } from "@/lib/ai/schemas";
+import { mealCalcSchema, menuExtractSchema } from "@/lib/ai/phase2-schemas";
+import { clampToSchema, medicalExtractionSchema, toGeminiSchema } from "@/lib/ai/schemas";
 
 const dishes = [
   { id: "1", name: "Smash Burger" },
@@ -53,5 +53,19 @@ describe("menu extraction schema", () => {
     const json = JSON.stringify(toGeminiSchema(menuExtractSchema));
     expect(json).not.toMatch(/"\$ref"|"oneOf"|"allOf"/);
     expect(json).toContain("restaurant_name");
+  });
+  it("leaves out array item limits, which Gemini rejects with a 400", () => {
+    for (const s of [menuExtractSchema, mealCalcSchema, medicalExtractionSchema]) {
+      const json = JSON.stringify(toGeminiSchema(s));
+      expect(json).not.toMatch(/"(max|min)Items"/);
+    }
+    expect(JSON.stringify(toGeminiSchema(mealCalcSchema))).toContain("At most 15 items.");
+  });
+  it("trims over-long AI lists back to the schema's limits", () => {
+    const answer = { meal: "lunch", items: Array.from({ length: 20 }, () => ({ components: Array(30).fill({}), irritants: Array(12).fill("spicy") })), note: null };
+    const out = clampToSchema(answer, mealCalcSchema);
+    expect(out.items).toHaveLength(15);
+    expect(out.items[0].components).toHaveLength(15);
+    expect(out.items[0].irritants).toHaveLength(8);
   });
 });

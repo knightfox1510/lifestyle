@@ -16,6 +16,7 @@ import { IRRITANT_META, type Irritant } from "@/modules/nutrition/irritants";
 import type { LabResult } from "@/lib/types";
 import { FoodAiAdd } from "./food-ai-add";
 import { ManualFoodForm } from "./manual-food-form";
+import { MealAdd } from "./meal-add";
 import { RestaurantPicker } from "./restaurant-picker";
 import { deleteFood, repeatFood } from "./actions";
 
@@ -35,6 +36,8 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
   const isOwner = ownerId === session.userId;
   // Your own drinks always show (water reminders); a partner's only with bladder-diary access.
   const fluidsVisible = ownerId === session.userId || (session.isModuleEnabled("bladder_diary") && session.accessTo("bladder_diary", ownerId) !== "none");
+
+  const people = session.members.filter((m) => session.accessTo("food_diary", m.user_id) === "write").map((m) => ({ id: m.user_id, name: m.user_id === session.userId ? "Me" : m.display_name }));
 
   const diningOn = session.isModuleEnabled("dining");
   const [{ data: e }, { data: g }, { data: recent }, fl, rp, rd] = await Promise.all([
@@ -146,7 +149,7 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
             ownerId={ownerId}
             day={day}
             meal={presetMeal}
-            people={session.members.filter((m) => session.accessTo("food_diary", m.user_id) === "write").map((m) => ({ id: m.user_id, name: m.user_id === session.userId ? "Me" : m.display_name }))}
+            people={people}
           />
           <div className="flex flex-wrap gap-x-6 gap-y-2">
             <ManualFoodForm key={`m-${date}-${presetMeal ?? ""}`} ownerId={ownerId} day={day} meal={presetMeal} />
@@ -162,17 +165,19 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
         const mt = totals(list);
         return (
           <Card key={meal} className="!p-4">
-            <div className="mb-1 flex items-baseline justify-between">
-              <h2 className="font-semibold">{MEAL_META[meal].icon} {t(MEAL_META[meal].label)}</h2>
-              <span className="flex items-center gap-3">
-                <span className="text-sm tabular-nums text-fg-muted">{mt.calories} kcal</span>
-                {canWrite ? (
-                  <Link href={`/food?date=${date}&meal=${meal}#add`} scroll={false} className={buttonClass("soft", "sm")}>
-                    ＋ {t("Add")}
-                  </Link>
-                ) : null}
-              </span>
-            </div>
+            {(() => {
+              const heading = (
+                <>
+                  <h2 className="font-semibold">{MEAL_META[meal].icon} {t(MEAL_META[meal].label)}</h2>
+                  <span className="ml-auto mr-3 text-sm tabular-nums text-fg-muted">{mt.calories} kcal</span>
+                </>
+              );
+              return canWrite ? (
+                <MealAdd key={`${date}-${meal}`} ownerId={ownerId} people={people} day={day} meal={meal}>{heading}</MealAdd>
+              ) : (
+                <div className="mb-1 flex items-baseline justify-between">{heading}</div>
+              );
+            })()}
             {list.length ? (
               <ul className="divide-y divide-border">
                 {list.map((x) => (

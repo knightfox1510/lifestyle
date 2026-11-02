@@ -5,7 +5,7 @@ import type { Part } from "@google/genai";
 import type { z } from "zod";
 import type { AppSession } from "@/lib/session";
 import { AiError, assertQuota, generate, recordUsage } from "@/lib/ai/gemini";
-import { toGeminiSchema } from "@/lib/ai/schemas";
+import { clampToSchema, toGeminiSchema } from "@/lib/ai/schemas";
 
 /** Calls Gemini for structured JSON, enforces the household quota, logs usage and validates the result. */
 export async function runJson<S extends z.ZodType>(
@@ -35,7 +35,7 @@ export async function runJson<S extends z.ZodType>(
     if (attempt === 0) await recordUsage(session, opts.feature, opts.usedHealth ?? false, res.usageMetadata);
     let json: unknown = undefined;
     try {
-      json = JSON.parse(res.text ?? "");
+      json = clampToSchema(JSON.parse(res.text ?? ""), opts.schema);
     } catch {
       /* retried below */
     }

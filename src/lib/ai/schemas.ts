@@ -37,9 +37,62 @@ export const medicalExtractionSchema = z.object({
 });
 export type MedicalExtraction = z.infer<typeof medicalExtractionSchema>;
 
-/** JSON schema for Gemini's responseJsonSchema. */
-export function toGeminiSchema(schema: z.ZodType) {
-  const json = z.toJSONSchema(schema) as Record<string, unknown>;
+type Json = Record<string, unknown>;
+
+/** The original JSON schema of a zod schema (with every limit still in it). */
+function rawJsonSchema(schema: z.ZodType): Json {
+  const json = z.toJSONSchema(schema) as Json;
   delete json.$schema;
   return json;
+}
+
+/**
+ * Gemini rejects schemas whose arrays carry item limits ("Request contains
+ * an invalid argument", 400): the limits blow up its constrained-decoding
+ * grammar. They are moved into the description instead; `clampToSchema`
+ * then trims any over-long list before zod validation.
+ */
+function relaxForGemini(node: unknown): unknown {
+  if (Array.isArray(node)) return node.map(relaxForGemini);
+  if (!node || typeof node !== "object") return node;
+  const out: Json = {};
+  for (const [k, v] of Object.entries(node as Json)) {
+    if (k === "maxItems" || k === "minItems") continue;
+    if (k === "properties" && v && typeof v === "object") {
+      out[k] = Object.fromEntries(Object.entries(v as Json).map(([pk, pv]) => [pk, relaxForGemini(pv)]));
+    } else out[k] = relaxForGemini(v);
+  }
+  const { maxItems, minItems } = node as { maxItems?: number; minItems?: number };
+  const hint = [minItems ? `At least ${minItems} item${minItems === 1 ? "" : "s"}.` : "", typeof maxItems === "number" ? `At most ${maxItems} items.` : ""].filter(Boolean).join(" ");
+  if (hint) out.description = [out.description, hint].filter(Boolean).join(" ");
+  return out;
+}
+
+/** JSON schema for Gemini's responseJsonSchema. */
+export function toGeminiSchema(schema: z.ZodType) {
+  return relaxForGemini(rawJsonSchema(schema)) as Json;
+}
+
+function clampNode(value: unknown, node: unknown): unknown {
+  if (!node || typeof node !== "object" || value == null) return value;
+  const n = node as { maxItems?: number; items?: unknown; properties?: Json; anyOf?: unknown[] };
+  if (Array.isArray(value)) {
+    const list = typeof n.maxItems === "number" ? value.slice(0, n.maxItems) : value;
+    if (n.items) return list.map((v) => clampNode(v, n.items));
+    if (n.anyOf) return clampNode(list, n.anyOf.find((o) => (o as Json)?.type === "array"));
+    return list;
+  }
+  if (typeof value === "object") {
+    if (n.properties) {
+      const obj = value as Json;
+      return Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, n.properties![k] ? clampNode(v, n.properties![k]) : v]));
+    }
+    if (n.anyOf) return clampNode(value, n.anyOf.find((o) => (o as Json)?.type === "object"));
+  }
+  return value;
+}
+
+/** Trims lists in an AI answer to the schema's item limits (which Gemini can't be given directly). */
+export function clampToSchema<T>(value: T, schema: z.ZodType): T {
+  return clampNode(value, rawJsonSchema(schema)) as T;
 }
