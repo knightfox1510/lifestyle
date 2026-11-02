@@ -24,7 +24,7 @@ export default async function HomePage() {
   const today = todayIn(tz);
   const now = localTime(new Date(), tz);
   const locale = `${session.profile.language ?? "en"}-IN`;
-  const can = (m: string) => session.isModuleEnabled(m) && session.accessTo(m, subject.user_id) !== "none";
+  const can = (m: string) => session.isShown(m) && session.accessTo(m, subject.user_id) !== "none";
 
   const water = await waterSettings(session.supabase, subject.user_id);
   const [day, me, partner, widgetsRes] = await Promise.all([

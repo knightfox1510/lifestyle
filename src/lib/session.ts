@@ -33,6 +33,10 @@ export type AppSession = {
   /** Whose personal data the screens show: me, or my partner in partner view. */
   subject: HouseholdMember;
   isModuleEnabled: (key: string) => boolean;
+  /** The person switched this feature off for themselves (Settings → My features). */
+  isHiddenFor: (key: string, userId: string) => boolean;
+  /** On for the household and not switched off by the person being viewed: use for navigation and hubs. */
+  isShown: (key: string) => boolean;
   /** What I can do with `ownerId`'s personal data in a module. */
   accessTo: (moduleKey: string, ownerId: string) => Access;
 };
@@ -87,11 +91,13 @@ export async function buildSession(
 
   const rawMembers = (membersRes.data ?? []) as Omit<HouseholdMember, "display_name">[];
   if (!rawMembers.some((m) => m.user_id === userId)) return null;
-  const { data: names } = await supabase
-    .from("profiles")
-    .select("id, display_name")
-    .in("id", rawMembers.map((m) => m.user_id));
-  const nameById = new Map((names ?? []).map((n: { id: string; display_name: string }) => [n.id, n.display_name]));
+  const ids = rawMembers.map((m) => m.user_id);
+  // hidden_modules is newer: fall back to names only on a database that hasn't been updated.
+  type NameRow = { id: string; display_name: string; hidden_modules?: string[] | null };
+  const first = await supabase.from("profiles").select("id, display_name, hidden_modules").in("id", ids);
+  const names: NameRow[] | null = first.error ? ((await supabase.from("profiles").select("id, display_name").in("id", ids)).data as NameRow[] | null) : (first.data as NameRow[] | null);
+  const nameById = new Map((names ?? []).map((n) => [n.id, n.display_name]));
+  const hiddenById = new Map((names ?? []).map((n) => [n.id, new Set(n.hidden_modules ?? [])]));
   const members: HouseholdMember[] = rawMembers.map((m) => ({
     ...m,
     display_name: nameById.get(m.user_id) || "Member",
@@ -121,6 +127,8 @@ export async function buildSession(
     viewMode,
     subject,
     isModuleEnabled: (key) => enabled.has(key) && MODULE_BY_KEY[key]?.status === "available",
+    isHiddenFor: (key, uid) => hiddenById.get(uid)?.has(key) ?? false,
+    isShown: (key) => enabled.has(key) && MODULE_BY_KEY[key]?.status === "available" && !(hiddenById.get(subject.user_id)?.has(key) ?? false),
     accessTo: (moduleKey, ownerId) => {
       if (ownerId === userId) return "write";
       if (!memberIds.has(ownerId)) return "none";

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { cx } from "@/components/ui";
 
 /**
  * Small HTML/CSS column chart: crisp text at any width, a hover tooltip per
@@ -45,8 +46,20 @@ export function ColumnChart({
 }) {
   const max = niceMax(Math.max(...data.map((d) => d.value), ...(line ?? []).map((v) => v ?? 0)));
   const ticks = [0, max / 2, max];
-  const every = labelEvery ?? Math.max(1, Math.ceil(data.length / 10));
+  // About 5 date labels whatever the width, so they never get cut off.
+  const every = labelEvery ?? Math.max(1, Math.ceil(data.length / 5));
   const n = data.length;
+  // Markers on the same column are one pin with all their labels (duplicates dropped).
+  const markerGroups: { key: string; index: number; labels: string[] }[] = [];
+  for (const m of markers ?? []) {
+    const index = data.findIndex((d) => d.key === m.key);
+    if (index < 0) continue;
+    const g = markerGroups.find((x) => x.index === index);
+    if (g) {
+      if (!g.labels.includes(m.label)) g.labels.push(m.label);
+    } else markerGroups.push({ key: m.key, index, labels: [m.label] });
+  }
+  markerGroups.sort((a, b) => a.index - b.index);
   const points = line
     ?.map((v, i) => (v === null ? null : `${((i + 0.5) / n) * 100},${100 - (v / max) * 100}`))
     .filter(Boolean)
@@ -95,27 +108,46 @@ export function ColumnChart({
                 <polyline points={points} fill="none" stroke="var(--series-2)" strokeWidth={2} vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
               </svg>
             ) : null}
-            {markers?.map((m, j) => {
-              const i = data.findIndex((d) => d.key === m.key);
-              if (i < 0) return null;
-              return (
-                <div key={`${m.key}-${j}`} className="pointer-events-none absolute inset-y-0 border-l border-dashed border-fg/60" style={{ left: `${((i + 0.5) / n) * 100}%` }}>
-                  <span className="absolute -top-1 left-1 max-w-28 truncate rounded bg-bg/85 px-1 text-[10px] font-medium leading-4 text-fg" style={{ top: j * 16 }}>
-                    {m.label}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-          <div className="mt-1 flex text-[11px] text-fg-muted">
-            {data.map((d, i) => (
-              <span key={d.key} className="flex-1 truncate text-center">
-                {i % every === 0 ? d.label : ""}
-              </span>
+            {markerGroups.map((g, gi) => (
+              <div key={g.key} className="pointer-events-none absolute inset-y-0 border-l border-dashed border-fg/60" style={{ left: `${((g.index + 0.5) / n) * 100}%` }}>
+                <span
+                  className={cx("absolute -top-2 flex size-4 items-center justify-center rounded-full bg-fg text-[10px] font-semibold leading-none text-bg", g.index > n / 2 ? "right-0.5" : "left-0.5")}
+                  aria-hidden
+                >
+                  {gi + 1}
+                </span>
+              </div>
             ))}
+          </div>
+          <div className="relative mt-1 h-4 text-[11px] text-fg-muted">
+            {data.map((d, i) =>
+              i % every === 0 || i === n - 1 ? (
+                i !== n - 1 && n - 1 - i < every / 2 ? null : (
+                  <span
+                    key={d.key}
+                    className={cx("absolute whitespace-nowrap", i === 0 ? "left-0" : i === n - 1 ? "right-0" : "-translate-x-1/2")}
+                    style={i === 0 || i === n - 1 ? undefined : { left: `${((i + 0.5) / n) * 100}%` }}
+                  >
+                    {d.label}
+                  </span>
+                )
+              ) : null,
+            )}
           </div>
         </div>
       </div>
+      {markerGroups.length ? (
+        <ol className="space-y-0.5 text-xs text-fg-muted">
+          {markerGroups.map((g, gi) => (
+            <li key={g.key} className="flex gap-1.5">
+              <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full bg-fg text-[10px] font-semibold text-bg">{gi + 1}</span>
+              <span>
+                <span className="font-medium text-fg">{data[g.index].label}</span>: {g.labels.join(", ")}
+              </span>
+            </li>
+          ))}
+        </ol>
+      ) : null}
       <details className="text-xs">
         <summary className="cursor-pointer text-fg-muted">Show as table</summary>
         <table className="mt-2 w-full">

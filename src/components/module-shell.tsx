@@ -6,6 +6,7 @@ import { EmptyState, PageHeader } from "@/components/ui";
 import { SubNav } from "@/components/sub-nav";
 import { getT } from "@/lib/i18n/server";
 import { AreaNav } from "@/components/area-nav";
+import { FeatureOff } from "@/components/feature-off";
 import { AREAS, type AreaKey } from "@/modules/areas";
 
 /**
@@ -35,8 +36,22 @@ export async function ModuleShell({
   if (subtitle) subtitle = t(subtitle);
 
   const header = <>{tabs ? <SubNav items={tabs.map((x) => ({ ...x, label: t(x.label) }))} /> : null}</>;
-  const areaItems = area ? AREAS[area].filter((i) => session.isModuleEnabled(i.module)).map((i) => ({ href: i.href, label: t(i.label) })) : [];
+  const areaItems = area ? AREAS[area].filter((i) => session.isShown(i.module)).map((i) => ({ href: i.href, label: t(i.label) })) : [];
   const areaNav = areaItems.length > 1 ? <AreaNav items={areaItems} /> : null;
+
+  // Switched off by the person being viewed (Settings → My features).
+  if (session.isHiddenFor(moduleKey, session.subject.user_id)) {
+    const isSelf = session.subject.user_id === session.userId;
+    const p = session.partner;
+    const partnerUses = Boolean(p && !session.isHiddenFor(moduleKey, p.user_id) && (def.scope === "household" || session.accessTo(moduleKey, p.user_id) !== "none"));
+    return (
+      <>
+        {areaNav}
+        <PageHeader title={name} />
+        <FeatureOff name={name} moduleKey={moduleKey} isSelf={isSelf} personName={session.subject.display_name} partner={isSelf && partnerUses && p ? { name: p.display_name } : null} />
+      </>
+    );
+  }
 
   if (def.scope === "household") {
     return (

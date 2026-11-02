@@ -8,6 +8,7 @@ import { loadDiaryEvents } from "@/modules/bladder/load";
 import { daysBetween } from "@/modules/bladder/events";
 import { getT } from "@/lib/i18n/server";
 import { BladderLogForm } from "./log-form";
+import { DateJump } from "@/components/date-jump";
 import { AddDiaryEvent } from "./add-event";
 import { deleteDiaryEvent } from "./actions";
 import { BladderEventRow, FluidRow } from "./entry-row";
@@ -48,7 +49,7 @@ export default async function BladderDiaryPage({ searchParams }: PageProps<"/bla
 
       <div className="flex items-center justify-between gap-2">
         <Link href={`/bladder?date=${addDays(date, -1)}`} className={buttonClass("ghost", "sm")}>← {shortDate(addDays(date, -1))}</Link>
-        <p className="font-semibold">{date === today ? "Today" : shortDate(date)}</p>
+        <DateJump date={date} today={today} basePath="/bladder" label={date === today ? t("Today") : shortDate(date)} />
         {date < today ? (
           <Link href={date === addDays(today, -1) ? "/bladder" : `/bladder?date=${addDays(date, 1)}`} className={buttonClass("ghost", "sm")}>
             {shortDate(addDays(date, 1))} →

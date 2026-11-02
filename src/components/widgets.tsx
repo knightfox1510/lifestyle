@@ -59,7 +59,7 @@ export async function WidgetFrame({ size, title, href, children }: { size: Widge
 export async function Widget({ widgetKey, size, session }: { widgetKey: string; size: WidgetSize; session: AppSession }) {
   const def = WIDGET_BY_KEY[widgetKey];
   if (!def) return null;
-  if (def.module && !session.isModuleEnabled(def.module)) return null;
+  if (def.module && !session.isShown(def.module)) return null;
   const subject = session.subject;
   const isSelf = subject.user_id === session.userId;
   const t = await getT(session);
@@ -564,7 +564,7 @@ export async function Widget({ widgetKey, size, session }: { widgetKey: string; 
     case "core.coming_up": {
       const today = todayIn(session.profile.timezone);
       const until = addDays(today, 30);
-      const on = (k: string) => session.isModuleEnabled(k);
+      const on = (k: string) => session.isShown(k);
       const [m, d, sb] = await Promise.all([
         on("maintenance") ? session.supabase.from("maintenance_tasks").select("title, next_due_on").eq("household_id", session.household.id).lte("next_due_on", until) : null,
         on("documents") ? session.supabase.from("documents").select("title, expires_on").eq("household_id", session.household.id).lte("expires_on", addDays(today, 60)) : null,

@@ -13,7 +13,7 @@ export default async function MeHub() {
   const t = await getT(session);
   const status = await hubStatuses(session, t);
   const tile = (keys: string[]) =>
-    MODULES.filter((m) => keys.includes(m.group) && m.href && session.isModuleEnabled(m.key) && m.key !== "food_diary").map((m) => ({
+    MODULES.filter((m) => keys.includes(m.group) && m.href && session.isShown(m.key) && m.key !== "food_diary").map((m) => ({
       href: m.href!,
       iconKey: m.key,
       name: t(m.name),
@@ -34,6 +34,7 @@ export default async function MeHub() {
           { href: "/assistant", name: t("Ask AI"), hint: t("Suggestions that use your health data") },
           { href: "/settings", name: t("Settings"), hint: t("Language, Home view, profile") },
           { href: "/settings/notifications", name: t("Notifications"), hint: t("Reminders, water, close your day") },
+          { href: "/settings/features", name: t("My features"), hint: t("Hide what you don't use") },
           { href: "/settings/sharing", name: t("Sharing"), hint: t("What your partner can see") },
           { href: "/settings/household", name: t("Household"), hint: t("Members, invites, features on/off") },
           { href: "/customize", name: t("Home widgets"), hint: t("Extra cards under your day") },

@@ -2637,3 +2637,15 @@ $$;
 drop trigger if exists meal_plan_member_check on public.meal_plan;
 create trigger meal_plan_member_check before insert or update on public.meal_plan
   for each row execute function public.meal_plan_member_check();
+
+-- ============================================================
+-- 20261122000001_hidden_modules.sql
+-- ============================================================
+
+-- Features each person has switched off for themselves (e.g. Gaurav hides the
+-- cycle tracker). The household setting still decides what exists at all.
+alter table public.profiles
+  add column if not exists hidden_modules text[] not null default '{}';
+do $$ begin
+  alter table public.profiles add constraint profiles_hidden_modules_check check (cardinality(hidden_modules) <= 60);
+exception when duplicate_object then null; end $$;

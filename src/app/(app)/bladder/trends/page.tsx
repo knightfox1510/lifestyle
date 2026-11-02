@@ -3,7 +3,7 @@ import { getSession } from "@/lib/session";
 import { shortDate } from "@/lib/dates";
 import { Card, EmptyState, cx } from "@/components/ui";
 import { BarList, ColumnChart, rollingAverage } from "@/components/charts";
-import { comparisons, dailyStats, hourHistogram, leaksAfterCaffeine, physicalShare, trend, triggerCounts } from "@/modules/bladder/analysis";
+import { comparisons, dailyStats, hourHistogram, leaksAfterCaffeine, loggedRollingAverage, physicalShare, trend, triggerCounts, weekdayPattern, weeklyStats, weeklyTrend } from "@/modules/bladder/analysis";
 import { loadDiary, loadDiaryEvents } from "@/modules/bladder/load";
 import { beforeAfter, daysBetween } from "@/modules/bladder/events";
 import { getT } from "@/lib/i18n/server";
@@ -12,7 +12,7 @@ import { PHASE_LABEL, leaksByPhase, periodsFrom, type CycleDay } from "@/modules
 
 export const metadata = { title: "Bladder trends" };
 
-const PERIODS = [14, 30, 90];
+const PERIODS = [14, 30, 90, 180];
 
 export default async function BladderTrendsPage({ searchParams }: PageProps<"/bladder/trends">) {
   const session = await getSession();
@@ -27,8 +27,15 @@ export default async function BladderTrendsPage({ searchParams }: PageProps<"/bl
     return <EmptyState title="No diary entries in this period">Log leaks, urges, bathroom visits and drinks for a few days to see patterns.</EmptyState>;
   }
 
-  const leaks = stats.map((s) => s.leaks);
   const t = trend(stats);
+  // Weekly view always looks back at least 12 weeks, whatever period is picked.
+  const wk = period >= 84 ? d : await loadDiary(session, ownerId, 84);
+  const wkStats = period >= 84 ? stats : dailyStats(wk.days, wk.events, wk.fluids, wk.tz, wk.sessions, wk.workouts, wk.foods);
+  const weeks = weeklyStats(wkStats).filter((w, i, all) => w.days > 0 || all.slice(0, i).some((x) => x.days > 0));
+  const wTrend = weeklyTrend(weeks);
+  const thisWeek = weeks.at(-1);
+  const lastWeek = weeks.at(-2);
+  const weekdays = weekdayPattern(wkStats);
   const caffeine = leaksAfterCaffeine(d.events, d.fluids);
   const loggedDates = stats.filter((s) => s.leaks + s.urges + s.voids + s.fluidMl > 0).map((s) => s.date);
   const after = afterExposures(d.events, d.fluids, d.foods, loggedDates, d.tz, 2);
@@ -38,7 +45,7 @@ export default async function BladderTrendsPage({ searchParams }: PageProps<"/bl
   const byPhase = cycleRows.length ? leaksByPhase(periodsFrom(cycleRows), new Map(stats.map((s) => [s.date, s.leaks])), loggedDates) : [];
   const share = physicalShare(d.events);
   const hours = hourHistogram(d.events, d.tz);
-  const avgLeaks = Math.round((leaks.reduce((a, b) => a + b, 0) / Math.max(loggedDays, 1)) * 10) / 10;
+  const avgLeaks = Math.round((stats.reduce((a, s) => a + s.leaks, 0) / Math.max(loggedDays, 1)) * 10) / 10;
   const avgFluid = Math.round(stats.reduce((a, s) => a + s.fluidMl, 0) / Math.max(loggedDays, 1));
   const avgVoids = Math.round((stats.reduce((a, s) => a + s.voids, 0) / Math.max(loggedDays, 1)) * 10) / 10;
   const dayLabel = (date: string) => shortDate(date);
@@ -74,13 +81,19 @@ export default async function BladderTrendsPage({ searchParams }: PageProps<"/bl
         </Link>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         <Stat label="Leaks / day" value={avgLeaks} sub={`${loggedDays} days logged`} />
         <Stat
-          label="Trend"
-          value={t ? `${t.change > 0 ? "+" : ""}${t.change}%` : "–"}
-          sub={t ? `${t.first} → ${t.second} per day (first vs second half)` : "Needs 6+ logged days"}
-          tone={t ? (t.change < 0 ? "good" : t.change > 0 ? "bad" : undefined) : undefined}
+          label="This week"
+          value={thisWeek?.perDay ?? "–"}
+          sub={lastWeek?.perDay != null ? `leaks/day · last week ${lastWeek.perDay}${thisWeek?.change != null ? ` (${thisWeek.change > 0 ? "+" : ""}${thisWeek.change}%)` : ""}` : "leaks/day"}
+          tone={thisWeek?.change != null ? (thisWeek.change < 0 ? "good" : thisWeek.change > 0 ? "bad" : undefined) : undefined}
+        />
+        <Stat
+          label="Weekly trend"
+          value={wTrend ? `${wTrend.pctPerWeek > 0 ? "+" : ""}${wTrend.pctPerWeek}%` : t ? `${t.change > 0 ? "+" : ""}${t.change}%` : "–"}
+          sub={wTrend ? `per week over ${wTrend.weeks} weeks (${wTrend.perWeek > 0 ? "+" : ""}${wTrend.perWeek} leaks/day each week)` : t ? `${t.first} → ${t.second} per day (first vs second half)` : "Needs 3 weeks or 6+ days"}
+          tone={(wTrend?.pctPerWeek ?? t?.change ?? 0) < 0 ? "good" : (wTrend?.pctPerWeek ?? t?.change ?? 0) > 0 ? "bad" : undefined}
         />
         <Stat label="Bathroom / day" value={avgVoids} sub="Typical: 4–8 per day" />
         <Stat label="Fluids / day" value={`${(avgFluid / 1000).toFixed(1)} L`} sub="on logged days" />
@@ -156,13 +169,45 @@ export default async function BladderTrendsPage({ searchParams }: PageProps<"/bl
         <ColumnChart
           markers={markers}
           title="Leaks per day"
-          subtitle={`Last ${period} days`}
-          data={stats.map((s) => ({ key: s.date, label: dayLabel(s.date), value: s.leaks, tooltip: `${dayLabel(s.date)}: ${s.leaks} leak${s.leaks === 1 ? "" : "s"}, ${s.fluidMl} ml fluids${s.kegel ? ", Kegel ✓" : ""}${s.workouts.length ? `, ${s.workouts.join("+")}` : ""}` }))}
-          line={rollingAverage(leaks)}
+          subtitle={`Last ${period} days · the line skips days with nothing logged`}
+          data={stats.map((s) => ({
+            key: s.date,
+            label: dayLabel(s.date),
+            value: s.leaks,
+            tooltip: s.leaks + s.urges + s.voids + s.fluidMl === 0 ? `${dayLabel(s.date)}: nothing logged` : `${dayLabel(s.date)}: ${s.leaks} leak${s.leaks === 1 ? "" : "s"}, ${s.urges} urges, ${s.fluidMl} ml fluids${s.kegel ? ", Kegel ✓" : ""}${s.workouts.length ? `, ${s.workouts.join("+")}` : ""}`,
+          }))}
+          line={loggedRollingAverage(stats)}
           barLabel="Leaks"
           lineLabel="7-day average"
         />
       </Card>
+
+      {weeks.length >= 2 ? (
+        <Card className="space-y-3">
+          <ColumnChart
+            title="Week by week"
+            subtitle={wTrend ? `Leaks per logged day each week · ${wTrend.pctPerWeek < 0 ? `falling about ${-wTrend.pctPerWeek}% a week` : wTrend.pctPerWeek > 0 ? `rising about ${wTrend.pctPerWeek}% a week` : "steady"}` : "Leaks per logged day each week (Mon–Sun)"}
+            data={weeks.map((w) => ({ key: w.start, label: shortDate(w.start), value: w.perDay ?? 0, tooltip: `Week of ${shortDate(w.start)}: ${w.perDay ?? "–"} leaks/day over ${w.days} logged day${w.days === 1 ? "" : "s"}` }))}
+            line={rollingAverage(weeks.map((w) => w.perDay ?? 0), 3)}
+            barLabel="Leaks per day"
+            lineLabel="3-week average"
+            height={140}
+            markers={markers.map((m) => ({ ...m, key: weeks.findLast((w) => w.start <= m.key)?.start ?? m.key }))}
+          />
+          <ul className="divide-y divide-border text-sm">
+            {[...weeks].reverse().slice(0, 6).map((w) => (
+              <li key={w.start} className="flex items-center justify-between gap-2 py-1.5">
+                <span>Week of {shortDate(w.start)} <span className="text-xs text-fg-muted">· {w.days} day{w.days === 1 ? "" : "s"} logged</span></span>
+                <span className="tabular-nums">
+                  <strong>{w.perDay ?? "–"}</strong> <span className="text-xs text-fg-muted">leaks/day · {w.urgesPerDay ?? "–"} urges · {w.voidsPerDay ?? "–"} bathroom</span>
+                  {w.change != null ? <span className={cx("ml-2 text-xs font-medium", w.change < 0 ? "text-accent" : w.change > 0 ? "text-danger" : "text-fg-muted")}>{w.change > 0 ? "▲" : w.change < 0 ? "▼" : "="} {Math.abs(w.change)}%</span> : null}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs text-fg-muted">Weeks with fewer than 3 logged days don&apos;t count towards the trend.</p>
+        </Card>
+      ) : null}
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
@@ -179,9 +224,14 @@ export default async function BladderTrendsPage({ searchParams }: PageProps<"/bl
             title="Leaks by time of day"
             data={hours.map((v, h) => ({ key: String(h), label: `${h}`, value: v, tooltip: `${String(h).padStart(2, "0")}:00–${String(h).padStart(2, "0")}:59: ${v} leak${v === 1 ? "" : "s"}` }))}
             height={120}
-            labelEvery={3}
+            labelEvery={6}
           />
         </Card>
+        {weekdays.some((w) => w.days >= 2) ? (
+          <Card>
+            <BarList title="Leaks per day by weekday (last 12 weeks)" items={weekdays.map((w) => ({ label: `${w.name} (${w.days}d)`, value: w.perDay ?? 0 }))} />
+          </Card>
+        ) : null}
       </div>
 
       <Card>

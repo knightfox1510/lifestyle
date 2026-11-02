@@ -33,6 +33,15 @@ do $$ begin
 exception when insufficient_privilege then null;
 end $$;
 
+-- Features hidden per person: you can change your own list only.
+select set_config('request.jwt.claim.sub', :p, false);
+update public.profiles set hidden_modules = array['cycle'] where id = :p;
+update public.profiles set hidden_modules = array['bladder_diary'] where id = :q;
+do $$ begin
+  assert (select hidden_modules from public.profiles where id = '4d4d4d4d-0000-0000-0000-000000000051') = array['cycle'], 'own list saved';
+  assert (select hidden_modules from public.profiles where id = '5e5e5e5e-0000-0000-0000-000000000052') = '{}', 'cannot change the partner''s list';
+end $$;
+
 -- Per-person dishes: only for members of the same household.
 select set_config('request.jwt.claim.sub', :p, false);
 insert into public.meal_plan (household_id, plan_date, meal, title, for_user, portions, kcal_per_serving, ingredients)

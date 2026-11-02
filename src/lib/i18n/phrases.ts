@@ -820,4 +820,11 @@ export const PHRASES: Record<string, { hi: string; mr: string }> = {
   "Bladder & pelvic health": { hi: "ब्लैडर और पेल्विक स्वास्थ्य", mr: "मूत्राशय आणि पेल्विक आरोग्य" },
   "Body & activity": { hi: "शरीर और गतिविधि", mr: "शरीर आणि हालचाल" },
   "Records": { hi: "रिकॉर्ड", mr: "नोंदी" },
+  "Hide what you don't use": { hi: "जो इस्तेमाल नहीं करते उसे छिपाएँ", mr: "वापरत नाही ते लपवा" },
+  "Hide what you don't use from your own menus and Today.": { hi: "जो इस्तेमाल नहीं करते उसे अपने मेनू और आज से छिपाएँ।", mr: "वापरत नाही ते तुमच्या मेनू आणि आजमधून लपवा." },
+  "My features": { hi: "मेरी सुविधाएँ", mr: "माझी वैशिष्ट्ये" },
+  "Search": { hi: "खोजें", mr: "शोधा" },
+  "Settings → Household": { hi: "सेटिंग्स → घर", mr: "सेटिंग्ज → घर" },
+  "To switch a feature off for the whole household, use": { hi: "पूरे घर के लिए कोई सुविधा बंद करने के लिए देखें", mr: "संपूर्ण घरासाठी वैशिष्ट्य बंद करण्यासाठी वापरा" },
+  "Turn off what you don't use. It only changes your own menus and Today; your partner keeps theirs, and nothing is deleted.": { hi: "जो इस्तेमाल नहीं करते उसे बंद करें। इससे सिर्फ़ आपके मेनू और आज बदलते हैं; पार्टनर के वैसे ही रहते हैं, और कुछ नहीं मिटता।", mr: "वापरत नाही ते बंद करा. यामुळे फक्त तुमचे मेनू आणि आज बदलतात; जोडीदाराचे तसेच राहतात, आणि काहीही हटत नाही." },
 };

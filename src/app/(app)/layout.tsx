@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { Search } from "lucide-react";
 import { getSession } from "@/lib/session";
 import { MODULES } from "@/modules/registry";
 import { TAB_MATCH } from "@/modules/areas";
@@ -13,7 +15,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   const session = await getSession();
   const lang = await getLang(session);
   const t = makeT(lang);
-  const enabled = MODULES.filter((m) => m.href && session.isModuleEnabled(m.key));
+  const enabled = MODULES.filter((m) => m.href && session.isShown(m.key));
   const groupOrder = ["Health", "Food", "Family & home", "Leisure", "Admin"] as const;
   const groups: NavGroup[] = [
     { title: null, items: [{ href: "/", label: t("Today"), icon: "today" }, { href: "/assistant", label: t("Ask AI"), icon: "ai" }] },
@@ -31,11 +33,11 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   ];
   const quickLog = {
     ownerId: session.userId,
-    medicines: session.isModuleEnabled("medicines"),
-    bladder: session.isModuleEnabled("bladder_diary"),
-    body: session.isModuleEnabled("body_recomp"),
-    checkin: session.isModuleEnabled("checkin"),
-    food: session.isModuleEnabled("food_diary"),
+    medicines: session.isModuleEnabled("medicines") && !session.isHiddenFor("medicines", session.userId),
+    bladder: session.isModuleEnabled("bladder_diary") && !session.isHiddenFor("bladder_diary", session.userId),
+    body: session.isModuleEnabled("body_recomp") && !session.isHiddenFor("body_recomp", session.userId),
+    checkin: session.isModuleEnabled("checkin") && !session.isHiddenFor("checkin", session.userId),
+    food: session.isModuleEnabled("food_diary") && !session.isHiddenFor("food_diary", session.userId),
   };
 
   return (
@@ -52,11 +54,16 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           <div className="hidden text-sm text-fg-muted md:block">
             {t("Signed in as")} <span className="font-medium text-fg">{session.me.display_name}</span>
           </div>
+          <div className="flex items-center gap-2">
+          <Link href="/search" aria-label={t("Search")} className="pressable grid size-10 shrink-0 place-items-center rounded-full border border-border bg-surface-2 text-fg-muted hover:text-fg">
+            <Search className="size-[18px]" aria-hidden />
+          </Link>
           <ViewSwitch
             mode={session.viewMode}
             meName={session.me.display_name}
             partnerName={session.partner?.display_name ?? null}
           />
+          </div>
         </header>
         {session.viewMode === "partner" && session.partner ? <PartnerViewBanner partnerName={session.partner.display_name} /> : null}
         </div>

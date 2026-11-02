@@ -14,7 +14,7 @@ export default async function HealthHub() {
   const tile = (keys: string[]) =>
     keys
       .map((k) => MODULES.find((m) => m.key === k))
-      .filter((m): m is NonNullable<typeof m> => Boolean(m?.href && session.isModuleEnabled(m.key)))
+      .filter((m): m is NonNullable<typeof m> => Boolean(m?.href && session.isShown(m.key)))
       .map((m) => ({ href: m.href!, iconKey: m.key, name: t(m.name), status: status[m.key]?.text ?? null, alert: status[m.key]?.alert }));
   // Related features sit together; anything new in the Health group lands in "More".
   const sections: [string, string[]][] = [
@@ -26,10 +26,10 @@ export default async function HealthHub() {
   const placed = new Set(sections.flatMap(([, k]) => k));
   const more = MODULES.filter((m) => m.group === "Health" && !placed.has(m.key)).map((m) => m.key);
   const tools = [
-    ...(session.isModuleEnabled("medical_records") ? [{ href: "/medical/visit", name: t("Doctor visit summary"), hint: t("One page to show or send your doctor") }] : []),
-    ...(session.isModuleEnabled("medicines") ? [{ href: "/medicines/checks", name: t("Safety checks"), hint: t("Interactions, duplicates and timing") }] : []),
-    ...(session.isModuleEnabled("medical_records") ? [{ href: "/medical/labs", name: t("Blood work & labs"), hint: t("Results and trends") }] : []),
-    ...(session.isModuleEnabled("bladder_diary") ? [{ href: "/bladder/report", name: t("Bladder diary report"), hint: t("For your doctor or physio") }] : []),
+    ...(session.isShown("medical_records") ? [{ href: "/medical/visit", name: t("Doctor visit summary"), hint: t("One page to show or send your doctor") }] : []),
+    ...(session.isShown("medicines") ? [{ href: "/medicines/checks", name: t("Safety checks"), hint: t("Interactions, duplicates and timing") }] : []),
+    ...(session.isShown("medical_records") ? [{ href: "/medical/labs", name: t("Blood work & labs"), hint: t("Results and trends") }] : []),
+    ...(session.isShown("bladder_diary") ? [{ href: "/bladder/report", name: t("Bladder diary report"), hint: t("For your doctor or physio") }] : []),
   ];
   return (
     <div className="space-y-6">

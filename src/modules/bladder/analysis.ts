@@ -169,3 +169,63 @@ export function trend(stats: DayStats[]) {
   const change = first === 0 ? (second === 0 ? 0 : 100) : Math.round(((second - first) / first) * 100);
   return { first: round1(first)!, second: round1(second)!, change };
 }
+
+const isLogged = (s: DayStats) => s.leaks + s.urges + s.voids + s.fluidMl > 0;
+
+/** 7-day average of leaks per day over logged days only (a day with no diary isn't a dry day). */
+export function loggedRollingAverage(stats: DayStats[], window = 7): (number | null)[] {
+  return stats.map((_, i) => {
+    const slice = stats.slice(Math.max(0, i - window + 1), i + 1).filter(isLogged);
+    return slice.length >= 3 ? round1(avg(slice.map((s) => s.leaks))) : null;
+  });
+}
+
+export type WeekStats = { start: string; days: number; leaks: number; perDay: number | null; urgesPerDay: number | null; voidsPerDay: number | null; change: number | null };
+
+/** Monday-to-Sunday weeks: leaks per logged day, and the change from the week before. */
+export function weeklyStats(stats: DayStats[]): WeekStats[] {
+  const weeks = new Map<string, DayStats[]>();
+  for (const s of stats) {
+    const dow = new Date(`${s.date}T12:00:00Z`).getUTCDay();
+    const start = new Date(Date.parse(`${s.date}T12:00:00Z`) - ((dow + 6) % 7) * 864e5).toISOString().slice(0, 10);
+    weeks.set(start, [...(weeks.get(start) ?? []), s]);
+  }
+  const out: WeekStats[] = [];
+  for (const [start, list] of [...weeks.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    const logged = list.filter(isLogged);
+    const perDay = round1(avg(logged.map((s) => s.leaks)));
+    const prev = out.at(-1)?.perDay ?? null;
+    out.push({
+      start,
+      days: logged.length,
+      leaks: logged.reduce((a, s) => a + s.leaks, 0),
+      perDay,
+      urgesPerDay: round1(avg(logged.map((s) => s.urges))),
+      voidsPerDay: round1(avg(logged.map((s) => s.voids))),
+      change: perDay !== null && prev !== null && prev > 0 ? Math.round(((perDay - prev) / prev) * 100) : null,
+    });
+  }
+  return out;
+}
+
+/**
+ * Straight-line trend through the weekly averages (weeks with 3+ logged days):
+ * leaks/day change per week, and as a % of the average. Null with < 3 weeks.
+ */
+export function weeklyTrend(weeks: WeekStats[]) {
+  const pts = weeks.filter((w) => w.perDay !== null && w.days >= 3).map((w, i) => ({ x: i, y: w.perDay! }));
+  if (pts.length < 3) return null;
+  const mx = avg(pts.map((p) => p.x))!;
+  const my = avg(pts.map((p) => p.y))!;
+  const slope = pts.reduce((a, p) => a + (p.x - mx) * (p.y - my), 0) / pts.reduce((a, p) => a + (p.x - mx) ** 2, 0);
+  return { weeks: pts.length, perWeek: Math.round(slope * 10) / 10, pctPerWeek: my > 0 ? Math.round((slope / my) * 100) : 0 };
+}
+
+/** Average leaks per logged day for each weekday (Mon first). */
+export function weekdayPattern(stats: DayStats[]) {
+  const names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  return names.map((name, i) => {
+    const days = stats.filter((s) => isLogged(s) && (new Date(`${s.date}T12:00:00Z`).getUTCDay() + 6) % 7 === i);
+    return { name, days: days.length, perDay: round1(avg(days.map((s) => s.leaks))) };
+  });
+}

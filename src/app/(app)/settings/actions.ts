@@ -101,6 +101,22 @@ export async function setModuleEnabled(moduleKey: string, enabled: boolean) {
   refreshAll();
 }
 
+/** Switch a feature off (or back on) just for me: it leaves my menus, hubs and Today. */
+export async function setModuleHiddenForMe(moduleKey: string, hidden: boolean): Promise<ActionResult> {
+  const def = MODULE_BY_KEY[moduleKey];
+  if (!def || def.status !== "available") return { error: "Unknown feature." };
+  const session = await getSession();
+  const { data, error: readError } = await session.supabase.from("profiles").select("hidden_modules").eq("id", session.userId).single();
+  if (readError) return { error: "Run the latest database update in Supabase to switch features per person." };
+  const cur = new Set<string>((data?.hidden_modules as string[] | null) ?? []);
+  if (hidden) cur.add(moduleKey);
+  else cur.delete(moduleKey);
+  const { error } = await session.supabase.from("profiles").update({ hidden_modules: [...cur] }).eq("id", session.userId);
+  if (error) return { error: "Couldn't save." };
+  refreshAll();
+  return { ok: true, message: hidden ? `${def.name} is off for you.` : `${def.name} is on for you.` };
+}
+
 // --------------------------------------------------------------------- AI ----
 
 export async function saveAiModel(_: ActionResult | null, form: FormData): Promise<ActionResult> {
