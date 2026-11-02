@@ -1,16 +1,16 @@
 import Link from "next/link";
 import { getSession } from "@/lib/session";
 import { addDays, localDate, localTime, shortDate, startOfLocalDayIso, todayIn } from "@/lib/dates";
-import { Badge, Card, buttonClass } from "@/components/ui";
+import { Card, buttonClass } from "@/components/ui";
 import type { BladderEvent, FluidIntake } from "@/lib/types";
-import { AMOUNT_LABEL, DRINK_META, KIND_META, TRIGGER_LABEL } from "@/modules/bladder/meta";
 import { dailyStats } from "@/modules/bladder/analysis";
 import { loadDiaryEvents } from "@/modules/bladder/load";
 import { daysBetween } from "@/modules/bladder/events";
 import { getT } from "@/lib/i18n/server";
 import { BladderLogForm } from "./log-form";
 import { AddDiaryEvent } from "./add-event";
-import { deleteBladderEvent, deleteDiaryEvent, deleteFluid } from "./actions";
+import { deleteDiaryEvent } from "./actions";
+import { BladderEventRow, FluidRow } from "./entry-row";
 
 export const metadata = { title: "Bladder diary" };
 
@@ -44,7 +44,7 @@ export default async function BladderDiaryPage({ searchParams }: PageProps<"/bla
 
   return (
     <div className="space-y-4">
-      {canWrite && date === today ? <BladderLogForm ownerId={ownerId} /> : null}
+      {canWrite ? <BladderLogForm key={date} ownerId={ownerId} day={date === today ? undefined : date} /> : null}
 
       <div className="flex items-center justify-between gap-2">
         <Link href={`/bladder?date=${addDays(date, -1)}`} className={buttonClass("ghost", "sm")}>← {shortDate(addDays(date, -1))}</Link>
@@ -84,43 +84,27 @@ export default async function BladderDiaryPage({ searchParams }: PageProps<"/bla
           <ul className="divide-y divide-border">
             {entries.map((x) =>
               x.type === "event" ? (
-                <li key={x.e.id} className="flex items-start justify-between gap-2 py-2.5 text-sm">
-                  <div>
-                    <p>
-                      <span className="mr-2 font-mono text-fg-muted">{localTime(x.at, tz)}</span>
-                      {KIND_META[x.e.kind].icon} <strong>{KIND_META[x.e.kind].label}</strong>
-                      {x.e.amount ? ` · ${AMOUNT_LABEL[x.e.amount]}` : ""}
-                      {x.e.urgency ? ` · urgency ${x.e.urgency}/5` : ""}
-                    </p>
-                    {x.e.triggers.length || x.e.pad_changed ? (
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        {x.e.triggers.map((t) => (
-                          <Badge key={t}>{TRIGGER_LABEL[t]}</Badge>
-                        ))}
-                        {x.e.pad_changed ? <Badge tone="warn">pad changed</Badge> : null}
-                      </div>
-                    ) : null}
-                    {x.e.notes ? <p className="mt-1 text-fg-muted">{x.e.notes}</p> : null}
-                  </div>
-                  {isOwner ? (
-                    <form action={deleteBladderEvent.bind(null, x.e.id)}>
-                      <button className="text-xs text-fg-muted hover:text-danger" aria-label="Delete entry">✕</button>
-                    </form>
-                  ) : null}
-                </li>
+                <BladderEventRow
+                  key={x.e.id}
+                  e={x.e}
+                  ownerId={ownerId}
+                  date={date}
+                  time={localTime(x.at, tz)}
+                  today={today}
+                  canEdit={canWrite}
+                  canDelete={canWrite && (isOwner || x.e.created_by === session.userId)}
+                />
               ) : (
-                <li key={x.f.id} className="flex items-center justify-between gap-2 py-2.5 text-sm">
-                  <p>
-                    <span className="mr-2 font-mono text-fg-muted">{localTime(x.at, tz)}</span>
-                    {DRINK_META[x.f.drink].icon} {DRINK_META[x.f.drink].label} · {x.f.volume_ml} ml
-                    {x.f.caffeinated ? <span className="text-fg-muted"> · caffeine</span> : null}
-                  </p>
-                  {isOwner ? (
-                    <form action={deleteFluid.bind(null, x.f.id)}>
-                      <button className="text-xs text-fg-muted hover:text-danger" aria-label="Delete drink">✕</button>
-                    </form>
-                  ) : null}
-                </li>
+                <FluidRow
+                  key={x.f.id}
+                  f={x.f}
+                  ownerId={ownerId}
+                  date={date}
+                  time={localTime(x.at, tz)}
+                  today={today}
+                  canEdit={canWrite}
+                  canDelete={canWrite && (isOwner || x.f.created_by === session.userId)}
+                />
               ),
             )}
           </ul>

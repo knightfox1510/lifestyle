@@ -1,13 +1,13 @@
 "use server";
 
 import { z } from "zod";
-import { errorMessage, refreshModule, requireWrite } from "@/lib/guards";
+import { dbErrorMessage, errorMessage, refreshModule, requireWrite } from "@/lib/guards";
 import { getSession } from "@/lib/session";
 import { BLADDER_KINDS, BLADDER_TRIGGERS, DRINKS, LEAK_AMOUNTS, type ActionResult } from "@/lib/types";
 import { DRINK_META } from "@/modules/bladder/meta";
 import { DIARY_EVENT_META, DIARY_EVENT_TYPES, diaryEventTitle } from "@/modules/bladder/events";
 import { leakKey } from "@/modules/bladder/whatsapp";
-import { todayIn } from "@/lib/dates";
+import { todayIn, zonedIso } from "@/lib/dates";
 import { revalidatePath } from "next/cache";
 
 const MODULE = "bladder_diary";
@@ -96,16 +96,97 @@ export async function quickLog(ownerId: string, what: "leak" | "urge" | "void" |
   }
 }
 
-export async function deleteBladderEvent(id: string) {
-  const session = await getSession();
-  await session.supabase.from("bladder_events").delete().eq("id", id).eq("owner_id", session.userId);
+/** Deletes a diary entry: the owner always, or whoever logged it while they have write access. */
+export async function deleteBladderEvent(id: string, ownerId: string): Promise<ActionResult> {
+  try {
+    const session = await requireWrite(MODULE, ownerId);
+    const { data, error } = await session.supabase.from("bladder_events").delete().eq("id", id).eq("owner_id", ownerId).select("id");
+    if (error || !data?.length) return { error: "Only the person it belongs to, or whoever logged it, can delete this." };
+  } catch (e) {
+    return { error: errorMessage(e) };
+  }
   refreshModule("/bladder");
+  return { ok: true, message: "Deleted." };
 }
 
-export async function deleteFluid(id: string) {
-  const session = await getSession();
-  await session.supabase.from("fluid_intake").delete().eq("id", id).eq("owner_id", session.userId);
+export async function deleteFluid(id: string, ownerId?: string): Promise<ActionResult> {
+  try {
+    const session = await (ownerId ? requireWrite(MODULE, ownerId) : getSession());
+    const { data, error } = await session.supabase.from("fluid_intake").delete().eq("id", id).eq("owner_id", ownerId ?? session.userId).select("id");
+    if (error || !data?.length) return { error: "Only the person it belongs to, or whoever logged it, can delete this." };
+  } catch (e) {
+    return { error: errorMessage(e) };
+  }
   refreshModule("/bladder");
+  return { ok: true, message: "Deleted." };
+}
+
+const localWhen = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a date"),
+  time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Pick a time"),
+});
+
+/** Turns a local date + time into a timestamp, refusing the future. */
+function whenFrom(v: z.infer<typeof localWhen>, tz: string): string | null {
+  const iso = zonedIso(v.date, v.time, tz);
+  return Date.parse(iso) > Date.now() + 5 * 60_000 ? null : iso;
+}
+
+const eventEdit = localWhen.extend({
+  kind: z.enum(BLADDER_KINDS),
+  amount: z.enum(LEAK_AMOUNTS).nullable(),
+  urgency: z.number().int().min(1).max(5).nullable(),
+  triggers: z.array(z.enum(BLADDER_TRIGGERS)).max(15),
+  pad_changed: z.boolean(),
+  notes: z.string().trim().max(1000).nullable(),
+});
+
+/** Fix a leak/urge/bathroom entry: its time (and date), type, amount, urgency, triggers and note. */
+export async function updateBladderEvent(id: string, ownerId: string, input: unknown): Promise<ActionResult> {
+  const parsed = eventEdit.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check the details." };
+  const { date, time, ...v } = parsed.data;
+  try {
+    const session = await requireWrite(MODULE, ownerId);
+    const occurred_at = whenFrom({ date, time }, session.profile.timezone);
+    if (!occurred_at) return { error: "That time is in the future." };
+    const { data, error } = await session.supabase
+      .from("bladder_events")
+      .update({ ...v, occurred_at, amount: v.kind === "leak" ? v.amount : null, notes: v.notes || null })
+      .eq("id", id)
+      .eq("owner_id", ownerId)
+      .select("id");
+    if (error || !data?.length) return { error: dbErrorMessage(error, "Couldn't save the changes.") };
+  } catch (e) {
+    return { error: errorMessage(e) };
+  }
+  refreshModule("/bladder");
+  return { ok: true, message: "Saved." };
+}
+
+const fluidEdit = localWhen.extend({
+  drink: z.enum(DRINKS),
+  volume_ml: z.number().int().min(10, "At least 10 ml").max(3000),
+  caffeinated: z.boolean(),
+});
+
+/** Fix a drink: time (and date), type, amount and caffeine. */
+export async function updateFluid(id: string, ownerId: string, input: unknown): Promise<ActionResult> {
+  const parsed = fluidEdit.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check the details." };
+  const { date, time, ...v } = parsed.data;
+  try {
+    const session = await requireWrite(MODULE, ownerId);
+    const occurred_at = whenFrom({ date, time }, session.profile.timezone);
+    if (!occurred_at) return { error: "That time is in the future." };
+    const { data, error } = await session.supabase.from("fluid_intake").update({ ...v, occurred_at }).eq("id", id).eq("owner_id", ownerId).select("id");
+    if (error || !data?.length) return { error: dbErrorMessage(error, "Couldn't save the changes.") };
+  } catch (e) {
+    return { error: errorMessage(e) };
+  }
+  refreshModule("/bladder");
+  refreshModule("/food");
+  return { ok: true, message: "Saved." };
 }
 
 // ------------------------------------------------------------- import ----

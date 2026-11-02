@@ -28,9 +28,10 @@ function Chip({ on, children, onClick }: { on: boolean; children: React.ReactNod
   );
 }
 
-export function BladderLogForm({ ownerId }: { ownerId: string }) {
+/** `day`: an earlier day being filled in; entries start at noon on it (change the time as needed). */
+export function BladderLogForm({ ownerId, day }: { ownerId: string; day?: string }) {
   const [mode, setMode] = useState<Mode | null>(null);
-  const [time, setTime] = useState("");
+  const [time, setTime] = useState(day ? `${day}T12:00` : "");
   const [amount, setAmount] = useState<string>("small");
   const [urgency, setUrgency] = useState<number | null>(null);
   const [triggers, setTriggers] = useState<string[]>([]);

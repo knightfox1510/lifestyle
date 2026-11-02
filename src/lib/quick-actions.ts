@@ -37,7 +37,7 @@ export async function getQuickLogData() {
 
 export async function undoQuickLog(kind: "water" | "bladder" | "dose", id: string) {
   const session = await getSession();
-  if (kind === "water") await deleteFluid(id);
-  else if (kind === "bladder") await deleteBladderEvent(id);
+  if (kind === "water") await deleteFluid(id, session.userId);
+  else if (kind === "bladder") await deleteBladderEvent(id, session.userId);
   else await undoDose(id, session.userId);
 }

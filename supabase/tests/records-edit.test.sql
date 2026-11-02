@@ -49,6 +49,21 @@ do $$ begin
   assert exists (select 1 from public.food_entries where id = 'e7e7e7e7-0000-0000-0000-000000000076'), 'partner cannot delete the owner''s own log';
 end $$;
 
+-- Bladder diary: K logs a leak for J, moves its time, deletes it; can't delete J's own.
+select set_config('request.jwt.claim.sub', :j, false);
+insert into public.module_shares (owner_id, grantee_id, module_key, level) values (:j, :k, 'bladder_diary', 'write');
+insert into public.bladder_events (id, household_id, kind) values ('e7e7e7e7-0000-0000-0000-000000000078', :'hid', 'leak');
+select set_config('request.jwt.claim.sub', :k, false);
+insert into public.bladder_events (id, owner_id, created_by, household_id, kind, amount) values ('e7e7e7e7-0000-0000-0000-000000000079', :j, :k, :'hid', 'leak', 'small');
+update public.bladder_events set occurred_at = now() - interval '45 minutes' where id = 'e7e7e7e7-0000-0000-0000-000000000079';
+update public.bladder_events set occurred_at = now() - interval '2 hours' where id = 'e7e7e7e7-0000-0000-0000-000000000078';
+delete from public.bladder_events where id in ('e7e7e7e7-0000-0000-0000-000000000078', 'e7e7e7e7-0000-0000-0000-000000000079');
+select set_config('request.jwt.claim.sub', :j, false);
+do $$ begin
+  assert not exists (select 1 from public.bladder_events where id = 'e7e7e7e7-0000-0000-0000-000000000079'), 'whoever logged it can delete';
+  assert (select occurred_at < now() - interval '1 hour' from public.bladder_events where id = 'e7e7e7e7-0000-0000-0000-000000000078'), 'write share can change the time';
+end $$;
+
 -- Medicine composition and nutrients.
 insert into public.medicines (household_id, name, times, dose_amount, ingredients, nutrients)
 values (:'hid', 'Shelcal 500', array['09:00'], 1, 'Calcium carbonate 1250 mg + Vitamin D3 250 IU', '{"calcium_mg": 500, "vit_d_mcg": 6.25}');

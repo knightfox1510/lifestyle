@@ -233,6 +233,7 @@ export const DRINKS = ["water", "tea", "coffee", "milk", "juice", "soda", "alcoh
 export type BladderEvent = {
   id: string;
   owner_id: string;
+  created_by?: string;
   occurred_at: string;
   kind: (typeof BLADDER_KINDS)[number];
   amount: (typeof LEAK_AMOUNTS)[number] | null;
@@ -245,6 +246,7 @@ export type BladderEvent = {
 export type FluidIntake = {
   id: string;
   owner_id: string;
+  created_by?: string;
   occurred_at: string;
   drink: (typeof DRINKS)[number];
   volume_ml: number;
