@@ -11,8 +11,8 @@ import { MEAL_META } from "@/modules/food/meta";
 import { loadUsuals } from "@/lib/week-plan";
 import type { MealPlanEntry, PantryItem } from "@/lib/types";
 
-/** Planning a whole week is a longer AI request; allow up to a minute on Vercel. */
-export const maxDuration = 60;
+/** Long AI jobs (documents, photos, whole-week plans) can take a while: up to 5 minutes on Vercel. */
+export const maxDuration = 300;
 
 const body = z.object({
   weekStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -93,7 +93,7 @@ ${input.notes ? `\nWishes for this week: ${input.notes}` : ""}
 Shopping list: combine across the week with total quantities in Indian household terms (e.g. "1 kg", "2 bunches", "500 g"), leave out what's in the pantry and basic masalas they'd already have.`;
 
     const result = await runJson(session, {
-      feature: "week_plan",
+      feature: "week_plan", maxDuration,
       schema: weekPlanSchema,
       parts: [{ text: prompt }],
       system: `${SAFETY_INSTRUCTIONS}\nYou are also a practical home cook and meal planner who knows Indian (especially Maharashtrian) home cooking.\n\n${ctx.text}`,

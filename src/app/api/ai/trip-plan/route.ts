@@ -6,8 +6,8 @@ import { tripPlanSchema } from "@/lib/ai/phase2-schemas";
 import { buildAiContext } from "@/lib/ai/context";
 import type { Trip, TripItem } from "@/lib/types";
 
-/** Photo and long AI requests can take a while; allow up to a minute on Vercel. */
-export const maxDuration = 60;
+/** Long AI jobs (documents, photos, whole-week plans) can take a while: up to 5 minutes on Vercel. */
+export const maxDuration = 300;
 
 const body = z.object({ tripId: z.uuid(), notes: z.string().trim().max(600).optional(), useMedicalHistory: z.boolean().optional() });
 
@@ -32,7 +32,7 @@ ${input.notes ? `Wishes: ${input.notes}` : ""}
 Give a realistic day-by-day plan (don't overpack days; include travel time and rest), a packing list tailored to destination, season and their health needs (medicines, comfort items, incontinence supplies if relevant), and practical tips (visas, transport passes, local etiquette, food for their diet).`;
 
     return runJson(session, {
-      feature: "trip_plan",
+      feature: "trip_plan", maxDuration,
       schema: tripPlanSchema,
       parts: [{ text: prompt }],
       system: `You are a careful travel planner. Respect health data quietly; never mention private conditions in a way others reading the plan would notice.\n\n${ctx.text}`,

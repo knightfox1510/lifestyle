@@ -23,6 +23,39 @@ describe("error classification", () => {
   });
 });
 
+describe("withRetry time budget", () => {
+  it("treats an aborted request as a timeout and doesn't retry it", async () => {
+    expect(classifyAiError(Object.assign(new Error("This operation was aborted"), { name: "AbortError" }))).toMatchObject({ kind: "timeout", retry: false });
+    const calls: string[] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(
+      withRetry(["a", "b"], async (m) => {
+        calls.push(m);
+        throw Object.assign(new Error("aborted"), { name: "AbortError" });
+      }, { delays: [0, 0], deadline: Date.now() + 60_000 }),
+    ).rejects.toMatchObject({ name: "AbortError" });
+    expect(calls).toEqual(["a"]);
+    spy.mockRestore();
+  });
+  it("skips a retry that couldn't finish before the deadline", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const calls: string[] = [];
+    await expect(
+      withRetry(["a", "b"], async (m) => {
+        calls.push(m);
+        throw { status: 503, message: "UNAVAILABLE" };
+      }, { delays: [0, 0], deadline: Date.now() + 5_000 }),
+    ).rejects.toMatchObject({ status: 503 });
+    expect(calls).toEqual(["a"]); // 5 s left is less than a useful attempt
+    spy.mockRestore();
+  });
+  it("hands each attempt a signal that fires at the deadline", async () => {
+    let got: AbortSignal | undefined;
+    await withRetry(["a"], async (_m, signal) => { got = signal; return 1; }, { deadline: Date.now() + 30_000 });
+    expect(got).toBeInstanceOf(AbortSignal);
+  });
+});
+
 describe("withRetry", () => {
   const quiet = () => vi.spyOn(console, "error").mockImplementation(() => {});
   it("retries the same model, then falls back", async () => {

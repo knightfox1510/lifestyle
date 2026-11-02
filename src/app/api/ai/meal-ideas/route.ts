@@ -10,8 +10,8 @@ import { totals } from "@/modules/food/meta";
 import { daysUntil, inPantry } from "@/modules/pantry/match";
 import type { FoodEntry, PantryItem } from "@/lib/types";
 
-/** Photo and long AI requests can take a while; allow up to a minute on Vercel. */
-export const maxDuration = 60;
+/** Long AI jobs (documents, photos, whole-week plans) can take a while: up to 5 minutes on Vercel. */
+export const maxDuration = 300;
 
 const body = z.object({
   subjectId: z.uuid(),
@@ -73,7 +73,7 @@ ${pantryText}
 Mark each ingredient's in_pantry honestly against the pantry list. Calories and macros are per serving. Keep steps short and practical.`;
 
     const result = await runJson(session, {
-      feature: "meal_ideas",
+      feature: "meal_ideas", maxDuration,
       schema: mealIdeasSchema,
       parts: [{ text: prompt }],
       system: `${SAFETY_INSTRUCTIONS}\nYou are also a practical home cook who knows Indian and global home cooking.\n\n${ctx.text}`,

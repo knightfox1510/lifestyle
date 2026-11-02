@@ -62,7 +62,7 @@ export function AnalyzeDocument({ documentId, alreadyRead }: { documentId: strin
   return (
     <>
       <Button size="sm" variant="secondary" onClick={analyze} disabled={loading}>
-        {loading ? "Reading…" : alreadyRead ? "✨ Read again with AI" : "✨ Read with AI"}
+        {loading ? "Reading… long reports can take 1–2 minutes" : alreadyRead ? "✨ Read again with AI" : "✨ Read with AI"}
       </Button>
       {message ? <div className="basis-full"><Notice tone={message.tone}>{message.text}</Notice></div> : null}
       {events ? (

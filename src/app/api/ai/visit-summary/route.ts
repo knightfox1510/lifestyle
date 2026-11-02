@@ -5,8 +5,8 @@ import { aiHandler, runJson } from "@/lib/ai/run";
 import { visitSummarySchema } from "@/lib/ai/health-schemas";
 import { loadVisitData, visitDataText, VISIT_PERIODS } from "@/lib/visit-summary";
 
-/** Photo and long AI requests can take a while; allow up to a minute on Vercel. */
-export const maxDuration = 60;
+/** Long AI jobs (documents, photos, whole-week plans) can take a while: up to 5 minutes on Vercel. */
+export const maxDuration = 300;
 
 /** Short doctor-facing overview of the visit summary data. */
 export async function POST(request: Request) {
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     if (session.accessTo("medical_records", input.subjectId) === "none") throw new AiError("You can't see this person's medical records.", 403);
     const v = await loadVisitData(session, input.subjectId, input.days);
     return runJson(session, {
-      feature: "visit_summary",
+      feature: "visit_summary", maxDuration,
       schema: visitSummarySchema,
       usedHealth: true,
       temperature: 0.2,

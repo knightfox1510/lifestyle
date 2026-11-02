@@ -10,8 +10,8 @@ import { computeItem, type CalcItem } from "@/modules/nutrition/compute";
 import { cleanIrritants } from "@/modules/nutrition/irritants";
 import type { Nutrients } from "@/modules/nutrition/nutrients";
 
-/** Photo and long AI requests can take a while; allow up to a minute on Vercel. */
-export const maxDuration = 60;
+/** Long AI jobs (documents, photos, whole-week plans) can take a while: up to 5 minutes on Vercel. */
+export const maxDuration = 300;
 
 /**
  * Turns a description/photo of a meal into nutrition. AI only breaks it down
@@ -49,7 +49,7 @@ Also give your own overall estimate for the item. Mark bladder irritants honestl
 ${context}`;
 
     const result = await runJson(session, {
-      feature: "food_estimate",
+      feature: "food_estimate", maxDuration,
       schema: mealCalcSchema,
       parts: [...(photo ? [photo] : []), { text: `Local time: ${hint || "unknown"}.\n${text ? `What I ate: ${text}` : "Work out the food in this photo."}` }],
       system,

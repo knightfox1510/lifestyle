@@ -7,8 +7,8 @@ import { householdFoods, matchIngredient } from "@/lib/nutrition/resolve";
 import { MEASURE_HINTS, STAPLES } from "@/modules/nutrition/staples";
 import type { Recipe } from "@/lib/types";
 
-/** Photo and long AI requests can take a while; allow up to a minute on Vercel. */
-export const maxDuration = 60;
+/** Long AI jobs (documents, photos, whole-week plans) can take a while: up to 5 minutes on Vercel. */
+export const maxDuration = 300;
 
 /** Works out grams for each recipe ingredient line and matches it to food data. */
 export async function POST(request: Request) {
@@ -23,7 +23,7 @@ export async function POST(request: Request) {
 
     const lines = recipe.ingredients.map((i, idx) => `${idx}. ${[i.quantity, i.name].filter(Boolean).join(" ")}`).join("\n");
     const result = await runJson(session, {
-      feature: "recipe_calc",
+      feature: "recipe_calc", maxDuration,
       schema: recipeCalcSchema,
       parts: [
         {

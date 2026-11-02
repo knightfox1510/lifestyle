@@ -5,8 +5,8 @@ import { AiError } from "@/lib/ai/gemini";
 import { aiHandler, imagePart, runJson } from "@/lib/ai/run";
 import { menuExtractSchema } from "@/lib/ai/phase2-schemas";
 
-/** Photo and long AI requests can take a while; allow up to a minute on Vercel. */
-export const maxDuration = 60;
+/** Long AI jobs (documents, photos, whole-week plans) can take a while: up to 5 minutes on Vercel. */
+export const maxDuration = 300;
 
 const MAX_IMAGES = 6;
 
@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     if (!images.length && !text) throw new AiError("Add menu screenshots or paste the menu text.");
 
     return runJson(session, {
-      feature: "menu_import",
+      feature: "menu_import", maxDuration, quick: true,
       schema: menuExtractSchema,
       parts: [
         ...images,

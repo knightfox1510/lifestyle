@@ -24,7 +24,7 @@ export function isPlausibleGeminiKey(key: string): boolean {
   return /^[A-Za-z0-9._\-]{20,300}$/.test(key);
 }
 
-export type AiFailure = "quota" | "busy" | "key" | "safety" | "bad_request" | "empty" | "unknown";
+export type AiFailure = "quota" | "busy" | "key" | "safety" | "bad_request" | "empty" | "timeout" | "unknown";
 
 /** Turns a Gemini SDK error into a kind; only quota/busy/empty/unknown are worth retrying. */
 export function classifyAiError(err: unknown): { kind: AiFailure; retry: boolean; status: number | null } {
@@ -32,6 +32,8 @@ export function classifyAiError(err: unknown): { kind: AiFailure; retry: boolean
   const status = typeof e?.status === "number" ? e.status : typeof e?.code === "number" ? e.code : null;
   const msg = String(e?.message ?? "").toLowerCase();
   if (e?.name === "EmptyResponse") return { kind: "empty", retry: true, status };
+  // Our own time budget ran out: no point retrying, the request would be cut off anyway.
+  if (e?.name === "AiTimeout" || e?.name === "AbortError" || e?.name === "TimeoutError" || msg.includes("aborted")) return { kind: "timeout", retry: false, status };
   if (status === 429 || msg.includes("resource_exhausted") || msg.includes("quota")) return { kind: "quota", retry: true, status };
   if (
     status === 401 ||
@@ -56,6 +58,7 @@ export const FAILURE_MESSAGE: Record<AiFailure, string> = {
   safety: "The AI declined this request. Try rewording it.",
   bad_request: "The AI couldn't process this request. Try a smaller photo or shorter text.",
   empty: "The AI returned an empty answer. Try again.",
+  timeout: "The AI took too long this time. Try again; for long documents, upload a few pages at a time.",
   unknown: "The AI request failed. Try again in a moment.",
 };
 
@@ -66,13 +69,21 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * (short backoff) on retryable failures, then the next model in the chain.
  * Non-retryable failures stop immediately.
  */
-export async function withRetry<T>(models: string[], attempt: (model: string) => Promise<T>, opts: { delays?: number[] } = {}) {
+export async function withRetry<T>(
+  models: string[],
+  attempt: (model: string, signal?: AbortSignal) => Promise<T>,
+  opts: { delays?: number[]; deadline?: number; minAttemptMs?: number } = {},
+) {
   const delays = opts.delays ?? [800, 2000];
+  // A retry that can't finish before the deadline only wastes the time left.
+  const minAttempt = opts.minAttemptMs ?? 15_000;
   let last: unknown = null;
   for (const model of models) {
     for (let i = 0; i < 2; i++) {
+      const left = opts.deadline ? opts.deadline - Date.now() : Infinity;
+      if (left < (last ? minAttempt : 1000)) throw last && classifyAiError(last).kind !== "unknown" ? last : Object.assign(new Error("AI time budget used up"), { name: "AiTimeout" });
       try {
-        return { result: await attempt(model), model };
+        return { result: await attempt(model, Number.isFinite(left) ? AbortSignal.timeout(left) : undefined), model };
       } catch (err) {
         last = err;
         const c = classifyAiError(err);

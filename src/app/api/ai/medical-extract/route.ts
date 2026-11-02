@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createPartFromBase64 } from "@google/genai";
 import { getSession } from "@/lib/session";
-import { AiError, assertQuota, generate, recordUsage } from "@/lib/ai/gemini";
+import { AiError, assertQuota, deadlineFor, generate, recordUsage } from "@/lib/ai/gemini";
 import { clampToSchema, medicalExtractionSchema, toGeminiSchema } from "@/lib/ai/schemas";
 import type { MedicalDocument } from "@/lib/types";
 
-/** Photo and long AI requests can take a while; allow up to a minute on Vercel. */
-export const maxDuration = 60;
+/** Long AI jobs (documents, photos, whole-week plans) can take a while: up to 5 minutes on Vercel. */
+export const maxDuration = 300;
 
 const bodySchema = z.object({ documentId: z.uuid() });
 
@@ -33,6 +33,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "You can only analyse documents you can edit" }, { status: 403 });
   }
 
+  const deadline = deadlineFor(maxDuration);
   try {
     await assertQuota(session);
     const file = await session.supabase.storage.from("medical-documents").download(document.storage_path);
@@ -46,7 +47,7 @@ export async function POST(request: Request) {
         responseJsonSchema: toGeminiSchema(medicalExtractionSchema),
         temperature: 0,
       },
-    });
+    }, { deadline, quick: true });
     await recordUsage(session, "medical_extract", false, res.usageMetadata);
 
     const extraction = medicalExtractionSchema.safeParse(clampToSchema(JSON.parse(res.text ?? "{}"), medicalExtractionSchema));

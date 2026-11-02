@@ -4,8 +4,8 @@ import { AiError } from "@/lib/ai/gemini";
 import { aiHandler, imagePart, runJson } from "@/lib/ai/run";
 import { scanSchema } from "@/lib/ai/phase2-schemas";
 
-/** Photo and long AI requests can take a while; allow up to a minute on Vercel. */
-export const maxDuration = 60;
+/** Long AI jobs (documents, photos, whole-week plans) can take a while: up to 5 minutes on Vercel. */
+export const maxDuration = 300;
 
 const PROMPTS = {
   receipt: `This is a grocery/shopping receipt (Indian stores and quick-commerce apps like Blinkit, Zepto, BigBasket, Swiggy Instamart are common). List each food or household product bought, with a clean generic name (expand abbreviations), quantity, category and where it would be stored. Skip totals, taxes, discounts, delivery fees and bags. expires_in_days = typical shelf life from purchase (e.g. milk 2, curd 4, bread 4, leafy greens 3, tomatoes 7, onions 30, rice 365), expiry_printed=false.`,
@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     const photo = await imagePart(form.get("photo"));
     if (!photo) throw new AiError("Take or choose a photo first.");
     return runJson(session, {
-      feature: `scan_${mode}`,
+      feature: `scan_${mode}`, maxDuration, quick: true,
       schema: scanSchema,
       parts: [photo, { text: PROMPTS[mode] }],
       temperature: 0.1,

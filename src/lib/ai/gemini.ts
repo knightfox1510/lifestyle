@@ -1,6 +1,6 @@
 import "server-only";
 
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { decryptSecret } from "@/lib/crypto";
 import type { AppSession } from "@/lib/session";
@@ -74,21 +74,41 @@ export async function recordUsage(
  * fallback, the person's language added to the system instruction, and a
  * clear AiError when everything fails.
  */
-export async function generate(session: AppSession, request: Omit<GenerateContentParameters, "model">): Promise<GenerateContentResponse & { modelUsed: string }> {
+/** Gemini 3 models (and Google's "-latest" aliases, which point at them) accept a thinking level. */
+const takesThinkingLevel = (model: string) => /gemini-(3|[a-z-]*latest)/.test(model);
+
+export type GenerateOptions = {
+  /** Wall-clock time (ms since epoch) by which the answer must be back; retries stop before it. */
+  deadline?: number;
+  /** Light thinking for long, mostly-transcription jobs (documents, menus): much faster on Pro. */
+  quick?: boolean;
+};
+
+/** Leaves a few seconds of the route's maxDuration for saving and replying. */
+export function deadlineFor(maxDurationSeconds: number) {
+  return Date.now() + (maxDurationSeconds - 8) * 1000;
+}
+
+export async function generate(
+  session: AppSession,
+  request: Omit<GenerateContentParameters, "model">,
+  opts: GenerateOptions = {},
+): Promise<GenerateContentResponse & { modelUsed: string }> {
   const ai = await getGemini(session);
   const lang = aiLanguageLine(session);
   const sys = request.config?.systemInstruction;
   const config = { ...request.config, systemInstruction: typeof sys === "string" || sys == null ? [sys, lang].filter(Boolean).join("\n\n") || undefined : sys };
   try {
-    const { result, model } = await withRetry(modelsFor(session), async (model) => {
-      const res = await ai.models.generateContent({ ...request, model, config });
+    const { result, model } = await withRetry(modelsFor(session), async (model, signal) => {
+      const thinking = opts.quick && takesThinkingLevel(model) && !config.thinkingConfig ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } } : {};
+      const res = await ai.models.generateContent({ ...request, model, config: { ...config, ...thinking, ...(signal ? { abortSignal: signal } : {}) } });
       if (!res.text?.trim()) throw Object.assign(new Error("Empty response"), { name: "EmptyResponse" });
       return res;
-    });
+    }, { deadline: opts.deadline ?? deadlineFor(60) });
     return Object.assign(result, { modelUsed: model });
   } catch (err) {
     if (err instanceof AiError) throw err;
     const c = classifyAiError(err);
-    throw new AiError(FAILURE_MESSAGE[c.kind], c.kind === "quota" ? 429 : c.kind === "key" ? 401 : 502);
+    throw new AiError(FAILURE_MESSAGE[c.kind], c.kind === "quota" ? 429 : c.kind === "key" ? 401 : c.kind === "timeout" ? 504 : 502);
   }
 }

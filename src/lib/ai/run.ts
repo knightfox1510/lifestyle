@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import type { Part } from "@google/genai";
 import type { z } from "zod";
 import type { AppSession } from "@/lib/session";
-import { AiError, assertQuota, generate, recordUsage } from "@/lib/ai/gemini";
+import { AiError, assertQuota, deadlineFor, generate, recordUsage } from "@/lib/ai/gemini";
 import { clampToSchema, toGeminiSchema } from "@/lib/ai/schemas";
 
 /** Calls Gemini for structured JSON, enforces the household quota, logs usage and validates the result. */
@@ -17,8 +17,13 @@ export async function runJson<S extends z.ZodType>(
     system?: string;
     temperature?: number;
     usedHealth?: boolean;
+    /** The route's maxDuration in seconds (default 60); the AI stops in time to reply. */
+    maxDuration?: number;
+    /** Light thinking, for long transcription-like jobs. */
+    quick?: boolean;
   },
 ): Promise<z.infer<S>> {
+  const deadline = deadlineFor(opts.maxDuration ?? 60);
   await assertQuota(session);
   const request = {
     contents: [{ role: "user", parts: opts.parts }],
@@ -31,7 +36,9 @@ export async function runJson<S extends z.ZodType>(
   };
   // A malformed or incomplete JSON answer gets one more try before giving up.
   for (let attempt = 0; ; attempt++) {
-    const res = await generate(session, request);
+    // A second try only if there's clearly time for it.
+    if (attempt > 0 && deadline - Date.now() < 20_000) throw new AiError("The AI response was incomplete. Try again.", 502);
+    const res = await generate(session, request, { deadline, quick: opts.quick });
     if (attempt === 0) await recordUsage(session, opts.feature, opts.usedHealth ?? false, res.usageMetadata);
     let json: unknown = undefined;
     try {
