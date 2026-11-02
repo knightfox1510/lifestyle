@@ -9,6 +9,7 @@ import type { BladderEvent, FluidIntake, Medicine, MedicineDose } from "@/lib/ty
 const med = (over: Partial<Medicine> = {}): Medicine => ({
   id: "m1",
   owner_id: "u",
+  created_by: "u",
   household_id: "h",
   name: "Med",
   strength: null,

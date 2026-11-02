@@ -4,7 +4,7 @@ import { addDays, localTime, shortDate, todayIn } from "@/lib/dates";
 import { Badge, Card, EmptyState, Notice, buttonClass } from "@/components/ui";
 import { DateJump } from "@/components/date-jump";
 import type { Medicine, MedicineDose } from "@/lib/types";
-import { doseLabel, refillInfo, slotsForDay } from "@/modules/medicines/logic";
+import { doseLabel, isCurrentOn, isUpcomingOn, refillInfo, slotsForDay } from "@/modules/medicines/logic";
 import { DoseButtons, AsNeededButton } from "./dose-buttons";
 import { getT } from "@/lib/i18n/server";
 import { medicineChecksFor } from "@/lib/medicine-checks";
@@ -29,11 +29,14 @@ export default async function MedicinesTodayPage({ searchParams }: PageProps<"/m
   ]);
   const meds = (medData ?? []) as Medicine[];
   const doses = (doseData ?? []) as MedicineDose[];
-  // On an earlier day, also show medicines added later (you may have been taking them already).
-  const startedLater = new Set(isToday ? [] : meds.filter((m) => m.start_date > date).map((m) => m.id));
+  // On an earlier day, also show medicines whose start date was set later but has already come
+  // (you may have been taking them before adding them). Future courses never show.
+  const startedLater = new Set(isToday ? [] : meds.filter((m) => m.start_date > date && m.start_date <= today).map((m) => m.id));
   const slots = slotsForDay(isToday ? meds : meds.map((m) => (startedLater.has(m.id) ? { ...m, start_date: date } : m)), doses, date);
-  const asNeeded = meds.filter((m) => m.times.length === 0);
-  const lowStock = meds.map((m) => ({ m, r: refillInfo(m) })).filter((x) => x.r?.low);
+  // Only medicines current on this day; ones starting later are listed separately.
+  const asNeeded = meds.filter((m) => m.times.length === 0 && (isCurrentOn(m, date) || startedLater.has(m.id)));
+  const upcoming = isToday ? meds.filter((m) => isUpcomingOn(m, today)) : [];
+  const lowStock = meds.filter((m) => isCurrentOn(m, today)).map((m) => ({ m, r: refillInfo(m) })).filter((x) => x.r?.low);
   const now = localTime(new Date(), tz);
   const done = slots.filter((s) => s.dose).length;
   const serious = meds.length ? (await medicineChecksFor(session, ownerId)).findings.filter((f) => f.severity === "high") : [];
@@ -145,6 +148,22 @@ export default async function MedicinesTodayPage({ searchParams }: PageProps<"/m
                 </li>
               );
             })}
+          </ul>
+        </Card>
+      ) : null}
+
+      {upcoming.length ? (
+        <Card>
+          <h2 className="mb-2 font-semibold">{t("Starting later")}</h2>
+          <ul className="divide-y divide-border">
+            {upcoming.map((m) => (
+              <li key={m.id} className="flex items-center justify-between gap-2 py-2 text-sm">
+                <span>
+                  <span className="font-medium">{m.name}</span> {m.strength ? <span className="text-fg-muted">{m.strength}</span> : null}
+                </span>
+                <Badge>{t("starts {date}", { date: shortDate(m.start_date) })}</Badge>
+              </li>
+            ))}
           </ul>
         </Card>
       ) : null}

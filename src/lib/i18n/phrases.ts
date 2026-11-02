@@ -770,4 +770,10 @@ export const PHRASES: Record<string, { hi: string; mr: string }> = {
   "{name}'s shared data": { hi: "{name} का साझा डेटा", mr: "{name} चा शेअर केलेला डेटा" },
   "Viewing {name}'s data": { hi: "{name} का डेटा देख रहे हैं", mr: "{name} चा डेटा पाहत आहात" },
   "Back to mine": { hi: "मेरे पर वापस", mr: "माझ्याकडे परत" },
+  "Starting later": { hi: "बाद में शुरू", mr: "नंतर सुरू" },
+  "starts {date}": { hi: "{date} से शुरू", mr: "{date} पासून सुरू" },
+  "Delete": { hi: "हटाएँ", mr: "हटवा" },
+  "Delete {name} and its dose history?": { hi: "{name} और उसकी ख़ुराक का इतिहास हटाएँ?", mr: "{name} आणि त्याचा डोसचा इतिहास हटवायचा?" },
+  "Yes, delete": { hi: "हाँ, हटाएँ", mr: "हो, हटवा" },
+  "Medicine deleted.": { hi: "दवा हटा दी गई।", mr: "औषध हटवले." },
 };

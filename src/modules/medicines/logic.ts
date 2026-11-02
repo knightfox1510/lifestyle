@@ -8,6 +8,16 @@ export function isScheduledOn(med: Medicine, date: string): boolean {
   return !med.days_of_week || med.days_of_week.includes(dayOfWeek(date));
 }
 
+/** Active and within its start/end dates on `date` (as-needed medicines included). */
+export function isCurrentOn(med: Medicine, date: string): boolean {
+  return med.active && med.start_date <= date && (!med.end_date || date <= med.end_date);
+}
+
+/** Active but not started yet on `date` (e.g. a course that begins next week). */
+export function isUpcomingOn(med: Medicine, date: string): boolean {
+  return med.active && med.start_date > date;
+}
+
 export type DoseSlot = { medicine: Medicine; time: string; dose: MedicineDose | null };
 
 export function slotsForDay(meds: Medicine[], doses: MedicineDose[], date: string): DoseSlot[] {

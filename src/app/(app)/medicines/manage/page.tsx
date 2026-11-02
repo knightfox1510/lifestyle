@@ -4,8 +4,9 @@ import type { Medicine } from "@/lib/types";
 import { DAY_LETTERS, doseLabel, refillInfo } from "@/modules/medicines/logic";
 import { formatDate } from "@/modules/medical/meta";
 import { MedicineForm } from "./medicine-form";
-import { deleteMedicine, restockMedicine, setMedicineActive } from "../actions";
-import { todayIn } from "@/lib/dates";
+import { restockMedicine, setMedicineActive } from "../actions";
+import { shortDate, todayIn } from "@/lib/dates";
+import { DeleteMedicineButton } from "./delete-button";
 
 export const metadata = { title: "Manage medicines" };
 
@@ -15,6 +16,7 @@ export default async function ManageMedicinesPage({ searchParams }: PageProps<"/
   const canWrite = session.accessTo("medicines", ownerId) === "write";
   const isOwner = ownerId === session.userId;
   const { edit } = await searchParams;
+  const today = todayIn(session.profile.timezone);
 
   const { data } = await session.supabase
     .from("medicines")
@@ -32,7 +34,7 @@ export default async function ManageMedicinesPage({ searchParams }: PageProps<"/
           key={editing?.id ?? "new"}
           ownerId={ownerId}
           medicine={editing}
-          today={todayIn(session.profile.timezone)}
+          today={today}
           timelineAvailable={session.isModuleEnabled("medical_records")}
         />
       ) : null}
@@ -58,7 +60,7 @@ export default async function ManageMedicinesPage({ searchParams }: PageProps<"/
                     ) : null}
                   </div>
                   <div className="flex flex-wrap gap-1">
-                    {!m.active ? <Badge>stopped</Badge> : null}
+                    {!m.active ? <Badge>stopped</Badge> : m.start_date > today ? <Badge tone="accent">starts {shortDate(m.start_date)}</Badge> : m.end_date && m.end_date < today ? <Badge>ended</Badge> : null}
                     {r ? <Badge tone={r.low ? "danger" : "neutral"}>{r.stock} in stock{r.daysLeft !== null ? ` · ~${r.daysLeft}d` : ""}</Badge> : null}
                     {!m.include_in_ai ? <Badge>hidden from AI</Badge> : null}
                   </div>
@@ -75,11 +77,7 @@ export default async function ManageMedicinesPage({ searchParams }: PageProps<"/
                     <form action={setMedicineActive.bind(null, m.id, ownerId, !m.active)}>
                       <button className={buttonClass("ghost", "sm")}>{m.active ? "Stop" : "Resume"}</button>
                     </form>
-                    {isOwner ? (
-                      <form action={deleteMedicine.bind(null, m.id)}>
-                        <button className={buttonClass("danger", "sm")}>Delete</button>
-                      </form>
-                    ) : null}
+                    {isOwner || m.created_by === session.userId ? <DeleteMedicineButton id={m.id} ownerId={ownerId} name={m.name} /> : null}
                   </div>
                 ) : null}
               </Card>

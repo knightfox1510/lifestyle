@@ -2,7 +2,6 @@
 
 import { z } from "zod";
 import { errorMessage, refreshModule, requireWrite } from "@/lib/guards";
-import { getSession } from "@/lib/session";
 import { todayIn, zonedIso } from "@/lib/dates";
 import { MEDICINE_FORMS, type ActionResult } from "@/lib/types";
 
@@ -99,10 +98,23 @@ export async function setMedicineActive(id: string, ownerId: string, active: boo
   refreshModule("/medicines");
 }
 
-export async function deleteMedicine(id: string) {
-  const session = await getSession();
-  await session.supabase.from("medicines").delete().eq("id", id).eq("owner_id", session.userId);
+/**
+ * Removes a medicine added by mistake, with its dose history. The owner can
+ * always; a partner with write access can remove ones they added.
+ */
+export async function deleteMedicine(id: string, ownerId: string): Promise<ActionResult> {
+  if (!z.uuid().safeParse(id).success) return { error: "Not found." };
+  try {
+    const session = await requireWrite(MODULE, ownerId);
+    const { data, error } = await session.supabase.from("medicines").delete().eq("id", id).eq("owner_id", ownerId).select("id");
+    if (error || !data?.length) {
+      return { error: ownerId === session.userId ? "Couldn't delete the medicine." : "Only the person it belongs to, or whoever added it, can delete it. Stop it instead." };
+    }
+  } catch (e) {
+    return { error: errorMessage(e) };
+  }
   refreshModule("/medicines");
+  return { ok: true, message: "Medicine deleted." };
 }
 
 export async function restockMedicine(id: string, ownerId: string, form: FormData) {
@@ -139,7 +151,7 @@ export async function logDose(
     const takenAt = date < today ? zonedIso(date, time ?? "12:00", tz) : new Date().toISOString();
     if (date < today) {
       const { data: med } = await session.supabase.from("medicines").select("start_date").eq("id", medicineId).maybeSingle();
-      if (med && date < med.start_date) await session.supabase.from("medicines").update({ start_date: date }).eq("id", medicineId);
+      if (med && date < med.start_date && med.start_date <= today) await session.supabase.from("medicines").update({ start_date: date }).eq("id", medicineId);
     }
     if (time) {
       const { data: existing } = await session.supabase

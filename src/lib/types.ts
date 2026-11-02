@@ -153,6 +153,7 @@ export const MEDICINE_FORMS = ["tablet", "capsule", "syrup", "injection", "drops
 export type Medicine = {
   id: string;
   owner_id: string;
+  created_by: string;
   household_id: string;
   name: string;
   strength: string | null;
