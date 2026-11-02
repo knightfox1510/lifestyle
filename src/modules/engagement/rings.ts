@@ -10,9 +10,24 @@ export function rings(inputs: RingInput[]): Ring[] {
   return inputs.filter((r) => r.target > 0).map((r) => ({ ...r, pct: Math.min(1, Math.max(0, r.value / r.target)) }));
 }
 
-/** Average completion, 0–100. */
+/** Water counts as one item per this many ml (2 L → 4 glasses-worth of items). */
+export const WATER_ML_PER_ITEM = 500;
+
+/** How many "things" a ring stands for: each dose, each main meal, the check-in, and water in 500 ml steps. */
+function ringItems(r: Ring) {
+  return r.key === "water" ? r.target / WATER_ML_PER_ITEM : r.target;
+}
+
+/**
+ * Share of today's things done, 0–100. Every dose, meal and the check-in
+ * counts as one thing, and water counts per 500 ml, so finishing one small
+ * ring early (say, a single morning tablet) no longer jumps the day to 25–33%.
+ */
 export function dayScore(rs: Ring[]) {
-  return rs.length ? Math.round((rs.reduce((a, r) => a + r.pct, 0) / rs.length) * 100) : 0;
+  const total = rs.reduce((a, r) => a + ringItems(r), 0);
+  if (!total) return 0;
+  const done = rs.reduce((a, r) => a + ringItems(r) * r.pct, 0);
+  return Math.round((done / total) * 100);
 }
 
 /** A day is closed when every goal shown that day is complete. */

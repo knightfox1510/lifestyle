@@ -6,7 +6,7 @@ import { addDays, localDate, localTime, shortDate, startOfLocalDayIso, todayIn }
 import { Card, buttonClass, cx, Notice } from "@/components/ui";
 import type { FluidIntake, FoodEntry, NutritionGoals } from "@/lib/types";
 import { MEAL_META, MEAL_ORDER, eatenAtFor, totals } from "@/modules/food/meta";
-import { DateJump } from "./date-jump";
+import { DateJump } from "@/components/date-jump";
 import { supplementNutrientsByDay } from "@/lib/supplement-nutrients";
 import { MicroPanel } from "@/components/micro-panel";
 import { AccuracyBadge } from "@/components/nutrition-ui";
@@ -92,7 +92,7 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <Link href={`/food?date=${addDays(date, -1)}`} className={buttonClass("ghost", "sm")}>← {shortDate(addDays(date, -1))}</Link>
-        <DateJump date={date} today={today} label={date === today ? t("Today") : shortDate(date)} />
+        <DateJump date={date} today={today} basePath="/food" label={date === today ? t("Today") : shortDate(date)} />
         {date < today ? (
           <Link href={date === addDays(today, -1) ? "/food" : `/food?date=${addDays(date, 1)}`} className={buttonClass("ghost", "sm")}>{shortDate(addDays(date, 1))} →</Link>
         ) : (

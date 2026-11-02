@@ -451,7 +451,7 @@ export async function Widget({ widgetKey, size, session }: { widgetKey: string; 
       const { data: r } = ids.length ? await session.supabase.from("recipes").select("id, title").in("id", ids) : { data: [] };
       const titles = new Map(((r ?? []) as Pick<Recipe, "id" | "title">[]).map((x) => [x.id, x.title]));
       return (
-        <WidgetFrame size={size} title="Today's meals" href="/recipes/plan">
+        <WidgetFrame size={size} title="Today's meals" href="/food/plan">
           {plan.length ? (
             <ul className="space-y-1 text-sm">
               {plan.map((p) => (

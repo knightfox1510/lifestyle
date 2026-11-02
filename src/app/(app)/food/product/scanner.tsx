@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { Button, Card, Input, Notice, cx } from "@/components/ui";
+import { Button, Card, Input, Notice, buttonClass, cx } from "@/components/ui";
 import type { PersonPortion } from "@/components/nutrition-ui";
 import { compressImage } from "@/lib/compress-image";
 import { MICRO_KEYS, NUTRIENT_META, formatNutrient, type Nutrients } from "@/modules/nutrition/nutrients";
@@ -96,6 +96,23 @@ export function ProductScanner({ me, people }: { me: string; people: PersonPorti
       setMsg({ tone: "danger", text: "Couldn't open the camera. Type the barcode number instead." });
     }
   }
+  /** Reads a barcode from a photo picked from the gallery or files. */
+  async function barcodeFromPhoto(file: File) {
+    const det = getDetector();
+    if (!det) return;
+    setMsg(null);
+    try {
+      const bitmap = await createImageBitmap(file);
+      const hits = await det.detect(bitmap);
+      bitmap.close();
+      if (hits[0]?.rawValue) {
+        setCode(hits[0].rawValue);
+        void lookup(hits[0].rawValue);
+      } else setMsg({ tone: "danger", text: "No barcode found in that photo. Try a closer, sharper one, or type the number." });
+    } catch {
+      setMsg({ tone: "danger", text: "Couldn't read that photo. Type the barcode number instead." });
+    }
+  }
   function stopCamera() {
     stream.current?.getTracks().forEach((t) => t.stop());
     stream.current = null;
@@ -161,7 +178,13 @@ export function ProductScanner({ me, people }: { me: string; people: PersonPorti
                   <Button variant="ghost" size="sm" onClick={stopCamera}>Stop camera</Button>
                 </div>
               ) : (
-                <Button onClick={startCamera}>📷 Scan with camera</Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button onClick={startCamera}>📷 Scan with camera</Button>
+                  <label className={cx(buttonClass("secondary"), "cursor-pointer")}>
+                    🖼️ From a photo
+                    <input type="file" accept="image/*" className="sr-only" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void barcodeFromPhoto(f); }} />
+                  </label>
+                </div>
               )
             ) : supported === false ? (
               <p className="text-xs text-fg-muted">This browser can&apos;t scan barcodes (iPhone Safari can&apos;t). Type the number printed under the barcode, or use the label photo.</p>
@@ -175,8 +198,8 @@ export function ProductScanner({ me, people }: { me: string; people: PersonPorti
         ) : (
           <label className="flex cursor-pointer flex-col items-center gap-1 rounded-xl border-2 border-dashed border-border p-5 text-center text-sm hover:bg-surface-2">
             <span className="text-2xl" aria-hidden>📄</span>
-            {loading ? "Reading the label…" : "Take a clear photo of the nutrition table (and ingredients, if they fit)"}
-            <input type="file" accept="image/*" capture="environment" className="sr-only" onChange={(e) => e.target.files?.[0] && readLabel(e.target.files[0])} />
+            {loading ? "Reading the label…" : "Take or choose a clear photo of the nutrition table (and ingredients, if they fit)"}
+            <input type="file" accept="image/*" className="sr-only" onChange={(e) => e.target.files?.[0] && readLabel(e.target.files[0])} />
           </label>
         )}
         {msg ? <Notice tone={msg.tone}>{msg.text}</Notice> : null}

@@ -33,7 +33,7 @@ export default async function GroceriesPage() {
     {session.isModuleEnabled("pantry") ? (
       <div className="mb-3 flex flex-wrap gap-2">
         <Link href="/pantry/scan" className={buttonClass("secondary", "sm")}>📷 Scan a list or receipt</Link>
-        {session.isModuleEnabled("recipes") ? <Link href="/recipes/plan" className={buttonClass("ghost", "sm")}>From this week&apos;s meal plan</Link> : null}
+        {session.isModuleEnabled("food_diary") ? <Link href="/food/plan" className={buttonClass("ghost", "sm")}>From this week&apos;s meal plan</Link> : null}
       </div>
     ) : null}
     {pantryOn ? (

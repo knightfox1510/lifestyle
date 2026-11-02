@@ -69,7 +69,7 @@ export function SupplementNutrientsEditor({
         </Field>
         <label className="pressable inline-flex h-11 cursor-pointer items-center gap-2 rounded-full bg-surface px-4 text-[14px] font-medium shadow-[0_0_0_1px_var(--border)]">
           <Camera className="size-4" aria-hidden /> {scanning ? t("Reading…") : t("Scan label")}
-          <input type="file" accept="image/*" capture="environment" className="sr-only" disabled={scanning} onChange={(e) => e.target.files?.[0] && scan(e.target.files[0])} />
+          <input type="file" accept="image/*" className="sr-only" disabled={scanning} onChange={(e) => e.target.files?.[0] && scan(e.target.files[0])} />
         </label>
       </div>
       {hits.length ? (

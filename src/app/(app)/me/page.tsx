@@ -6,7 +6,7 @@ import { getT } from "@/lib/i18n/server";
 import { hubStatuses } from "@/lib/hub-status";
 import { SignOutButton } from "@/components/sign-out-button";
 
-export const metadata = { title: "Me" };
+export const metadata = { title: "Family" };
 
 export default async function MeHub() {
   const session = await getSession();
@@ -22,7 +22,7 @@ export default async function MeHub() {
     }));
   return (
     <div className="space-y-6">
-      <PageHeader title={session.me.display_name} subtitle={session.household.name} />
+      <PageHeader title={session.household.name} subtitle={[session.me.display_name, session.partner?.display_name].filter(Boolean).join(" & ")} />
       <HubGrid title={t("Kitchen")} items={tile(["Food"])} />
       <HubGrid title={t("Home & family")} items={tile(["Family & home", "Leisure", "Admin"])} />
       <HubList

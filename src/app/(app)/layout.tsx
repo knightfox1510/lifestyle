@@ -2,7 +2,7 @@ import { getSession } from "@/lib/session";
 import { MODULES } from "@/modules/registry";
 import { AppNav, type NavGroup, type NavItem } from "@/components/app-nav";
 import { ToastProvider } from "@/components/toaster";
-import { ViewSwitch } from "@/components/view-switch";
+import { PartnerViewBanner, ViewSwitch } from "@/components/view-switch";
 import { AppLockGate } from "@/components/app-lock";
 import { I18nProvider } from "@/lib/i18n/client";
 import { getLang } from "@/lib/i18n/server";
@@ -26,7 +26,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
     { href: "/", label: t("Today"), icon: "today" },
     { href: "/health", label: t("Health"), icon: "health" },
     { href: session.isModuleEnabled("food_diary") ? "/food" : "/groceries", label: t("Food"), icon: "food" },
-    { href: "/me", label: t("Me"), icon: "me" },
+    { href: "/me", label: t("Family"), icon: "me" },
   ];
   const quickLog = {
     ownerId: session.userId,
@@ -43,7 +43,8 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
     <div className="min-h-dvh md:grid md:grid-cols-[248px_1fr] print:block">
       <AppNav groups={groups} tabs={tabs} householdName={session.household.name} quickLog={quickLog} logLabel={t("Log")} />
       <div className="min-w-0 pb-28 md:pb-8 print:pb-0">
-        <header className="sticky top-0 z-20 print:hidden flex items-center justify-between gap-3 bg-bg/80 px-4 py-3 backdrop-blur-xl md:px-8">
+        <div className="sticky top-0 z-20 print:hidden">
+        <header className="flex items-center justify-between gap-3 bg-bg/80 px-4 py-3 backdrop-blur-xl md:px-8">
           <div className="min-w-0 md:hidden">
             <p className="truncate text-sm font-semibold">{session.household.name}</p>
           </div>
@@ -56,6 +57,8 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
             partnerName={session.partner?.display_name ?? null}
           />
         </header>
+        {session.viewMode === "partner" && session.partner ? <PartnerViewBanner partnerName={session.partner.display_name} /> : null}
+        </div>
         <main className="mx-auto w-full max-w-4xl px-4 py-6 md:px-8">{children}</main>
       </div>
       <AppLockGate />

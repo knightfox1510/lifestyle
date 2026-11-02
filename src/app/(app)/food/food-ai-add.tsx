@@ -104,9 +104,9 @@ export function FoodAiAdd({ ownerId, people, day, meal: preset }: { ownerId: str
         />
         <div className="flex flex-col gap-2">
           <VoiceButton onText={(t) => setText((prev) => (prev ? `${prev} ${t}` : t))} />
-          <label className="flex size-10 cursor-pointer items-center justify-center rounded-xl border border-border text-lg hover:bg-surface-2" title="Add a photo">
+          <label className="flex size-10 cursor-pointer items-center justify-center rounded-xl border border-border text-lg hover:bg-surface-2" title="Take or choose a photo">
             📷
-            <input type="file" accept="image/*" capture="environment" className="sr-only" onChange={(e) => setPhoto(e.target.files?.[0] ?? null)} />
+            <input type="file" accept="image/*" className="sr-only" onChange={(e) => setPhoto(e.target.files?.[0] ?? null)} />
           </label>
         </div>
       </div>

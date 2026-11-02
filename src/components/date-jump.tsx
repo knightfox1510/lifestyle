@@ -5,7 +5,7 @@ import { CalendarDays } from "lucide-react";
 import { useT } from "@/lib/i18n/client";
 
 /** The day's name; tapping it opens a date picker to jump to any earlier day. */
-export function DateJump({ date, today, label }: { date: string; today: string; label: string }) {
+export function DateJump({ date, today, label, basePath }: { date: string; today: string; label: string; basePath: string }) {
   const router = useRouter();
   const t = useT();
   return (
@@ -18,7 +18,7 @@ export function DateJump({ date, today, label }: { date: string; today: string; 
         className="absolute inset-0 cursor-pointer opacity-0"
         value={date}
         max={today}
-        onChange={(e) => e.target.value && router.push(e.target.value === today ? "/food" : `/food?date=${e.target.value}`)}
+        onChange={(e) => e.target.value && router.push(e.target.value === today ? basePath : `${basePath}?date=${e.target.value}`)}
       />
     </label>
   );

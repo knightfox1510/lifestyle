@@ -95,7 +95,7 @@ export function Scanner({ pantryOn, groceriesOn }: { pantryOn: boolean; grocerie
               <span className="text-sm font-medium">Take a photo or choose one</span>
             </>
           )}
-          <input type="file" accept="image/*" capture="environment" className="sr-only" onChange={(e) => pick(e.target.files?.[0] ?? null)} />
+          <input type="file" accept="image/*" className="sr-only" onChange={(e) => pick(e.target.files?.[0] ?? null)} />
         </label>
         <Button onClick={scan} disabled={!file || loading} className="w-full sm:w-auto">
           {loading ? "Reading the photo…" : "✨ Read items"}

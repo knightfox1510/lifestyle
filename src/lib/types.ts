@@ -18,6 +18,7 @@ export type Household = {
   has_custom_ai_key: boolean;
   /** standard = Flash, best = Pro (missing on databases not yet updated). */
   ai_model?: "standard" | "best";
+  shopping_day?: number;
 };
 
 export type MemberRole = "owner" | "member";

@@ -11,10 +11,21 @@ describe("rings", () => {
   it("computes completion and the closed day", () => {
     const rs = rings([{ key: "water", value: 1000, target: 2000 }, { key: "meds", value: 2, target: 2 }, { key: "food", value: 1, target: 0 }]);
     expect(rs.map((r) => r.key)).toEqual(["water", "meds"]); // no target → no ring
-    expect(dayScore(rs)).toBe(75);
+    // water 2 of 4 half-litres + 2 of 2 doses = 4 of 6 things
+    expect(dayScore(rs)).toBe(67);
     expect(dayClosed(rs)).toBe(false);
     expect(dayClosed(rings([{ key: "water", value: 2500, target: 2000 }]))).toBe(true);
     expect(dayClosed([])).toBe(false);
+  });
+  it("doesn't jump ahead when one small ring is done early", () => {
+    // Morning: the one daily tablet, breakfast and a glass of water.
+    const morning = rings([
+      { key: "water", value: 200, target: 2000 },
+      { key: "food", value: 1, target: 3 },
+      { key: "meds", value: 1, target: 1 },
+      { key: "check", value: 0, target: 1 },
+    ]);
+    expect(dayScore(morning)).toBe(27); // 0.4 + 1 + 1 of 9 things (was 36% as an average of rings)
   });
   it("paces water across the day", () => {
     expect(waterPace("07:00", "08:00", "20:00", 2400)).toBe(0);

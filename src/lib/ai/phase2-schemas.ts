@@ -217,3 +217,23 @@ export const labelSchema = z.object({
   irritants: z.array(irritantEnum).max(8),
   note: z.string().max(200).nullable(),
 });
+
+export const weekPlanSchema = z.object({
+  meals: z
+    .array(
+      z.object({
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe("One of the dates given"),
+        meal: z.enum(MEALS),
+        title: z.string().min(1).max(150).describe("Dish name as the household would write it, e.g. 'Poha', 'Dal tadka + jeera rice'"),
+        recipe_title: z.string().max(150).nullable().describe("Exact title from the household's saved recipes if it is one of them, else null"),
+        usual: z.boolean().describe("True if this is one of their usual meals"),
+      }),
+    )
+    .max(40),
+  shopping: z
+    .array(z.object({ name: z.string().min(1).max(80), quantity: z.string().max(40).nullable(), category: z.enum(GROCERY_CATEGORIES) }))
+    .max(60)
+    .describe("Everything to buy on shopping day for these meals that is not already in the pantry, combined across the week with total quantities"),
+  note: z.string().max(400).nullable().describe("One or two sentences on how the week is balanced"),
+});
+export type WeekPlan = z.infer<typeof weekPlanSchema>;

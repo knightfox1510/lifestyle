@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { errorMessage, refreshModule, requireWrite } from "@/lib/guards";
 import { getSession } from "@/lib/session";
-import { todayIn } from "@/lib/dates";
+import { todayIn, zonedIso } from "@/lib/dates";
 import { MEDICINE_FORMS, type ActionResult } from "@/lib/types";
 
 const MODULE = "medicines";
@@ -117,7 +117,12 @@ export async function restockMedicine(id: string, ownerId: string, form: FormDat
   refreshModule("/medicines");
 }
 
-/** Mark a scheduled slot (or an as-needed dose when time is null) taken or skipped. */
+/**
+ * Mark a scheduled slot (or an as-needed dose when time is null) taken or
+ * skipped, today or on an earlier day. Past doses are timed at their slot
+ * (as-needed ones at noon), and logging a day before the medicine's start
+ * date moves the start date back to it.
+ */
 export async function logDose(
   medicineId: string,
   ownerId: string,
@@ -128,6 +133,14 @@ export async function logDose(
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || (time !== null && !/^\d{2}:\d{2}$/.test(time))) return { error: "Invalid slot" };
   try {
     const session = await requireWrite(MODULE, ownerId);
+    const tz = session.profile.timezone;
+    const today = todayIn(tz);
+    if (date > today) return { error: "You can't log a dose for a future day." };
+    const takenAt = date < today ? zonedIso(date, time ?? "12:00", tz) : new Date().toISOString();
+    if (date < today) {
+      const { data: med } = await session.supabase.from("medicines").select("start_date").eq("id", medicineId).maybeSingle();
+      if (med && date < med.start_date) await session.supabase.from("medicines").update({ start_date: date }).eq("id", medicineId);
+    }
     if (time) {
       const { data: existing } = await session.supabase
         .from("medicine_doses")
@@ -137,7 +150,7 @@ export async function logDose(
         .eq("scheduled_time", time)
         .maybeSingle();
       if (existing) {
-        await session.supabase.from("medicine_doses").update({ status, taken_at: new Date().toISOString() }).eq("id", existing.id);
+        await session.supabase.from("medicine_doses").update({ status, taken_at: takenAt }).eq("id", existing.id);
         refreshModule("/medicines");
         return { ok: true, id: existing.id };
       }
@@ -148,6 +161,7 @@ export async function logDose(
       scheduled_date: date,
       scheduled_time: time,
       status,
+      taken_at: takenAt,
       logged_by: session.userId,
     }).select("id").single();
     if (error) return { error: "Couldn't log the dose." };
