@@ -27,6 +27,7 @@ describe("pantry matching", () => {
 const lab = (over: Partial<LabResult>): LabResult => ({
   id: Math.random().toString(),
   owner_id: "u",
+  created_by: "u",
   document_id: null,
   test_date: "2026-01-01",
   panel: null,

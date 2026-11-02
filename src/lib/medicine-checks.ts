@@ -16,7 +16,7 @@ export async function medicineChecksFor(session: AppSession, ownerId: string) {
     canMedical ? session.supabase.from("medical_events").select("title, details").eq("owner_id", ownerId).eq("category", "allergy") : Promise.resolve({ data: [] }),
   ]);
   const list: CheckMed[] = [
-    ...((meds ?? []) as Medicine[]).map((m) => ({ name: m.name, strength: m.strength, dose_amount: m.dose_amount, times: m.times, kind: "medicine" as const })),
+    ...((meds ?? []) as Medicine[]).map((m) => ({ name: m.name, strength: m.strength, dose_amount: m.dose_amount, times: m.times, kind: "medicine" as const, ingredients: m.ingredients ?? null })),
     ...((supps ?? []) as Supplement[]).map((s) => ({ name: s.name, strength: s.dose, times: [], kind: "supplement" as const })),
   ];
   const allergyList = ((allergies ?? []) as { title: string; details: string | null }[]).map((a) => `${a.title}${a.details ? ` (${a.details})` : ""}`);

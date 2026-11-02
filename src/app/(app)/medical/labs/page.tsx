@@ -6,7 +6,8 @@ import { formatDate } from "@/modules/medical/meta";
 import { byMarker, refLabel, valueLabel } from "@/modules/medical/labs";
 import type { LabFlag, LabResult } from "@/lib/types";
 import { AddLabForm } from "./add-lab-form";
-import { deleteLabResult, setLabIncludeInAi } from "../actions";
+import { setLabIncludeInAi } from "../actions";
+import { LabRowActions } from "./lab-row-actions";
 
 export const metadata = { title: "Blood work & lab results" };
 
@@ -60,18 +61,14 @@ export default async function LabsPage({ searchParams }: PageProps<"/medical/lab
                   {refLabel(r) ? <span className="text-xs text-fg-muted">ref {refLabel(r)}</span> : null}
                   {!r.include_in_ai ? <> <Badge>hidden from AI</Badge></> : null}
                 </span>
-                <span className="flex gap-1">
+                <span className="flex flex-wrap items-center justify-end gap-1">
                   {r.document_id ? <Link href={`/medical/documents#${r.document_id}`} className={buttonClass("ghost", "sm")}>Report</Link> : null}
                   {canWrite ? (
                     <form action={setLabIncludeInAi.bind(null, r.id, ownerId, !r.include_in_ai)}>
                       <button className={buttonClass("ghost", "sm")}>{r.include_in_ai ? "Hide from AI" : "Use in AI"}</button>
                     </form>
                   ) : null}
-                  {isOwner ? (
-                    <form action={deleteLabResult.bind(null, r.id)}>
-                      <button className={buttonClass("danger", "sm")} aria-label="Delete result">✕</button>
-                    </form>
-                  ) : null}
+                  {canWrite ? <LabRowActions result={r} ownerId={ownerId} canDelete={isOwner || r.created_by === session.userId} /> : null}
                 </span>
               </li>
             ))}

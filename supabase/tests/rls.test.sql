@@ -127,7 +127,7 @@ do $$ begin
   assert (select count(*) from public.share_access_log) = 0, 'C: no access log';
 end $$;
 
--- Upgrade to write: B can log a cold for A, but not delete -----------------------
+-- Upgrade to write: B can log a cold for A, but not delete A's entries -----------
 select set_config('request.jwt.claim.sub', :a, false);
 update public.module_shares set level = 'write' where grantee_id = :b;
 do $$ begin
@@ -144,9 +144,10 @@ begin
   update public.medical_events set severity = 'mild' where title = 'Cold';
   get diagnostics n = row_count;
   assert n = 1, 'write share can update';
-  delete from public.medical_events;
+  -- B may delete entries B added (e.g. imported papers), never ones A added.
+  delete from public.medical_events where created_by <> auth.uid();
   get diagnostics n = row_count;
-  assert n = 0, 'only owner deletes';
+  assert n = 0, 'partner cannot delete the owner''s entries';
 end $$;
 
 -- B leaves → shares revoked, nothing visible --------------------------------------

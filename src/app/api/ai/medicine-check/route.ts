@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     if (!checks.list.length) throw new AiError("No active medicines or supplements to check.");
 
     const listText = checks.list
-      .map((m) => `- ${m.name}${m.strength ? ` ${m.strength}` : ""}${m.kind === "supplement" ? " (supplement)" : ""}${m.times?.length ? ` at ${m.times.join(", ")}` : m.kind === "medicine" ? " (as needed)" : ""}`)
+      .map((m) => `- ${m.name}${m.strength ? ` ${m.strength}` : ""}${m.ingredients ? ` [contains: ${m.ingredients}]` : ""}${m.kind === "supplement" ? " (supplement)" : ""}${m.times?.length ? ` at ${m.times.join(", ")}` : m.kind === "medicine" ? " (as needed)" : ""}`)
       .join("\n");
     const already = checks.findings.map((f) => `- ${f.title}`).join("\n") || "(none)";
 

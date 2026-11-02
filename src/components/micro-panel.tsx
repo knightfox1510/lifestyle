@@ -49,7 +49,7 @@ export function MicroPanel({
                 </span>
                 <span className="tabular-nums text-fg-muted">
                   <span className={cx(bad && "text-danger")}>{formatNutrient(k, v)}</span> {t.kind === "max" ? "limit" : "of"} {formatNutrient(k, t.amount)}
-                  {supp > 0 ? <span className="block text-right text-[11px]">food {formatNutrient(k, food)} + supplements {formatNutrient(k, supp)}{supp > t.amount * 3 ? " (large periodic dose)" : ""}</span> : null}
+                  {supp > 0 ? <span className="block text-right text-[11px]">food {formatNutrient(k, food)} + supplements &amp; medicines {formatNutrient(k, supp)}{supp > t.amount * 3 ? " (large periodic dose)" : ""}</span> : null}
                 </span>
               </div>
               <div className="flex h-1.5 overflow-hidden rounded-full bg-surface-2" title={t.note}>

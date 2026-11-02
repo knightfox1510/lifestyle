@@ -50,7 +50,7 @@ export async function buildTrackingContext(session: AppSession, subjectId: strin
       "Current medicines (tracked):",
       ...medList.map(
         (m) =>
-          `- ${m.name}${m.strength ? ` ${m.strength}` : ""}: ${doseLabel(m)} ${m.times.length ? `at ${m.times.join(", ")}` : "as needed"}${m.reason ? `, for ${m.reason}` : ""}${m.instructions ? ` (${m.instructions})` : ""}`,
+          `- ${m.name}${m.strength ? ` ${m.strength}` : ""}${m.ingredients ? ` [${m.ingredients}]` : ""}: ${doseLabel(m)} ${m.times.length ? `at ${m.times.join(", ")}` : "as needed"}${m.reason ? `, for ${m.reason}` : ""}${m.instructions ? ` (${m.instructions})` : ""}`,
       ),
     );
     if (adh.pct !== null) lines.push(`Medicine adherence last 2 weeks: ${adh.pct}%.`);

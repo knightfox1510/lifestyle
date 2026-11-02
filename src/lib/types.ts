@@ -171,6 +171,10 @@ export type Medicine = {
   prescribed_by: string | null;
   active: boolean;
   include_in_ai: boolean;
+  /** Active ingredients as on the strip, e.g. "Calcium carbonate 1250 mg + Vitamin D3 250 IU". */
+  ingredients?: string | null;
+  /** Vitamins/minerals in ONE unit (tablet, capsule, ml); counted per dose taken. */
+  nutrients?: Record<string, number> | null;
 };
 
 export type MedicineDose = {
@@ -325,6 +329,7 @@ export type LabFlag = "low" | "normal" | "high" | "abnormal";
 export type LabResult = {
   id: string;
   owner_id: string;
+  created_by: string;
   document_id: string | null;
   test_date: string;
   panel: string | null;

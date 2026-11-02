@@ -4,7 +4,8 @@ import { Badge, Card, EmptyState, cx } from "@/components/ui";
 import { CATEGORY_META, formatDate, formatRange } from "@/modules/medical/meta";
 import { MEDICAL_CATEGORIES, type MedicalCategory, type MedicalEvent } from "@/lib/types";
 import { AddEventForm } from "./add-event-form";
-import { deleteMedicalEvent, endMedicalEvent, setEventIncludeInAi } from "./actions";
+import { endMedicalEvent, setEventIncludeInAi } from "./actions";
+import { EventActions } from "./record-actions";
 
 export const metadata = { title: "Medical timeline" };
 
@@ -33,6 +34,8 @@ export default async function MedicalTimelinePage({ searchParams }: PageProps<"/
   const currentMeds = all.filter((e) => e.category === "medication" && (e.ongoing || (e.end_date ?? "") >= today));
   const relatable = all.filter((e) => ["illness", "condition", "symptom", "injury", "surgery"].includes(e.category)).slice(0, 50);
 
+  const relatableOptions = relatable.map((e) => ({ id: e.id, label: `${e.title} (${formatDate(e.start_date)})` }));
+
   const byYear = new Map<string, MedicalEvent[]>();
   for (const e of events) {
     const y = e.start_date.slice(0, 4);
@@ -54,7 +57,7 @@ export default async function MedicalTimelinePage({ searchParams }: PageProps<"/
       {canWrite ? (
         <AddEventForm
           ownerId={ownerId}
-          relatable={relatable.map((e) => ({ id: e.id, label: `${e.title} (${formatDate(e.start_date)})` }))}
+          relatable={relatableOptions}
         />
       ) : null}
 
@@ -115,7 +118,7 @@ export default async function MedicalTimelinePage({ searchParams }: PageProps<"/
                       </Link>
                     ) : null}
                     {canWrite ? (
-                      <div className="mt-3 flex flex-wrap gap-1.5">
+                      <EventActions event={e} ownerId={ownerId} relatable={relatableOptions} canDelete={isOwner || e.created_by === session.userId}>
                         <form action={setEventIncludeInAi.bind(null, e.id, ownerId, !e.include_in_ai)}>
                           <button className="rounded-lg px-2 py-1 text-xs text-fg-muted hover:bg-surface-2">
                             {e.include_in_ai ? "Hide from AI" : "Use in AI"}
@@ -126,12 +129,7 @@ export default async function MedicalTimelinePage({ searchParams }: PageProps<"/
                             <button className="rounded-lg px-2 py-1 text-xs text-fg-muted hover:bg-surface-2">Mark ended today</button>
                           </form>
                         ) : null}
-                        {isOwner ? (
-                          <form action={deleteMedicalEvent.bind(null, e.id)}>
-                            <button className="rounded-lg px-2 py-1 text-xs text-danger hover:bg-danger-soft">Delete</button>
-                          </form>
-                        ) : null}
-                      </div>
+                      </EventActions>
                     ) : null}
                   </Card>
                 </li>

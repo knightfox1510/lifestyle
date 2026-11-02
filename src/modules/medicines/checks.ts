@@ -16,6 +16,8 @@ export type CheckMed = {
   dose_amount?: number | null;
   times?: string[];
   kind: "medicine" | "supplement";
+  /** Composition from the strip/box, so brand names the app doesn't know still get checked. */
+  ingredients?: string | null;
 };
 
 export type Severity = "high" | "medium" | "info";
@@ -115,7 +117,7 @@ function closeTimes(a: string[] | undefined, b: string[] | undefined, gap: numbe
 type Tagged = CheckMed & { ings: Ingredient[] };
 
 export function checkMedicines(meds: CheckMed[], opts: { allergies?: string[]; bladder?: boolean; t?: T } = {}): Finding[] {
-  const list: Tagged[] = meds.map((m) => ({ ...m, ings: ingredientsOf(m.name) }));
+  const list: Tagged[] = meds.map((m) => ({ ...m, ings: ingredientsOf(m.ingredients ? `${m.name} ${m.ingredients}` : m.name) }));
   const out: Finding[] = [];
   const tr = opts.t ?? makeT("en");
   // Titles/details are English keys with {placeholders}, translated here.
@@ -288,5 +290,5 @@ export function checkMedicines(meds: CheckMed[], opts: { allergies?: string[]; b
 
 /** Which listed medicines weren't recognised (so the UI can say what wasn't checked). */
 export function unrecognised(meds: CheckMed[]) {
-  return meds.filter((m) => ingredientsOf(m.name).length === 0).map((m) => m.name);
+  return meds.filter((m) => ingredientsOf(m.ingredients ? `${m.name} ${m.ingredients}` : m.name).length === 0).map((m) => m.name);
 }

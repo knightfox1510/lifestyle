@@ -4,17 +4,32 @@ import { useActionState, useState } from "react";
 import { Card, Checkbox, Field, Input, Select, Textarea } from "@/components/ui";
 import { ActionMessage, SubmitButton } from "@/components/form-status";
 import { CATEGORY_META } from "@/modules/medical/meta";
-import { MEDICAL_CATEGORIES, type MedicalCategory } from "@/lib/types";
-import { addMedicalEvent } from "./actions";
+import { MEDICAL_CATEGORIES, type MedicalCategory, type MedicalEvent } from "@/lib/types";
+import { addMedicalEvent, updateMedicalEvent } from "./actions";
 
-export function AddEventForm({ ownerId, relatable }: { ownerId: string; relatable: { id: string; label: string }[] }) {
-  const [open, setOpen] = useState(false);
-  const [category, setCategory] = useState<MedicalCategory>("illness");
-  const [ongoing, setOngoing] = useState(false);
+/** Adds a timeline entry, or edits one (`event`) — including entries read from papers. */
+export function AddEventForm({
+  ownerId,
+  relatable,
+  event,
+  onDone,
+}: {
+  ownerId: string;
+  relatable: { id: string; label: string }[];
+  event?: MedicalEvent;
+  onDone?: () => void;
+}) {
+  const editing = Boolean(event);
+  const [open, setOpen] = useState(editing);
+  const [category, setCategory] = useState<MedicalCategory>(event?.category ?? "illness");
+  const [ongoing, setOngoing] = useState(event?.ongoing ?? false);
   // React resets uncontrolled fields after a successful action; reset the controlled one here.
   const [state, action] = useActionState(async (prev: Awaited<ReturnType<typeof addMedicalEvent>> | null, form: FormData) => {
-    const result = await addMedicalEvent(prev, form);
-    if (result.ok) setOngoing(false);
+    const result = editing ? await updateMedicalEvent(prev, form) : await addMedicalEvent(prev, form);
+    if (result.ok) {
+      if (editing) onDone?.();
+      else setOngoing(false);
+    }
     return result;
   }, null);
   const today = new Date().toISOString().slice(0, 10);
@@ -34,6 +49,7 @@ export function AddEventForm({ ownerId, relatable }: { ownerId: string; relatabl
     <Card>
       <form action={action} className="space-y-3">
         <input type="hidden" name="ownerId" value={ownerId} />
+        {event ? <input type="hidden" name="id" value={event.id} /> : null}
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Type">
             <Select name="category" value={category} onChange={(e) => setCategory(e.target.value as MedicalCategory)}>
@@ -49,29 +65,30 @@ export function AddEventForm({ ownerId, relatable }: { ownerId: string; relatabl
               name="title"
               required
               maxLength={200}
+              defaultValue={event?.title}
               placeholder={category === "medication" ? "e.g. Azithromycin 500mg" : "e.g. Cough and cold"}
             />
           </Field>
           <Field label="Start date">
-            <Input type="date" name="start_date" required defaultValue={today} max={today} />
+            <Input type="date" name="start_date" required defaultValue={event?.start_date ?? today} max={editing ? undefined : today} />
           </Field>
           <Field label="End date">
-            <Input type="date" name="end_date" disabled={ongoing} />
+            <Input type="date" name="end_date" disabled={ongoing} defaultValue={event?.end_date ?? ""} />
           </Field>
         </div>
 
         {category === "medication" ? (
           <div className="grid gap-3 sm:grid-cols-3">
             <Field label="Dose">
-              <Input name="dosage" maxLength={120} placeholder="1 tablet / 5 ml" />
+              <Input name="dosage" maxLength={120} placeholder="1 tablet / 5 ml" defaultValue={event?.dosage ?? ""} />
             </Field>
             <Field label="How often">
-              <Input name="frequency" maxLength={120} placeholder="Twice daily after food" />
+              <Input name="frequency" maxLength={120} placeholder="Twice daily after food" defaultValue={event?.frequency ?? ""} />
             </Field>
             <Field label="Taken for">
-              <Select name="related_event_id" defaultValue="">
+              <Select name="related_event_id" defaultValue={event?.related_event_id ?? ""}>
                 <option value="">Not linked</option>
-                {relatable.map((r) => (
+                {relatable.filter((r) => r.id !== event?.id).map((r) => (
                   <option key={r.id} value={r.id}>{r.label}</option>
                 ))}
               </Select>
@@ -79,7 +96,7 @@ export function AddEventForm({ ownerId, relatable }: { ownerId: string; relatabl
           </div>
         ) : (
           <Field label="Severity">
-            <Select name="severity" defaultValue="">
+            <Select name="severity" defaultValue={event?.severity ?? ""}>
               <option value="">Not specified</option>
               <option value="mild">Mild</option>
               <option value="moderate">Moderate</option>
@@ -89,16 +106,16 @@ export function AddEventForm({ ownerId, relatable }: { ownerId: string; relatabl
         )}
 
         <Field label="Notes">
-          <Textarea name="details" maxLength={4000} placeholder="Symptoms, doctor, hospital, what helped…" />
+          <Textarea name="details" maxLength={4000} placeholder="Symptoms, doctor, hospital, what helped…" defaultValue={event?.details ?? ""} />
         </Field>
         <div className="flex flex-wrap gap-x-6 gap-y-2">
           <Checkbox name="ongoing" label="Still ongoing" checked={ongoing} onChange={(e) => setOngoing(e.target.checked)} />
-          <Checkbox name="include_in_ai" label="Use in AI suggestions" defaultChecked />
+          <Checkbox name="include_in_ai" label="Use in AI suggestions" defaultChecked={event?.include_in_ai ?? true} />
         </div>
         <ActionMessage state={state} />
         <div className="flex gap-2">
-          <SubmitButton>Add entry</SubmitButton>
-          <button type="button" onClick={() => setOpen(false)} className="rounded-xl px-4 text-sm text-fg-muted hover:bg-surface-2">
+          <SubmitButton>{editing ? "Save changes" : "Add entry"}</SubmitButton>
+          <button type="button" onClick={() => (editing ? onDone?.() : setOpen(false))} className="rounded-xl px-4 text-sm text-fg-muted hover:bg-surface-2">
             Close
           </button>
         </div>

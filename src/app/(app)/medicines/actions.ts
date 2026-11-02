@@ -4,6 +4,9 @@ import { z } from "zod";
 import { errorMessage, refreshModule, requireWrite } from "@/lib/guards";
 import { todayIn, zonedIso } from "@/lib/dates";
 import { MEDICINE_FORMS, type ActionResult } from "@/lib/types";
+import { SUPPLEMENT_KEYS } from "@/modules/nutrition/supplements";
+
+const NUTRIENT_KEYS_FOR_MEDS = SUPPLEMENT_KEYS as [string, ...string[]];
 
 const MODULE = "medicines";
 const blankToNull = (v: unknown) => (typeof v === "string" && v.trim() === "" ? null : v);
@@ -31,6 +34,18 @@ const medicineSchema = z
     prescribed_by: optText(120),
     include_in_ai: z.boolean(),
     add_to_timeline: z.boolean(),
+    ingredients: optText(400),
+    nutrients: z.preprocess(
+      (v) => {
+        if (typeof v !== "string" || !v.trim()) return {};
+        try {
+          return JSON.parse(v);
+        } catch {
+          return {};
+        }
+      },
+      z.partialRecord(z.enum(NUTRIENT_KEYS_FOR_MEDS), z.number().min(0).max(100000)),
+    ),
   })
   .refine((v) => !v.end_date || v.end_date >= v.start_date, { message: "End date is before start date" });
 

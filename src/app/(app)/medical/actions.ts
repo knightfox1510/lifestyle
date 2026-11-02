@@ -94,11 +94,49 @@ export async function endMedicalEvent(eventId: string, ownerId: string) {
   refresh();
 }
 
-export async function deleteMedicalEvent(eventId: string) {
-  const session = await getSession();
-  // RLS lets only the owner delete; this is a no-op for anyone else.
-  await session.supabase.from("medical_events").delete().eq("id", eventId).eq("owner_id", session.userId);
+/** Edits any timeline entry, including ones read from papers. */
+export async function updateMedicalEvent(_: ActionResult | null, form: FormData): Promise<ActionResult> {
+  const raw = Object.fromEntries(form);
+  const id = z.uuid().safeParse(raw.id);
+  if (!id.success) return { error: "Entry not found." };
+  const parsed = eventSchema.safeParse({ ...raw, ongoing: raw.ongoing === "on", include_in_ai: raw.include_in_ai === "on" });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const { ownerId, ...values } = parsed.data;
+  try {
+    const session = await requireWrite(ownerId);
+    const isMedication = values.category === "medication";
+    const { data, error } = await session.supabase
+      .from("medical_events")
+      .update({
+        ...values,
+        related_event_id: values.related_event_id === id.data ? null : values.related_event_id,
+        end_date: values.ongoing ? null : values.end_date,
+        dosage: isMedication ? values.dosage : null,
+        frequency: isMedication ? values.frequency : null,
+        severity: isMedication ? null : values.severity,
+      })
+      .eq("id", id.data)
+      .eq("owner_id", ownerId)
+      .select("id");
+    if (error || !data?.length) return { error: "Couldn't save the changes." };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
   refresh();
+  return { ok: true, message: "Saved." };
+}
+
+/** Deletes a timeline entry: the person it belongs to, or whoever added it (e.g. imported the papers). */
+export async function deleteMedicalEvent(eventId: string, ownerId: string): Promise<ActionResult> {
+  try {
+    const session = await requireWrite(ownerId);
+    const { data, error } = await session.supabase.from("medical_events").delete().eq("id", eventId).eq("owner_id", ownerId).select("id");
+    if (error || !data?.length) return { error: "Only the person it belongs to, or whoever added it, can delete this." };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+  refresh();
+  return { ok: true, message: "Deleted." };
 }
 
 // --------------------------------------------------------------- profile ----
@@ -295,8 +333,38 @@ export async function setLabIncludeInAi(id: string, ownerId: string, include: bo
   refresh();
 }
 
-export async function deleteLabResult(id: string) {
-  const session = await getSession();
-  await session.supabase.from("lab_results").delete().eq("id", id).eq("owner_id", session.userId);
+/** Fixes a lab value (e.g. one AI misread), re-checking it against the reference range. */
+export async function updateLabResult(_: ActionResult | null, form: FormData): Promise<ActionResult> {
+  const raw = Object.fromEntries(form);
+  const id = z.uuid().safeParse(raw.id);
+  if (!id.success) return { error: "Result not found." };
+  const parsed = labSchema.safeParse(raw);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const { ownerId, ...values } = parsed.data;
+  try {
+    const session = await requireWrite(ownerId);
+    const { data, error } = await session.supabase
+      .from("lab_results")
+      .update({ ...values, flag: computeFlag(values.value ?? null, values.ref_low ?? null, values.ref_high ?? null) })
+      .eq("id", id.data)
+      .eq("owner_id", ownerId)
+      .select("id");
+    if (error || !data?.length) return { error: "Couldn't save the changes." };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
   refresh();
+  return { ok: true, message: "Saved." };
+}
+
+export async function deleteLabResult(id: string, ownerId: string): Promise<ActionResult> {
+  try {
+    const session = await requireWrite(ownerId);
+    const { data, error } = await session.supabase.from("lab_results").delete().eq("id", id).eq("owner_id", ownerId).select("id");
+    if (error || !data?.length) return { error: "Only the person it belongs to, or whoever added it, can delete this." };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+  refresh();
+  return { ok: true, message: "Deleted." };
 }

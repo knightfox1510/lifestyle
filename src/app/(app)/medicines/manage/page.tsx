@@ -55,6 +55,7 @@ export default async function ManageMedicinesPage({ searchParams }: PageProps<"/
                       {m.days_of_week ? ` · ${m.days_of_week.map((d) => DAY_LETTERS[d]).join(" ")}` : ""}
                       {m.end_date ? ` · until ${formatDate(m.end_date)}` : ""}
                     </p>
+                    {m.ingredients ? <p className="text-xs text-fg-muted">Contains: {m.ingredients}</p> : null}
                     {m.reason || m.prescribed_by ? (
                       <p className="text-xs text-fg-muted">{[m.reason && `For ${m.reason}`, m.prescribed_by && `Dr: ${m.prescribed_by}`].filter(Boolean).join(" · ")}</p>
                     ) : null}
@@ -63,6 +64,7 @@ export default async function ManageMedicinesPage({ searchParams }: PageProps<"/
                     {!m.active ? <Badge>stopped</Badge> : m.start_date > today ? <Badge tone="accent">starts {shortDate(m.start_date)}</Badge> : m.end_date && m.end_date < today ? <Badge>ended</Badge> : null}
                     {r ? <Badge tone={r.low ? "danger" : "neutral"}>{r.stock} in stock{r.daysLeft !== null ? ` · ~${r.daysLeft}d` : ""}</Badge> : null}
                     {!m.include_in_ai ? <Badge>hidden from AI</Badge> : null}
+                    {m.nutrients && Object.keys(m.nutrients).length ? <Badge tone="accent">counts in nutrients</Badge> : null}
                   </div>
                 </div>
                 {canWrite ? (

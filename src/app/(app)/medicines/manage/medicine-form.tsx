@@ -7,6 +7,7 @@ import { ActionMessage, SubmitButton } from "@/components/form-status";
 import { MEDICINE_FORMS, type Medicine } from "@/lib/types";
 import { DAY_LETTERS } from "@/modules/medicines/logic";
 import { saveMedicine } from "../actions";
+import { MedicineLookupButtons, MedicineNutrientFields } from "./medicine-lookup";
 
 const PRESETS: Record<string, string[]> = {
   "Once a day": ["08:00"],
@@ -30,11 +31,24 @@ export function MedicineForm({
   const [open, setOpen] = useState(Boolean(medicine));
   const [times, setTimes] = useState<string[]>(medicine?.times ?? ["08:00"]);
   const [days, setDays] = useState<number[]>(medicine?.days_of_week ?? [0, 1, 2, 3, 4, 5, 6]);
+  const [name, setName] = useState(medicine?.name ?? "");
+  const [strength, setStrength] = useState(medicine?.strength ?? "");
+  const [form, setForm] = useState<string>(medicine?.form ?? "tablet");
+  const [unit, setUnit] = useState(medicine?.dose_unit ?? "tablet");
+  const [ingredients, setIngredients] = useState(medicine?.ingredients ?? "");
+  const [nutrients, setNutrients] = useState<Record<string, string>>(() => Object.fromEntries(Object.entries(medicine?.nutrients ?? {}).map(([k, v]) => [k, String(v)])));
+  const nutrientJson = JSON.stringify(Object.fromEntries(Object.entries(nutrients).map(([k, v]) => [k, Number(v)]).filter(([, v]) => Number.isFinite(v as number) && (v as number) > 0)));
   const [state, action] = useActionState(async (prev: Awaited<ReturnType<typeof saveMedicine>> | null, form: FormData) => {
     const res = await saveMedicine(prev, form);
     if (res.ok && !medicine) {
       setTimes(["08:00"]);
       setDays([0, 1, 2, 3, 4, 5, 6]);
+      setName("");
+      setStrength("");
+      setForm("tablet");
+      setUnit("tablet");
+      setIngredients("");
+      setNutrients({});
     }
     return res;
   }, null);
@@ -58,16 +72,32 @@ export function MedicineForm({
         {days.map((d) => (
           <input key={d} type="hidden" name="days_of_week" value={d} />
         ))}
+        <input type="hidden" name="nutrients" value={nutrientJson} />
         <h2 className="font-semibold">{medicine ? `Edit ${medicine.name}` : "New medicine"}</h2>
         <div className="grid gap-3 sm:grid-cols-3">
           <Field label="Name" className="sm:col-span-2">
-            <Input name="name" required maxLength={120} defaultValue={medicine?.name} placeholder="e.g. Solifenacin" />
+            <Input name="name" required maxLength={120} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Solifenacin" />
           </Field>
           <Field label="Strength">
-            <Input name="strength" maxLength={60} defaultValue={medicine?.strength ?? ""} placeholder="5 mg" />
+            <Input name="strength" maxLength={60} value={strength} onChange={(e) => setStrength(e.target.value)} placeholder="5 mg" />
+          </Field>
+          <MedicineLookupButtons
+            name={name}
+            strength={strength}
+            onResult={(info) => {
+              if (info.name && !name.trim()) setName(info.name);
+              if (info.strength && !strength.trim()) setStrength(info.strength);
+              if (info.form) setForm(info.form);
+              if (info.unit) setUnit(info.unit);
+              if (info.ingredients) setIngredients(info.ingredients);
+              setNutrients(Object.fromEntries(Object.entries(info.per_unit).filter(([, v]) => v != null && v > 0).map(([k, v]) => [k, String(v)])));
+            }}
+          />
+          <Field label="Contains (composition)" className="sm:col-span-3">
+            <Input name="ingredients" maxLength={400} value={ingredients} onChange={(e) => setIngredients(e.target.value)} placeholder="e.g. Calcium carbonate 1250 mg + Vitamin D3 250 IU" />
           </Field>
           <Field label="Form">
-            <Select name="form" defaultValue={medicine?.form ?? "tablet"}>
+            <Select name="form" value={form} onChange={(e) => setForm(e.target.value)}>
               {MEDICINE_FORMS.map((f) => (
                 <option key={f} value={f}>{f}</option>
               ))}
@@ -77,9 +107,11 @@ export function MedicineForm({
             <Input name="dose_amount" type="number" min={0.25} step={0.25} required defaultValue={medicine?.dose_amount ?? 1} />
           </Field>
           <Field label="Unit">
-            <Input name="dose_unit" required maxLength={20} defaultValue={medicine?.dose_unit ?? "tablet"} placeholder="tablet / ml / puff" />
+            <Input name="dose_unit" required maxLength={20} value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="tablet / ml / puff" />
           </Field>
         </div>
+
+        <MedicineNutrientFields values={nutrients} unit={unit} onChange={setNutrients} />
 
         <div className="space-y-2">
           <span className="text-sm font-medium">When</span>
