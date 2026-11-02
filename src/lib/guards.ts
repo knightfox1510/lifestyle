@@ -25,3 +25,20 @@ export function refreshModule(path: string) {
 export function errorMessage(e: unknown) {
   return e instanceof Error ? e.message : "Something went wrong";
 }
+
+type DbError = { code?: string; message?: string } | null | undefined;
+
+/** The database hasn't had the latest update yet (a column the app now writes is missing). */
+export function isMissingColumn(error: DbError) {
+  return Boolean(error && (error.code === "PGRST204" || error.code === "42703" || /column .* does not exist|could not find the .* column/i.test(error.message ?? "")));
+}
+
+/** A clear message for a failed save, instead of a generic "Couldn't save". */
+export function dbErrorMessage(error: DbError, fallback: string) {
+  if (!error) return fallback;
+  if (isMissingColumn(error)) return "Your database needs the latest update: run supabase/setup/update-existing-database.sql in the Supabase SQL Editor.";
+  if (error.code === "42501") return "You don't have permission to change this (check Settings → Sharing).";
+  if (error.code === "23514") return `${fallback} One of the values is out of range.`;
+  if (error.code === "23505") return `${fallback} It already exists.`;
+  return fallback;
+}

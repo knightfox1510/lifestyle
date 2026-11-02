@@ -789,4 +789,7 @@ export const PHRASES: Record<string, { hi: string; mr: string }> = {
   "Saved.": { hi: "सहेजा गया।", mr: "जतन केले." },
   "restaurant": { hi: "रेस्टोरेंट", mr: "रेस्टॉरंट" },
   "shared meal": { hi: "साझा भोजन", mr: "एकत्र जेवण" },
+  "Same as {day}": { hi: "{day} जैसा", mr: "{day} सारखे" },
+  "yesterday": { hi: "कल", mr: "काल" },
+  "Cycle tracker": { hi: "मासिक चक्र", mr: "मासिक पाळी" },
 };

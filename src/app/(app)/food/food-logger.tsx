@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { Button, Field, Input, Notice, Select } from "@/components/ui";
 import { PeoplePortions, type PersonPortion } from "@/components/nutrition-ui";
 import type { Meal } from "@/lib/types";
-import { MEAL_META, MEAL_ORDER, mealForHour } from "@/modules/food/meta";
+import { MEAL_META, MEAL_ORDER, eatenAtFor, mealForHour, type LogDay } from "@/modules/food/meta";
 import { forGrams, type Nutrients } from "@/modules/nutrition/nutrients";
 import { logFoodForPeople } from "./actions";
 import { useT } from "@/lib/i18n/client";
@@ -19,6 +19,9 @@ export function FoodAmountLogger({
   accuracy,
   me,
   people,
+  meal: presetMeal,
+  day,
+  onLogged,
 }: {
   name: string;
   per100: Nutrients;
@@ -28,11 +31,15 @@ export function FoodAmountLogger({
   accuracy: "label" | "calculated";
   me: string;
   people: PersonPortion[];
+  /** Preset meal (from a meal card's Add) and the diary day being filled in. */
+  meal?: Meal;
+  day?: LogDay;
+  onLogged?: () => void;
 }) {
   const [label, setLabel] = useState(name);
   const [unit, setUnit] = useState<"g" | "serving">(servingG ? "serving" : "g");
   const [amount, setAmount] = useState(servingG ? 1 : 100);
-  const [meal, setMeal] = useState<Meal>(() => mealForHour(new Date().getHours()));
+  const [meal, setMeal] = useState<Meal>(() => presetMeal ?? mealForHour(new Date().getHours()));
   const [who, setWho] = useState<Record<string, number>>({ [me]: 1 });
   const [msg, setMsg] = useState<{ tone: "accent" | "danger"; text: string } | null>(null);
   const [pending, start] = useTransition();
@@ -78,8 +85,10 @@ export function FoodAmountLogger({
               Object.entries(who).filter(([, f]) => f > 0).map(([ownerId, factor]) => ({ ownerId, factor })),
               meal,
               [{ description: label.trim(), quantity: unit === "g" ? `${amount} g` : `${amount} serving${amount === 1 ? "" : "s"}`, grams, nutrients: n as Record<string, number>, accuracy, irritants, source: "manual" }],
+              eatenAtFor(day, meal),
             );
             setMsg(r.error ? { tone: "danger", text: r.error } : { tone: "accent", text: r.message ?? "Logged." });
+            if (!r.error) onLogged?.();
           })
         }
       >

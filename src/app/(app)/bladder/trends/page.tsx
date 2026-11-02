@@ -7,6 +7,8 @@ import { comparisons, dailyStats, hourHistogram, leaksAfterCaffeine, physicalSha
 import { loadDiary, loadDiaryEvents } from "@/modules/bladder/load";
 import { beforeAfter, daysBetween } from "@/modules/bladder/events";
 import { getT } from "@/lib/i18n/server";
+import { afterExposures } from "@/modules/bladder/exposures";
+import { PHASE_LABEL, leaksByPhase, periodsFrom, type CycleDay } from "@/modules/cycle/logic";
 
 export const metadata = { title: "Bladder trends" };
 
@@ -28,6 +30,12 @@ export default async function BladderTrendsPage({ searchParams }: PageProps<"/bl
   const leaks = stats.map((s) => s.leaks);
   const t = trend(stats);
   const caffeine = leaksAfterCaffeine(d.events, d.fluids);
+  const loggedDates = stats.filter((s) => s.leaks + s.urges + s.voids + s.fluidMl > 0).map((s) => s.date);
+  const after = afterExposures(d.events, d.fluids, d.foods, loggedDates, d.tz, 2);
+  // Cycle phases (cycle tracker), with periods looked up over the whole last year.
+  const cycleOn = session.isModuleEnabled("cycle") && session.accessTo("cycle", ownerId) !== "none";
+  const cycleRows = cycleOn ? ((await session.supabase.from("cycle_days").select("day, flow, symptoms").eq("owner_id", ownerId).gte("day", d.days[0].slice(0, 4) + "-01-01").order("day")).data ?? []) as CycleDay[] : [];
+  const byPhase = cycleRows.length ? leaksByPhase(periodsFrom(cycleRows), new Map(stats.map((s) => [s.date, s.leaks])), loggedDates) : [];
   const share = physicalShare(d.events);
   const hours = hourHistogram(d.events, d.tz);
   const avgLeaks = Math.round((leaks.reduce((a, b) => a + b, 0) / Math.max(loggedDays, 1)) * 10) / 10;
@@ -99,6 +107,48 @@ export default async function BladderTrendsPage({ searchParams }: PageProps<"/bl
               <span className="text-xs text-fg-muted"> · {tr("{b} and {a} days logged", { b: r.beforeDays, a: r.afterDays })}</span>
             </p>
           ))}
+        </Card>
+      ) : null}
+
+      {after.results.length ? (
+        <Card>
+          <h2 className="mb-1 text-sm font-semibold">What happens after you eat or drink</h2>
+          <p className="mb-3 text-xs text-fg-muted">
+            How often a leak or strong urge followed within {after.hours} hours of each drink or irritant food.
+            {after.usual !== null ? ` For comparison, any ${after.hours}-hour stretch of the day had one ${Math.round(after.usual * 100)}% of the time.` : ""}
+          </p>
+          <ul className="divide-y divide-border">
+            {after.results.slice(0, 10).map((r) => (
+              <li key={r.key} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+                <span>
+                  <span className="font-medium">{r.label}</span> <span className="text-xs text-fg-muted">· {r.count} times</span>
+                  {r.likely ? <span className="ml-2 rounded-full bg-danger-soft px-2 py-0.5 text-xs font-medium">likely trigger</span> : null}
+                </span>
+                <span className="text-right tabular-nums">
+                  <strong className={cx(r.likely && "text-danger")}>{Math.round(r.rate * 100)}%</strong>
+                  <span className="block text-xs text-fg-muted">{r.medianMinutes !== null ? `next bathroom/urge ~${r.medianMinutes} min after` : ""}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-fg-muted">
+            Needs at least 3 examples to show and 5 to flag. Log drinks with the time you had them for this to work well. A trigger is worth testing by cutting it for 1–2 weeks, with your doctor or physio&apos;s okay.
+          </p>
+        </Card>
+      ) : null}
+
+      {byPhase.some((p) => p.days >= 3) ? (
+        <Card>
+          <h2 className="mb-1 text-sm font-semibold">Through the menstrual cycle</h2>
+          <p className="mb-2 text-xs text-fg-muted">Average leaks per logged day in each phase (from the cycle tracker).</p>
+          <ul className="divide-y divide-border text-sm">
+            {byPhase.map((p) => (
+              <li key={p.phase} className="flex justify-between py-2">
+                <span>{PHASE_LABEL[p.phase]}</span>
+                <span className="tabular-nums"><strong>{p.avg ?? "–"}</strong> <span className="text-xs text-fg-muted">· {p.days} days</span></span>
+              </li>
+            ))}
+          </ul>
         </Card>
       ) : null}
 

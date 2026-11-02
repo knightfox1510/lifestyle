@@ -43,6 +43,7 @@ export const MODULES: ModuleDef[] = [
   { key: "supplements", name: "Supplement stack", description: "Daily supplement checklist with adherence history.", group: "Health", scope: "personal", status: "available", phase: 1, href: "/supplements", icon: "🧴" },
   { key: "bladder_diary", name: "Bladder diary", description: "Leaks, urgency, fluids and triggers with doctor-ready reports.", group: "Health", scope: "personal", status: "available", phase: 1, href: "/bladder", sensitive: true, icon: "💧" },
   { key: "pelvic_floor", name: "Pelvic floor trainer", description: "Guided Kegel sessions and streaks.", group: "Health", scope: "personal", status: "available", phase: 1, href: "/pelvic-floor", sensitive: true, icon: "🧘" },
+  { key: "cycle", name: "Cycle tracker", description: "Periods, symptoms and predictions, with how the cycle affects the bladder.", group: "Health", scope: "personal", status: "available", phase: 5, href: "/cycle", sensitive: true, icon: "🌸" },
   { key: "checkin", name: "Daily check-in", description: "Sleep, mood, energy and stress in 10 seconds.", group: "Health", scope: "personal", status: "available", phase: 1, href: "/checkin", icon: "🌤️" },
   { key: "habits", name: "Habits", description: "Build and track daily habits.", group: "Health", scope: "personal", status: "available", phase: 1, href: "/habits", icon: "✅" },
   { key: "groceries", name: "Grocery list", description: "Shared, offline-ready grocery list.", group: "Food", scope: "household", status: "available", phase: 1, href: "/groceries", icon: "🛒" },

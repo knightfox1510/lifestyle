@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { errorMessage, refreshModule, requireWrite } from "@/lib/guards";
+import { dbErrorMessage, errorMessage, isMissingColumn, refreshModule, requireWrite } from "@/lib/guards";
 import { todayIn, zonedIso } from "@/lib/dates";
 import { MEDICINE_FORMS, type ActionResult } from "@/lib/types";
 import { SUPPLEMENT_KEYS } from "@/modules/nutrition/supplements";
@@ -65,16 +65,32 @@ export async function saveMedicine(_: ActionResult | null, form: FormData): Prom
     days_of_week: days_of_week.length === 0 || days_of_week.length === 7 ? null : [...new Set(days_of_week)].sort(),
   };
 
+  // Databases without the composition/nutrients columns yet still save the rest.
+  const { ingredients, nutrients, ...basic } = row;
+  let note = "";
   try {
     const session = await requireWrite(MODULE, ownerId);
     if (id) {
-      const { error } = await session.supabase.from("medicines").update(row).eq("id", id).eq("owner_id", ownerId);
-      if (error) return { error: "Couldn't save the medicine." };
+      let { error } = await session.supabase.from("medicines").update(row).eq("id", id).eq("owner_id", ownerId);
+      if (isMissingColumn(error)) {
+        ({ error } = await session.supabase.from("medicines").update(basic).eq("id", id).eq("owner_id", ownerId));
+        if (!error && (ingredients || Object.keys(nutrients).length)) note = " Composition and nutrients weren't saved: run the latest database update in Supabase.";
+      }
+      if (error) {
+        console.error("save medicine failed", error.code, error.message);
+        return { error: dbErrorMessage(error, "Couldn't save the medicine.") };
+      }
     } else {
-      const { error } = await session.supabase
-        .from("medicines")
-        .insert({ ...row, owner_id: ownerId, created_by: session.userId, household_id: session.household.id });
-      if (error) return { error: "Couldn't add the medicine." };
+      const meta = { owner_id: ownerId, created_by: session.userId, household_id: session.household.id };
+      let { error } = await session.supabase.from("medicines").insert({ ...row, ...meta });
+      if (isMissingColumn(error)) {
+        ({ error } = await session.supabase.from("medicines").insert({ ...basic, ...meta }));
+        if (!error && (ingredients || Object.keys(nutrients).length)) note = " Composition and nutrients weren't saved: run the latest database update in Supabase.";
+      }
+      if (error) {
+        console.error("add medicine failed", error.code, error.message);
+        return { error: dbErrorMessage(error, "Couldn't add the medicine.") };
+      }
 
       // Mirror into the medical timeline so history (and AI) sees it.
       if (add_to_timeline && session.isModuleEnabled("medical_records") && session.accessTo("medical_records", ownerId) === "write") {
@@ -100,7 +116,7 @@ export async function saveMedicine(_: ActionResult | null, form: FormData): Prom
     return { error: errorMessage(e) };
   }
   refreshModule("/medicines");
-  return { ok: true, message: id ? "Saved." : "Medicine added." };
+  return { ok: true, message: (id ? "Saved." : "Medicine added.") + note };
 }
 
 export async function setMedicineActive(id: string, ownerId: string, active: boolean) {

@@ -4,7 +4,7 @@ import { getT } from "@/lib/i18n/server";
 import { getSession } from "@/lib/session";
 import { addDays, localDate, localTime, shortDate, startOfLocalDayIso, todayIn } from "@/lib/dates";
 import { Card, buttonClass, cx, Notice } from "@/components/ui";
-import type { FluidIntake, FoodEntry, NutritionGoals } from "@/lib/types";
+import type { FluidIntake, FoodEntry, Meal, NutritionGoals } from "@/lib/types";
 import { MEAL_META, MEAL_ORDER, eatenAtFor, totals } from "@/modules/food/meta";
 import { DateJump } from "@/components/date-jump";
 import { supplementNutrientsByDay } from "@/lib/supplement-nutrients";
@@ -17,6 +17,7 @@ import type { LabResult } from "@/lib/types";
 import { FoodAiAdd } from "./food-ai-add";
 import { ManualFoodForm } from "./manual-food-form";
 import { MealAdd } from "./meal-add";
+import { FoodQuickSearch } from "./quick-search";
 import { RestaurantPicker } from "./restaurant-picker";
 import { repeatFood } from "./actions";
 import { FoodEntryRow } from "./entry-row";
@@ -42,9 +43,9 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
 
   const diningOn = session.isModuleEnabled("dining");
   const [{ data: e }, { data: g }, { data: recent }, fl, rp, rd] = await Promise.all([
-    session.supabase.from("food_entries").select("*").eq("owner_id", ownerId).gte("eaten_at", startOfLocalDayIso(date)).lt("eaten_at", startOfLocalDayIso(addDays(date, 3))).order("eaten_at"),
+    session.supabase.from("food_entries").select("*").eq("owner_id", ownerId).gte("eaten_at", startOfLocalDayIso(addDays(date, -1))).lt("eaten_at", startOfLocalDayIso(addDays(date, 3))).order("eaten_at"),
     session.supabase.from("nutrition_goals").select("*").eq("owner_id", ownerId).maybeSingle(),
-    session.supabase.from("food_entries").select("*").eq("owner_id", ownerId).order("eaten_at", { ascending: false }).limit(60),
+    session.supabase.from("food_entries").select("*").eq("owner_id", ownerId).order("eaten_at", { ascending: false }).limit(200),
     fluidsVisible
       ? session.supabase.from("fluid_intake").select("volume_ml, occurred_at").eq("owner_id", ownerId).gte("occurred_at", startOfLocalDayIso(date)).lt("occurred_at", startOfLocalDayIso(addDays(date, 3)))
       : Promise.resolve({ data: [] }),
@@ -71,6 +72,24 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
   const water = ((fl.data ?? []) as Pick<FluidIntake, "volume_ml" | "occurred_at">[])
     .filter((x) => localDate(x.occurred_at, tz) === date)
     .reduce((a, x) => a + x.volume_ml, 0);
+
+  const prevDate = addDays(date, -1);
+  const prevEntries = ((e ?? []) as FoodEntry[]).filter((x) => localDate(x.eaten_at, tz) === prevDate);
+  const previousFor = (meal: Meal) => {
+    const items = prevEntries.filter((x) => x.meal === meal).map((x) => x.description);
+    return items.length ? { date: prevDate, label: prevDate === addDays(today, -1) ? t("yesterday") : shortDate(prevDate), items } : null;
+  };
+  // Recently logged foods (one per name and meal), for search and one-tap re-adding.
+  const recentSeen = new Set<string>();
+  const recentFoods = ((recent ?? []) as FoodEntry[])
+    .filter((x) => {
+      const k = `${x.description.toLowerCase()}|${x.meal}`;
+      if (recentSeen.has(k)) return false;
+      recentSeen.add(k);
+      return true;
+    })
+    .slice(0, 60)
+    .map((x) => ({ id: x.id, description: x.description, quantity: x.quantity, calories: x.calories, meal: x.meal }));
 
   const seen = new Set<string>();
   const favourites = ((recent ?? []) as FoodEntry[]).filter((x) => {
@@ -145,6 +164,7 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
           {date !== today ? (
             <Notice tone="accent">{t("Adding to {date}. Entries are saved at the meal's usual time.", { date: shortDate(date) })}</Notice>
           ) : null}
+          <FoodQuickSearch ownerId={ownerId} people={people} day={day} meal={presetMeal} recent={recentFoods} />
           <FoodAiAdd
             key={`${date}-${presetMeal ?? ""}`}
             ownerId={ownerId}
@@ -174,7 +194,7 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
                 </>
               );
               return canWrite ? (
-                <MealAdd key={`${date}-${meal}`} ownerId={ownerId} people={people} day={day} meal={meal}>{heading}</MealAdd>
+                <MealAdd key={`${date}-${meal}`} ownerId={ownerId} people={people} day={day} meal={meal} recent={recentFoods} previous={list.length ? null : previousFor(meal)}>{heading}</MealAdd>
               ) : (
                 <div className="mb-1 flex items-baseline justify-between">{heading}</div>
               );

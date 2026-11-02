@@ -7,7 +7,7 @@ import { foodItemSchema, MEALS, nutritionGoalSchema } from "@/lib/ai/phase2-sche
 import type { ActionResult } from "@/lib/types";
 import { NUTRIENT_KEYS, scale, splitMacros, type Nutrients } from "@/modules/nutrition/nutrients";
 import { cleanIrritants } from "@/modules/nutrition/irritants";
-import { localDate, zonedIso } from "@/lib/dates";
+import { addDays, localDate, localTime, zonedIso } from "@/lib/dates";
 
 const MODULE = "food_diary";
 const when = z.iso.datetime({ offset: true }).optional();
@@ -327,4 +327,55 @@ export async function deleteCustomFood(id: string) {
   const session = await getSession();
   await session.supabase.from("custom_foods").delete().eq("id", id).eq("household_id", session.household.id);
   refreshModule("/food");
+}
+
+/** Copies everything from one meal on an earlier day (e.g. yesterday's breakfast) to the same meal on `toDate`. */
+export async function copyMeal(ownerId: string, fromDate: string, meal: (typeof MEALS)[number], toDate: string): Promise<ActionResult> {
+  const iso = /^\d{4}-\d{2}-\d{2}$/;
+  if (!iso.test(fromDate) || !iso.test(toDate) || !MEALS.includes(meal)) return { error: "Pick a meal." };
+  try {
+    const session = await requireWrite(MODULE, ownerId);
+    const tz = session.profile.timezone;
+    const { data } = await session.supabase
+      .from("food_entries")
+      .select("*")
+      .eq("owner_id", ownerId)
+      .eq("meal", meal)
+      .gte("eaten_at", zonedIso(fromDate, "00:00", tz))
+      .lt("eaten_at", zonedIso(addDays(fromDate, 1), "00:00", tz));
+    const rows = (data ?? []) as Record<string, unknown>[];
+    if (!rows.length) return { error: "Nothing was logged for that meal." };
+    const now = Date.now();
+    const shift = (at: string) => {
+      const t = zonedIso(toDate, localTime(at, tz), tz);
+      return Date.parse(t) > now ? new Date(now).toISOString() : t;
+    };
+    const { error } = await session.supabase.from("food_entries").insert(
+      rows.map((e) => ({
+        owner_id: ownerId,
+        created_by: session.userId,
+        household_id: session.household.id,
+        meal,
+        eaten_at: shift(String(e.eaten_at)),
+        description: e.description,
+        quantity: e.quantity,
+        calories: e.calories,
+        protein_g: e.protein_g,
+        carbs_g: e.carbs_g,
+        fat_g: e.fat_g,
+        fiber_g: e.fiber_g,
+        recipe_id: e.recipe_id,
+        source: e.source,
+        micros: e.micros ?? {},
+        grams: e.grams,
+        accuracy: e.accuracy ?? "estimated",
+        irritants: e.irritants ?? [],
+      })),
+    );
+    if (error) return { error: "Couldn't copy the meal." };
+    refreshModule("/food");
+    return { ok: true, message: `Added ${rows.length} item${rows.length === 1 ? "" : "s"}.` };
+  } catch (e) {
+    return { error: errorMessage(e) };
+  }
 }
