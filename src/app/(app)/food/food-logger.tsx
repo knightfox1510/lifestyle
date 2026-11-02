@@ -29,6 +29,7 @@ export function FoodAmountLogger({
   me: string;
   people: PersonPortion[];
 }) {
+  const [label, setLabel] = useState(name);
   const [unit, setUnit] = useState<"g" | "serving">(servingG ? "serving" : "g");
   const [amount, setAmount] = useState(servingG ? 1 : 100);
   const [meal, setMeal] = useState<Meal>(() => mealForHour(new Date().getHours()));
@@ -41,6 +42,9 @@ export function FoodAmountLogger({
 
   return (
     <div className="space-y-2">
+      <Field label={t("Name in your diary")}>
+        <Input value={label} onChange={(e) => setLabel(e.target.value)} maxLength={200} />
+      </Field>
       <div className="flex flex-wrap items-end gap-2">
         <Field label={t("Amount")} className="w-24">
           <Input type="number" min={0} step={unit === "g" ? 5 : 0.5} value={amount} onChange={(e) => setAmount(Math.max(0, Number(e.target.value) || 0))} />
@@ -67,13 +71,13 @@ export function FoodAmountLogger({
       {msg ? <Notice tone={msg.tone}>{msg.text}</Notice> : null}
       <Button
         size="sm"
-        disabled={pending || grams <= 0 || !Object.values(who).some((v) => v > 0)}
+        disabled={pending || grams <= 0 || !label.trim() || !Object.values(who).some((v) => v > 0)}
         onClick={() =>
           start(async () => {
             const r = await logFoodForPeople(
               Object.entries(who).filter(([, f]) => f > 0).map(([ownerId, factor]) => ({ ownerId, factor })),
               meal,
-              [{ description: name, quantity: unit === "g" ? `${amount} g` : `${amount} serving${amount === 1 ? "" : "s"}`, grams, nutrients: n as Record<string, number>, accuracy, irritants, source: "manual" }],
+              [{ description: label.trim(), quantity: unit === "g" ? `${amount} g` : `${amount} serving${amount === 1 ? "" : "s"}`, grams, nutrients: n as Record<string, number>, accuracy, irritants, source: "manual" }],
             );
             setMsg(r.error ? { tone: "danger", text: r.error } : { tone: "accent", text: r.message ?? "Logged." });
           })

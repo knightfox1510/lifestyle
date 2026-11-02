@@ -7,6 +7,7 @@ import { foodItemSchema, MEALS, nutritionGoalSchema } from "@/lib/ai/phase2-sche
 import type { ActionResult } from "@/lib/types";
 import { NUTRIENT_KEYS, scale, splitMacros, type Nutrients } from "@/modules/nutrition/nutrients";
 import { cleanIrritants } from "@/modules/nutrition/irritants";
+import { localDate, zonedIso } from "@/lib/dates";
 
 const MODULE = "food_diary";
 const when = z.iso.datetime({ offset: true }).optional();
@@ -112,10 +113,69 @@ export async function repeatFood(entryId: string, ownerId: string, meal: (typeof
   refreshModule("/food");
 }
 
-export async function deleteFood(id: string) {
-  const session = await getSession();
-  await session.supabase.from("food_entries").delete().eq("id", id).eq("owner_id", session.userId);
+/**
+ * Deletes a logged food. The person it belongs to can always; whoever logged
+ * it (e.g. a partner logging a shared meal) can while they have write access.
+ */
+export async function deleteFood(id: string, ownerId: string): Promise<ActionResult> {
+  try {
+    const session = await requireWrite(MODULE, ownerId);
+    const { data, error } = await session.supabase.from("food_entries").delete().eq("id", id).eq("owner_id", ownerId).select("id");
+    if (error || !data?.length) return { error: "Only the person it belongs to, or whoever logged it, can delete this." };
+  } catch (e) {
+    return { error: errorMessage(e) };
+  }
   refreshModule("/food");
+  return { ok: true, message: "Deleted." };
+}
+
+const editSchema = z.object({
+  description: z.string().trim().min(1, "Give it a name").max(200),
+  quantity: z.preprocess(blank, z.string().trim().max(60).nullable()),
+  meal: z.enum(MEALS),
+  time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Pick a time"),
+  /** Portion change: 0.5 = half of what was logged, 2 = double. Nutrients and grams scale with it. */
+  factor: z.number().min(0.1).max(10),
+});
+
+/** Rename a logged food, change the amount, move it to another meal or time (same day). */
+export async function updateFoodEntry(id: string, ownerId: string, input: unknown): Promise<ActionResult> {
+  const parsed = editSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check the details." };
+  const v = parsed.data;
+  try {
+    const session = await requireWrite(MODULE, ownerId);
+    const { data: e } = await session.supabase.from("food_entries").select("*").eq("id", id).eq("owner_id", ownerId).maybeSingle();
+    if (!e) return { error: "Entry not found." };
+    const tz = session.profile.timezone;
+    const date = localDate(e.eaten_at, tz);
+    const f = v.factor;
+    const r1 = (n: unknown) => (n == null ? null : Math.round(Number(n) * f * 10) / 10);
+    const micros = Object.fromEntries(Object.entries((e.micros ?? {}) as Record<string, number>).map(([k, n]) => [k, Math.round(Number(n) * f * 100) / 100]));
+    const patch = {
+      description: v.description,
+      quantity: v.quantity,
+      meal: v.meal,
+      eaten_at: zonedIso(date, v.time, tz),
+      ...(f !== 1
+        ? {
+            calories: e.calories == null ? null : Math.min(5000, Math.round(Number(e.calories) * f)),
+            protein_g: r1(e.protein_g),
+            carbs_g: r1(e.carbs_g),
+            fat_g: r1(e.fat_g),
+            fiber_g: r1(e.fiber_g),
+            grams: e.grams == null ? null : Math.min(10000, r1(e.grams) ?? 0),
+            micros,
+          }
+        : {}),
+    };
+    const { error } = await session.supabase.from("food_entries").update(patch).eq("id", id).eq("owner_id", ownerId);
+    if (error) return { error: "Couldn't save the changes." };
+  } catch (err) {
+    return { error: errorMessage(err) };
+  }
+  refreshModule("/food");
+  return { ok: true, message: "Saved." };
 }
 
 // ------------------------------------------------------------------ goals --

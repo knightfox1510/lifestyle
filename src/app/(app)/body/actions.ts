@@ -89,3 +89,36 @@ export async function saveBodyGoals(_: ActionResult | null, form: FormData): Pro
   refreshModule("/body");
   return { ok: true, message: "Goal saved." };
 }
+
+const basicsSchema = z.object({
+  ownerId: z.uuid(),
+  height_cm: z.preprocess(blank, z.coerce.number().min(50).max(250).nullable()),
+  sex: z.preprocess(blank, z.enum(["female", "male", "other"]).nullable()),
+  date_of_birth: z.preprocess(blank, z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable()),
+});
+
+/** Height, sex and date of birth (kept in the medical profile) for BMI and calorie estimates. */
+export async function saveBodyBasics(_: ActionResult | null, form: FormData): Promise<ActionResult> {
+  const parsed = basicsSchema.safeParse(Object.fromEntries(form));
+  if (!parsed.success) return { error: "Check the height (cm) and date." };
+  const { ownerId, ...values } = parsed.data;
+  const patch = Object.fromEntries(Object.entries(values).filter(([, v]) => v !== null));
+  if (!Object.keys(patch).length) return { error: "Nothing to save." };
+  try {
+    const session = await getSession();
+    if (!session.isModuleEnabled("medical_records")) return { error: "Turn on Medical records in Settings → Household; height is kept in the medical profile." };
+    if (session.accessTo("medical_records", ownerId) !== "write") return { error: "You can't edit their profile." };
+    const { data: existing } = await session.supabase.from("medical_profiles").select("owner_id").eq("owner_id", ownerId).maybeSingle();
+    const { error } = existing
+      ? await session.supabase.from("medical_profiles").update(patch).eq("owner_id", ownerId)
+      : ownerId === session.userId
+        ? await session.supabase.from("medical_profiles").insert({ ...patch, owner_id: ownerId })
+        : { error: { message: "only-they" } };
+    if (error) return { error: error.message === "only-they" ? "Only they can start their profile. Ask them to add their height." : "Couldn't save." };
+  } catch (e) {
+    return { error: errorMessage(e) };
+  }
+  refreshModule("/body");
+  refreshModule("/medical");
+  return { ok: true, message: "Saved." };
+}

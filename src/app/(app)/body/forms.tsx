@@ -4,7 +4,7 @@ import { useActionState, useState } from "react";
 import { Card, Field, Input, Select, Textarea } from "@/components/ui";
 import { ActionMessage, SubmitButton } from "@/components/form-status";
 import type { BodyGoals } from "@/lib/types";
-import { logBodyMetric, saveBodyGoals } from "./actions";
+import { logBodyMetric, saveBodyBasics, saveBodyGoals } from "./actions";
 
 export function WeightForm({ ownerId, last }: { ownerId: string; last: number | null }) {
   const [state, action] = useActionState(logBodyMetric, null);
@@ -133,5 +133,45 @@ export function BodyGoalsForm({ ownerId, goals, current }: { ownerId: string; go
         </div>
       </form>
     </Card>
+  );
+}
+
+/** Asks only for what's missing (height, sex, date of birth) to work out BMI and calorie needs. */
+export function BodyBasicsForm({ ownerId, need, height }: { ownerId: string; need: { height: boolean; sex: boolean; dob: boolean }; height: number | null }) {
+  const [state, action] = useActionState(saveBodyBasics, null);
+  const [open, setOpen] = useState(need.height);
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="text-xs text-accent underline">
+        {need.height ? "Add your height" : need.sex || need.dob ? "Add age and sex for calorie needs" : `Change height (${height} cm)`}
+      </button>
+    );
+  }
+  return (
+    <form action={action} className="grid gap-2 sm:grid-cols-4 sm:items-end">
+      <input type="hidden" name="ownerId" value={ownerId} />
+      <Field label="Height (cm)">
+        <Input name="height_cm" type="number" min={50} max={250} step="0.5" defaultValue={height ?? ""} required={need.height} />
+      </Field>
+      {need.sex ? (
+        <Field label="Sex">
+          <Select name="sex" defaultValue="">
+            <option value="">–</option>
+            <option value="female">Female</option>
+            <option value="male">Male</option>
+            <option value="other">Other</option>
+          </Select>
+        </Field>
+      ) : null}
+      {need.dob ? (
+        <Field label="Date of birth">
+          <Input name="date_of_birth" type="date" />
+        </Field>
+      ) : null}
+      <SubmitButton>Save</SubmitButton>
+      <div className="sm:col-span-4">
+        <ActionMessage state={state} />
+      </div>
+    </form>
   );
 }

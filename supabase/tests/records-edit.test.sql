@@ -35,6 +35,20 @@ do $$ begin
   assert exists (select 1 from public.medical_events where id = 'e7e7e7e7-0000-0000-0000-000000000073'), 'partner cannot delete the owner''s entry';
 end $$;
 
+-- Food: K logs a shared meal for J, then edits (moves) and deletes it; can't delete J's own.
+select set_config('request.jwt.claim.sub', :j, false);
+insert into public.module_shares (owner_id, grantee_id, module_key, level) values (:j, :k, 'food_diary', 'write');
+insert into public.food_entries (id, owner_id, household_id, meal, description) values ('e7e7e7e7-0000-0000-0000-000000000076', :j, :'hid', 'lunch', 'Dal');
+select set_config('request.jwt.claim.sub', :k, false);
+insert into public.food_entries (id, owner_id, created_by, household_id, meal, description) values ('e7e7e7e7-0000-0000-0000-000000000077', :j, :k, :'hid', 'lunch', 'Roti');
+update public.food_entries set meal = 'dinner', description = 'Phulka' where id = 'e7e7e7e7-0000-0000-0000-000000000077';
+delete from public.food_entries where id in ('e7e7e7e7-0000-0000-0000-000000000076', 'e7e7e7e7-0000-0000-0000-000000000077');
+select set_config('request.jwt.claim.sub', :j, false);
+do $$ begin
+  assert not exists (select 1 from public.food_entries where id = 'e7e7e7e7-0000-0000-0000-000000000077'), 'whoever logged it can delete';
+  assert exists (select 1 from public.food_entries where id = 'e7e7e7e7-0000-0000-0000-000000000076'), 'partner cannot delete the owner''s own log';
+end $$;
+
 -- Medicine composition and nutrients.
 insert into public.medicines (household_id, name, times, dose_amount, ingredients, nutrients)
 values (:'hid', 'Shelcal 500', array['09:00'], 1, 'Calcium carbonate 1250 mg + Vitamin D3 250 IU', '{"calcium_mg": 500, "vit_d_mcg": 6.25}');

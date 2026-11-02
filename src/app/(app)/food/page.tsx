@@ -18,7 +18,8 @@ import { FoodAiAdd } from "./food-ai-add";
 import { ManualFoodForm } from "./manual-food-form";
 import { MealAdd } from "./meal-add";
 import { RestaurantPicker } from "./restaurant-picker";
-import { deleteFood, repeatFood } from "./actions";
+import { repeatFood } from "./actions";
+import { FoodEntryRow } from "./entry-row";
 
 export const metadata = { title: "Food diary" };
 
@@ -181,29 +182,25 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
             {list.length ? (
               <ul className="divide-y divide-border">
                 {list.map((x) => (
-                  <li key={x.id} className="flex items-center justify-between gap-2 py-2 text-sm">
-                    <span className="min-w-0">
-                      <span className="block truncate">{x.description}{x.quantity ? <span className="text-fg-muted"> · {x.quantity}</span> : null}</span>
-                      <span className="text-xs text-fg-muted">
-                        {localTime(x.eaten_at, tz)} · P {Math.round(Number(x.protein_g ?? 0))} · C {Math.round(Number(x.carbs_g ?? 0))} · F {Math.round(Number(x.fat_g ?? 0))}
-                        {x.grams ? ` · ${Math.round(Number(x.grams))} g` : ""}
-                        {x.source === "restaurant" ? " · restaurant" : ""}
-                        {(x.irritants ?? []).length ? ` · ${(x.irritants ?? []).map((i) => IRRITANT_META[i as Irritant]?.icon ?? "").join("")}` : ""}
-                        {x.group_id ? " · shared meal" : ""}
-                      </span>
-                      <span className="mt-0.5 block">
-                        <AccuracyBadge accuracy={x.accuracy} />
-                      </span>
-                    </span>
-                    <span className="flex shrink-0 items-center gap-2">
-                      <span className="tabular-nums">{x.calories ?? "–"}</span>
-                      {isOwner ? (
-                        <form action={deleteFood.bind(null, x.id)}>
-                          <button className="text-xs text-fg-muted hover:text-danger" aria-label={`Delete ${x.description}`}>✕</button>
-                        </form>
-                      ) : null}
-                    </span>
-                  </li>
+                  <FoodEntryRow
+                    key={x.id}
+                    entry={{ id: x.id, description: x.description, quantity: x.quantity, meal: x.meal, time: localTime(x.eaten_at, tz), calories: x.calories }}
+                    ownerId={ownerId}
+                    canEdit={canWrite}
+                    canDelete={canWrite && (isOwner || x.created_by === session.userId)}
+                    meta={[
+                      localTime(x.eaten_at, tz),
+                      `P ${Math.round(Number(x.protein_g ?? 0))} · C ${Math.round(Number(x.carbs_g ?? 0))} · F ${Math.round(Number(x.fat_g ?? 0))}`,
+                      x.grams ? `${Math.round(Number(x.grams))} g` : null,
+                      x.source === "restaurant" ? t("restaurant") : null,
+                      (x.irritants ?? []).length ? (x.irritants ?? []).map((i) => IRRITANT_META[i as Irritant]?.icon ?? "").join("") : null,
+                      x.group_id ? t("shared meal") : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  >
+                    <AccuracyBadge accuracy={x.accuracy} />
+                  </FoodEntryRow>
                 ))}
               </ul>
             ) : (

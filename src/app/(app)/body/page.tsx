@@ -2,9 +2,11 @@ import { getSession } from "@/lib/session";
 import { addDays, dayOfWeek, lastNDays, localDate, shortDate, startOfLocalDayIso, todayIn } from "@/lib/dates";
 import { Card, EmptyState, cx } from "@/components/ui";
 import { LineChart } from "@/components/charts";
-import type { BodyGoals, BodyMetric, FoodEntry, NutritionGoals } from "@/lib/types";
+import type { BodyGoals, BodyMetric, FoodEntry, MedicalProfile, NutritionGoals } from "@/lib/types";
+import { BMI_LABEL, ageOn, bmi, bmiBand, bmr, healthyWeightRange, proteinRange, waistRisk, waistToHeight } from "@/modules/body/stats";
+import { maintenanceCalories } from "@/modules/food/meta";
 import { totals } from "@/modules/food/meta";
-import { BodyGoalsForm, WeightForm } from "./forms";
+import { BodyBasicsForm, BodyGoalsForm, WeightForm } from "./forms";
 import { deleteBodyMetric } from "./actions";
 
 export const metadata = { title: "Body recomposition" };
@@ -19,14 +21,17 @@ export default async function BodyPage() {
   const foodVisible = session.isModuleEnabled("food_diary") && session.accessTo("food_diary", ownerId) !== "none";
   const from = startOfLocalDayIso(addDays(today, -180));
 
-  const [{ data: m }, { data: g }, food, ng] = await Promise.all([
+  const medicalOn = session.isModuleEnabled("medical_records") && session.accessTo("medical_records", ownerId) !== "none";
+  const [{ data: m }, { data: g }, food, ng, mp] = await Promise.all([
     session.supabase.from("body_metrics").select("*").eq("owner_id", ownerId).gte("measured_at", from).order("measured_at"),
     session.supabase.from("body_goals").select("*").eq("owner_id", ownerId).maybeSingle(),
     foodVisible
       ? session.supabase.from("food_entries").select("eaten_at, calories, protein_g, carbs_g, fat_g, fiber_g").eq("owner_id", ownerId).gte("eaten_at", startOfLocalDayIso(addDays(today, -42)))
       : Promise.resolve({ data: [] }),
-    foodVisible ? session.supabase.from("nutrition_goals").select("calories").eq("owner_id", ownerId).maybeSingle() : Promise.resolve({ data: null }),
+    foodVisible ? session.supabase.from("nutrition_goals").select("calories, activity_level").eq("owner_id", ownerId).maybeSingle() : Promise.resolve({ data: null }),
+    medicalOn ? session.supabase.from("medical_profiles").select("height_cm, sex, date_of_birth").eq("owner_id", ownerId).maybeSingle() : Promise.resolve({ data: null }),
   ]);
+  const profile = mp.data as Pick<MedicalProfile, "height_cm" | "sex" | "date_of_birth"> | null;
   const metrics = (m ?? []) as BodyMetric[];
   const goals = g as BodyGoals | null;
   const weights = metrics.filter((x) => x.weight_kg !== null).map((x) => ({ date: localDate(x.measured_at, tz), value: Number(x.weight_kg) }));
@@ -59,6 +64,21 @@ export default async function BodyPage() {
   const delta = (a: number | null) => (latest !== null && a !== null ? Math.round((latest - a) * 10) / 10 : null);
   const fmtDelta = (d: number | null) => (d === null ? "–" : `${d > 0 ? "+" : ""}${d} kg`);
 
+  // Body numbers from height (medical profile), latest weight and waist.
+  const height = profile?.height_cm != null ? Number(profile.height_cm) : null;
+  const age = profile?.date_of_birth ? ageOn(profile.date_of_birth, today) : null;
+  const sex = profile?.sex ?? null;
+  const waist = [...metrics].reverse().find((x) => x.waist_cm != null)?.waist_cm ?? null;
+  const bmiNow = latest !== null && height ? bmi(latest, height) : null;
+  const band = bmiNow !== null ? bmiBand(bmiNow) : null;
+  const range = height ? healthyWeightRange(height) : null;
+  const whtr = waist !== null && height ? waistToHeight(Number(waist), height) : null;
+  const waistHigh = waist !== null ? waistRisk(Number(waist), sex) : null;
+  const activity = (ng.data as Pick<NutritionGoals, "activity_level"> | null)?.activity_level ?? "moderate";
+  const bmrNow = latest !== null && height && age ? bmr(latest, height, age, sex) : null;
+  const maintenance = latest !== null && height && age ? maintenanceCalories({ weightKg: latest, heightCm: height, age, sex, activity }) : null;
+  const protein = latest !== null ? proteinRange(latest) : null;
+
   return (
     <div className="space-y-4">
       {canWrite ? <WeightForm ownerId={ownerId} last={latest} /> : null}
@@ -82,6 +102,48 @@ export default async function BodyPage() {
           {target !== null ? <p className="text-xs text-fg-muted">target {target} kg{goals?.target_date ? ` by ${shortDate(goals.target_date)}` : ""}</p> : null}
         </Card>
       </div>
+
+      <Card className="space-y-3">
+        <div className="flex items-baseline justify-between gap-2">
+          <h2 className="text-sm font-semibold">Your body numbers</h2>
+          {medicalOn && canWrite && height ? <BodyBasicsForm ownerId={ownerId} height={height} need={{ height: false, sex: !sex, dob: !age }} /> : null}
+        </div>
+        {!height ? (
+          medicalOn && canWrite ? (
+            <div className="space-y-2">
+              <p className="text-sm text-fg-muted">Add height to see BMI, a healthy weight range for your height and daily calorie needs.</p>
+              <BodyBasicsForm ownerId={ownerId} height={null} need={{ height: true, sex: !sex, dob: !age }} />
+            </div>
+          ) : (
+            <p className="text-sm text-fg-muted">Height is kept in the medical profile{medicalOn ? "" : " (turn on Medical records in Settings → Household)"}.</p>
+          )
+        ) : (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div>
+              <p className="text-xs text-fg-muted">BMI</p>
+              <p className={cx("text-2xl font-semibold tabular-nums", band === "obese" && "text-danger", band === "over" && "text-sun")}>{bmiNow ?? "–"}</p>
+              {band ? <p className="text-xs text-fg-muted">{BMI_LABEL[band]}</p> : <p className="text-xs text-fg-muted">log a weight</p>}
+            </div>
+            <div>
+              <p className="text-xs text-fg-muted">Healthy weight for {height} cm</p>
+              <p className="text-2xl font-semibold tabular-nums">{range ? `${Math.round(range.low)}–${Math.round(range.high)}` : "–"}<span className="text-sm font-normal text-fg-muted"> kg</span></p>
+              <p className="text-xs text-fg-muted">BMI 18.5–22.9</p>
+            </div>
+            <div>
+              <p className="text-xs text-fg-muted">Waist ÷ height</p>
+              <p className={cx("text-2xl font-semibold tabular-nums", whtr?.band === "high" && "text-danger", whtr?.band === "raised" && "text-sun")}>{whtr ? whtr.value.toFixed(2) : "–"}</p>
+              <p className="text-xs text-fg-muted">{whtr ? (whtr.band === "ok" ? "under 0.5 · good" : whtr.band === "raised" ? "aim for under 0.5" : "high · aim for under 0.5") : "log a waist measurement"}{waistHigh ? " · waist above the Indian cut-off" : ""}</p>
+            </div>
+            <div>
+              <p className="text-xs text-fg-muted">Calories to maintain</p>
+              <p className="text-2xl font-semibold tabular-nums">{maintenance ? `~${maintenance.toLocaleString("en-IN")}` : "–"}</p>
+              <p className="text-xs text-fg-muted">{bmrNow ? `at rest ${bmrNow.toLocaleString("en-IN")} · ${activity.replace("_", " ")}` : "needs age and sex"}</p>
+            </div>
+          </div>
+        )}
+        {protein ? <p className="text-xs text-fg-muted">Protein: at least {protein.rda} g a day (0.8 g/kg); {protein.active[0]}–{protein.active[1]} g when losing fat or strength training.</p> : null}
+        <p className="text-xs text-fg-muted">BMI uses the cut-offs for Indian adults (overweight from 23). It doesn&apos;t see muscle, so waist ÷ height is often the better guide. Not a diagnosis.</p>
+      </Card>
 
       {progress !== null ? (
         <Card className="space-y-3">

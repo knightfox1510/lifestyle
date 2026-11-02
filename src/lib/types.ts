@@ -367,6 +367,7 @@ export type NutritionGoals = {
 export type FoodEntry = {
   id: string;
   owner_id: string;
+  created_by?: string;
   eaten_at: string;
   meal: Meal;
   description: string;

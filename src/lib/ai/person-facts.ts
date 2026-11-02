@@ -3,6 +3,7 @@ import "server-only";
 import type { AppSession } from "@/lib/session";
 import type { BodyGoals, BodyMetric, MedicalProfile, NutritionGoals } from "@/lib/types";
 import { maintenanceCalories } from "@/modules/food/meta";
+import { bmi } from "@/modules/body/stats";
 
 /** Body + nutrition facts used by food AI features (respecting sharing). */
 export async function personFacts(session: AppSession, subjectId: string) {
@@ -28,6 +29,7 @@ export async function personFacts(session: AppSession, subjectId: string) {
   const lines = [
     weight ? `Current weight: ${weight} kg.` : null,
     profile?.height_cm ? `Height: ${profile.height_cm} cm.` : null,
+    weight && profile?.height_cm ? `BMI: ${bmi(Number(weight), Number(profile.height_cm))} (Indian adult cut-offs: 23 overweight, 25 obese).` : null,
     age ? `Age: ${age}.` : null,
     profile?.sex ? `Sex: ${profile.sex}.` : null,
     goals?.target_weight_kg ? `Target weight: ${goals.target_weight_kg} kg${goals.target_date ? ` by ${goals.target_date}` : ""}.` : null,
