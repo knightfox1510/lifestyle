@@ -193,7 +193,7 @@ function recipeServingNutrients(r: Recipe): { nutrients: Nutrients; accuracy: "c
 }
 
 /** Logs a recipe for one or more people, each with their own number of servings. */
-export async function logRecipeForPeople(recipeId: string, people: { ownerId: string; servings: number }[], meal: (typeof MEALS)[number]): Promise<ActionResult> {
+export async function logRecipeForPeople(recipeId: string, people: { ownerId: string; servings: number }[], meal: (typeof MEALS)[number], eatenAt?: string): Promise<ActionResult> {
   const session = await getSession();
   const { data } = await session.supabase.from("recipes").select("*").eq("id", recipeId).eq("household_id", session.household.id).maybeSingle();
   if (!data) return { error: "Recipe not found." };
@@ -217,6 +217,7 @@ export async function logRecipeForPeople(recipeId: string, people: { ownerId: st
         source: "recipe",
       },
     ],
+    eatenAt,
   );
 }
 

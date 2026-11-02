@@ -23,8 +23,10 @@ export default async function MeHub() {
   return (
     <div className="space-y-6">
       <PageHeader title={session.household.name} subtitle={[session.me.display_name, session.partner?.display_name].filter(Boolean).join(" & ")} />
-      <HubGrid title={t("Kitchen")} items={tile(["Food"])} />
-      <HubGrid title={t("Home & family")} items={tile(["Family & home", "Leisure", "Admin"])} />
+      <HubGrid title={t("Home & family")} items={tile(["Family & home"])} />
+      <HubGrid title={t("Plans & fun")} items={tile(["Leisure"]).filter((i) => i.iconKey !== "dining")} />
+      <HubGrid title={t("Paperwork")} items={tile(["Admin"])} />
+      <HubList title={t("Kitchen")} items={[{ href: "/food/plan", name: t("Food & kitchen"), hint: t("Week plan, groceries, pantry, recipes and eating out are under the Food tab") }]} />
       <HubList
         title={t("You")}
         items={[

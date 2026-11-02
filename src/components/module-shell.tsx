@@ -5,6 +5,8 @@ import { MODULE_BY_KEY } from "@/modules/registry";
 import { EmptyState, PageHeader } from "@/components/ui";
 import { SubNav } from "@/components/sub-nav";
 import { getT } from "@/lib/i18n/server";
+import { AreaNav } from "@/components/area-nav";
+import { AREAS, type AreaKey } from "@/modules/areas";
 
 /**
  * Shared wrapper for a module's screens: checks the module is on, handles the
@@ -15,11 +17,14 @@ export async function ModuleShell({
   moduleKey,
   subtitle,
   tabs,
+  area,
   children,
 }: {
   moduleKey: string;
   subtitle?: string;
   tabs?: { href: string; label: string }[];
+  /** Related features to show as a shortcut row above the title. */
+  area?: AreaKey;
   children: ReactNode;
 }) {
   const session = await getSession();
@@ -30,10 +35,13 @@ export async function ModuleShell({
   if (subtitle) subtitle = t(subtitle);
 
   const header = <>{tabs ? <SubNav items={tabs.map((x) => ({ ...x, label: t(x.label) }))} /> : null}</>;
+  const areaItems = area ? AREAS[area].filter((i) => session.isModuleEnabled(i.module)).map((i) => ({ href: i.href, label: t(i.label) })) : [];
+  const areaNav = areaItems.length > 1 ? <AreaNav items={areaItems} /> : null;
 
   if (def.scope === "household") {
     return (
       <>
+        {areaNav}
         <PageHeader title={name} subtitle={subtitle} />
         {header}
         {children}
@@ -47,6 +55,7 @@ export async function ModuleShell({
   if (access === "none") {
     return (
       <>
+        {areaNav}
         <PageHeader title={name} />
         <EmptyState title={t("{person} hasn't shared {module} with you", { person: subject.display_name, module: name })}>
           {t("They can share it from Settings → Sharing. Switch back to Personal to see your own.")}
@@ -58,6 +67,7 @@ export async function ModuleShell({
 
   return (
     <>
+      {areaNav}
       <PageHeader
         title={isSelf ? name : `${subject.display_name} · ${name}`}
         subtitle={isSelf ? subtitle : access === "write" ? t("Shared with you: you can view and add entries.") : t("Shared with you: view only.")}

@@ -3,7 +3,7 @@ import { ModuleShell } from "@/components/module-shell";
 export default function BodyLayout({ children }: LayoutProps<"/body">) {
   return (
     <ModuleShell
-      moduleKey="body_recomp"
+      moduleKey="body_recomp" area="body"
       subtitle="Weight, measurements and vitals over time, against your target and the calories you eat."
       tabs={[
         { href: "/body", label: "Progress" },

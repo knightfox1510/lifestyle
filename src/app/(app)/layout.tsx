@@ -1,5 +1,6 @@
 import { getSession } from "@/lib/session";
 import { MODULES } from "@/modules/registry";
+import { TAB_MATCH } from "@/modules/areas";
 import { AppNav, type NavGroup, type NavItem } from "@/components/app-nav";
 import { ToastProvider } from "@/components/toaster";
 import { PartnerViewBanner, ViewSwitch } from "@/components/view-switch";
@@ -24,9 +25,9 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   // Phones: Today · Health · ＋ · Food · Me. Everything else lives in the Health and Me hubs.
   const tabs: NavItem[] = [
     { href: "/", label: t("Today"), icon: "today" },
-    { href: "/health", label: t("Health"), icon: "health" },
-    { href: session.isModuleEnabled("food_diary") ? "/food" : "/groceries", label: t("Food"), icon: "food" },
-    { href: "/me", label: t("Family"), icon: "me" },
+    { href: "/health", label: t("Health"), icon: "health", match: TAB_MATCH.health },
+    { href: session.isModuleEnabled("food_diary") ? "/food" : "/groceries", label: t("Food"), icon: "food", match: TAB_MATCH.food },
+    { href: "/me", label: t("Family"), icon: "me", match: TAB_MATCH.family },
   ];
   const quickLog = {
     ownerId: session.userId,

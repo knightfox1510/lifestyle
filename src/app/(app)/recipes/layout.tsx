@@ -3,11 +3,10 @@ import { ModuleShell } from "@/components/module-shell";
 export default function RecipesLayout({ children }: LayoutProps<"/recipes">) {
   return (
     <ModuleShell
-      moduleKey="recipes"
-      subtitle="Your household's recipes and a weekly meal plan that fills the grocery list for you."
+      moduleKey="recipes" area="food"
+      subtitle="Your household's recipes. Plan them into the week from Food → Week plan, which also fills the grocery list."
       tabs={[
         { href: "/recipes", label: "Recipes" },
-        { href: "/food/plan", label: "Meal plan" },
         { href: "/food/ideas", label: "✨ Ideas" },
       ]}
     >

@@ -9,7 +9,8 @@ import { Logo } from "@/components/logo";
 import { MODULE_ICONS, NAV_ICONS } from "@/components/icons";
 import { QuickLogSheet, type QuickLogConfig } from "@/components/quick-log-sheet";
 
-export type NavItem = { href: string; label: string; icon: string };
+/** `match`: other path prefixes that count as this tab (e.g. Health stays lit inside Medicines). */
+export type NavItem = { href: string; label: string; icon: string; match?: readonly string[] };
 export type NavGroup = { title: string | null; items: NavItem[] };
 
 function isActive(path: string, href: string) {
@@ -61,14 +62,15 @@ export function AppNav({
   const path = usePathname();
   // Optimistic highlight: the tapped item lights up immediately, then the real path takes over.
   const [clicked, setClicked] = useState<{ href: string; from: string } | null>(null);
-  const activeHref = (href: string) => (clicked && clicked.from === path ? clicked.href === href : isActive(path, href));
+  const activeHref = (href: string, match?: readonly string[]) =>
+    clicked && clicked.from === path ? clicked.href === href : isActive(path, href) || Boolean(match?.some((m) => isActive(path, m)));
   const [sheetOpen, setSheetOpen] = useState(false);
   const left = tabs.slice(0, 2);
   const right = tabs.slice(2);
 
   const tab = (item: NavItem) => {
     const Icon = iconFor(item.icon);
-    const on = activeHref(item.href);
+    const on = activeHref(item.href, item.match);
     return (
       <Link
         key={item.href}

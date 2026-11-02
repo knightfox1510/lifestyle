@@ -33,6 +33,22 @@ do $$ begin
 exception when insufficient_privilege then null;
 end $$;
 
+-- Per-person dishes: only for members of the same household.
+select set_config('request.jwt.claim.sub', :p, false);
+insert into public.meal_plan (household_id, plan_date, meal, title, for_user, portions, kcal_per_serving, ingredients)
+values (:'hid', '2026-11-07', 'lunch', 'Paneer bhurji', :q, '{"x": 1.5}', 420, '[{"name": "paneer", "quantity": "200 g", "category": "dairy"}]');
+do $$ begin
+  insert into public.meal_plan (household_id, plan_date, meal, title, for_user)
+  values (current_setting('test.hid')::uuid, '2026-11-07', 'dinner', 'Not ours', '6f6f6f6f-0000-0000-0000-000000000053');
+  raise exception 'SHOULD_FAIL: stranger as for_user';
+exception when insufficient_privilege then null;
+end $$;
+do $$ begin
+  insert into public.meal_plan (household_id, plan_date, meal, title, portions) values (current_setting('test.hid')::uuid, '2026-11-07', 'dinner', 'Bad', '[1]');
+  raise exception 'SHOULD_FAIL: portions array';
+exception when check_violation then null;
+end $$;
+
 reset role;
 do $$ begin
   if (select shopping_day from public.households where name = 'Plan home') <> 6 then raise exception 'stranger changed the shopping day'; end if;

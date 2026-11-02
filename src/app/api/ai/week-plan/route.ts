@@ -19,6 +19,8 @@ const body = z.object({
   meals: z.array(z.enum(MEALS)).min(1).max(5),
   variety: z.enum(["usual", "mix", "new"]),
   notes: z.string().trim().max(500).optional(),
+  /** Allow a different dish for one person when their goals, diet or health call for it. */
+  separate: z.boolean().optional(),
 });
 
 export async function POST(request: Request) {
@@ -69,7 +71,16 @@ export async function POST(request: Request) {
           ? "Bring in new dishes they'd likely enjoy, in the same cuisine and effort level as their usuals; keep about a third usual meals."
           : "Mostly their usual meals (about two thirds), plus a few new dishes in the same style for variety.";
 
-    const prompt = `Plan meals for a household of ${session.members.length} for the days below. They do their grocery shopping on ${shortDay(input.weekStart)} ${shortDate(input.weekStart)}, so the shopping list should cover the whole week.
+    // People get short keys (p1, p2…) so the answer can say who eats what and how much.
+    const people = session.members.map((m, i) => ({ key: `p${i + 1}`, id: m.user_id, name: m.display_name, facts: facts[i] }));
+    const peopleText = people
+      .map((p) => {
+        const n = p.facts.nutrition;
+        const targets = n?.calories ? `daily target ${n.calories} kcal, ${n.protein_g ?? "?"} g protein, ${n.carbs_g ?? "?"} g carbs, ${n.fat_g ?? "?"} g fat` : p.facts.maintenance ? `no target set; maintenance about ${p.facts.maintenance} kcal` : "no calorie target known";
+        return `${p.key} = ${p.name}: ${targets}.\n${p.facts.text || "(no other details shared)"}`;
+      })
+      .join("\n\n");
+    const prompt = `Plan meals for a household of ${session.members.length} for the days below. They do their grocery shopping on ${shortDay(input.weekStart)} ${shortDate(input.weekStart)}, so one shop should cover the whole week.
 Fill ONLY these empty slots (date, meal):
 ${slots.map((s) => `- ${s.d} (${shortDay(s.d)}) ${s.m}`).join("\n")}
 
@@ -87,10 +98,13 @@ Saved recipes: ${recipes.length ? recipes.map((r) => r.title).join("; ") : "(non
 Pantry:
 ${pantryText}
 
-${facts.map((f, i) => `About ${session.members[i].display_name}:\n${f.text}`).join("\n\n")}
+The people (use these keys):
+${peopleText}
 ${input.notes ? `\nWishes for this week: ${input.notes}` : ""}
 
-Shopping list: combine across the week with total quantities in Indian household terms (e.g. "1 kg", "2 bunches", "500 g"), leave out what's in the pantry and basic masalas they'd already have.`;
+Portions: most dishes are shared (for = "all"); give each person their own servings so that, across breakfast, lunch, snacks and dinner, their day lands near their own calorie and protein targets (e.g. 1.5 servings for the person with the higher target, 0.75 for the lower). Give kcal and macros for ONE standard serving.
+${input.separate ? "When one person's goal, diet or health clearly needs it (e.g. extra protein, bladder irritants to avoid, a different diet), you may plan a separate dish for that person in the same slot (for = their key), plus a shared one for the others; keep this to a few slots so cooking stays practical." : "Everyone eats the same dish in each slot (for = \"all\"); adjust only the portions."}
+Ingredients: per dish, what to buy for all its portions in Indian household quantities (e.g. "250 g", "1 bunch", "6"); skip salt, water and everyday masalas.`;
 
     const result = await runJson(session, {
       feature: "week_plan", maxDuration,
@@ -103,13 +117,33 @@ Shopping list: combine across the week with total quantities in Indian household
 
     const allowed = new Set(slots.map((s) => `${s.d}|${s.m}`));
     const byTitle = new Map(recipes.map((r) => [r.title.toLowerCase(), r]));
+    const byKey = new Map(people.map((p) => [p.key, p.id]));
     const meals = result.meals
       .filter((x) => allowed.has(`${x.date}|${x.meal}`))
       .map((x) => {
         const r = x.recipe_title ? byTitle.get(x.recipe_title.toLowerCase()) : undefined;
-        return { date: x.date, meal: x.meal, title: r ? r.title : x.title, recipe_id: r?.id ?? null, servings: r?.servings ?? session.members.length, usual: x.usual };
+        const forUser = x.for !== "all" ? (byKey.get(x.for) ?? null) : null;
+        const portions = Object.fromEntries(
+          x.portions.map((p) => [byKey.get(p.person), Math.round(p.servings * 4) / 4] as const).filter(([id]) => id && (!forUser || id === forUser)),
+        ) as Record<string, number>;
+        const eaters = forUser ? [forUser] : people.map((p) => p.id);
+        const total = eaters.reduce((a, id) => a + (portions[id] ?? 1), 0);
+        return {
+          date: x.date,
+          meal: x.meal,
+          title: r ? r.title : x.title,
+          recipe_id: r?.id ?? null,
+          for_user: forUser,
+          portions,
+          servings: Math.min(20, Math.max(1, Math.ceil(total))),
+          usual: x.usual,
+          kcal_per_serving: x.kcal_per_serving,
+          protein_g: x.protein_g,
+          carbs_g: x.carbs_g,
+          fat_g: x.fat_g,
+          ingredients: x.ingredients.filter((i) => !(pantry.length && inPantry(i.name, pantry))),
+        };
       });
-    const shopping = result.shopping.filter((s) => !(pantry.length && inPantry(s.name, pantry)));
-    return { meals, shopping, note: result.note };
+    return { meals, note: result.note, people: people.map((p) => ({ id: p.id, name: p.name, kcal: p.facts.nutrition?.calories ?? null, protein: p.facts.nutrition?.protein_g ?? null })) };
   });
 }

@@ -493,6 +493,15 @@ export type MealPlanEntry = {
   title: string | null;
   servings: number;
   notes: string | null;
+  for_user?: string | null;
+  /** Servings per person, by user id (missing = 1). */
+  portions?: Record<string, number> | null;
+  kcal_per_serving?: number | null;
+  protein_g?: number | null;
+  carbs_g?: number | null;
+  fat_g?: number | null;
+  ingredients?: { name: string; quantity: string | null; category: GroceryCategory }[] | null;
+  logged_at?: string | null;
 };
 
 // ------------------------------------------------------------- Phase 3 ----

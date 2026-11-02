@@ -227,13 +227,22 @@ export const weekPlanSchema = z.object({
         title: z.string().min(1).max(150).describe("Dish name as the household would write it, e.g. 'Poha', 'Dal tadka + jeera rice'"),
         recipe_title: z.string().max(150).nullable().describe("Exact title from the household's saved recipes if it is one of them, else null"),
         usual: z.boolean().describe("True if this is one of their usual meals"),
+        for: z.string().max(10).describe("'all' if everyone eats it, or one person's key (p1, p2…) for a dish just for them"),
+        portions: z
+          .array(z.object({ person: z.string().max(10).describe("Person key, e.g. p1"), servings: z.number().min(0.25).max(4) }))
+          .max(6)
+          .describe("Servings for each person who eats it, sized to their calorie and protein targets (1 = a standard serving)"),
+        kcal_per_serving: z.number().int().min(0).max(2500).describe("Calories in ONE standard serving"),
+        protein_g: z.number().min(0).max(200),
+        carbs_g: z.number().min(0).max(400),
+        fat_g: z.number().min(0).max(200),
+        ingredients: z
+          .array(z.object({ name: z.string().min(1).max(80), quantity: z.string().max(40).nullable(), category: z.enum(GROCERY_CATEGORIES) }))
+          .max(14)
+          .describe("What to buy for this dish for ALL the portions above, in Indian household quantities; skip salt, water and basic masalas"),
       }),
     )
-    .max(40),
-  shopping: z
-    .array(z.object({ name: z.string().min(1).max(80), quantity: z.string().max(40).nullable(), category: z.enum(GROCERY_CATEGORIES) }))
-    .max(60)
-    .describe("Everything to buy on shopping day for these meals that is not already in the pantry, combined across the week with total quantities"),
-  note: z.string().max(400).nullable().describe("One or two sentences on how the week is balanced"),
+    .max(45),
+  note: z.string().max(400).nullable().describe("One or two sentences on how the week is balanced for each person"),
 });
 export type WeekPlan = z.infer<typeof weekPlanSchema>;

@@ -3,7 +3,7 @@ import { ModuleShell } from "@/components/module-shell";
 export default function MedicinesLayout({ children }: LayoutProps<"/medicines">) {
   return (
     <ModuleShell
-      moduleKey="medicines"
+      moduleKey="medicines" area="meds"
       subtitle="Prescriptions and short courses: today's doses, stock and refills."
       tabs={[
         { href: "/medicines", label: "Today" },

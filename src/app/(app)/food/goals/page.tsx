@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getSession } from "@/lib/session";
 import { Card } from "@/components/ui";
 import type { NutritionGoals } from "@/lib/types";
@@ -13,6 +14,12 @@ export default async function GoalsPage() {
   const facts = await personFacts(session, ownerId);
   return (
     <div className="space-y-4">
+      {session.isModuleEnabled("body_recomp") ? (
+        <p className="text-sm text-fg-muted">
+          Goals work from your weight, height and activity. See BMI, a healthy weight range and calories to maintain on{" "}
+          <Link href="/body" className="text-accent underline">Body</Link>.
+        </p>
+      ) : null}
       <Card>
         <GoalsForm
           ownerId={ownerId}

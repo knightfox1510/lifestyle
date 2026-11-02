@@ -36,3 +36,50 @@ describe("week plan", () => {
     expect(JSON.stringify(toGeminiSchema(weekPlanSchema))).not.toMatch(/"(max|min)Items"/);
   });
 });
+
+import { mergeIngredients, planDayTotals, planFor, portionFor } from "@/modules/food/plan";
+import { activeAreaHref, AREAS } from "@/modules/areas";
+
+describe("per-person plans", () => {
+  const g = "g", k = "k";
+  it("knows who a dish is for and their portion", () => {
+    expect(planFor({ for_user: null }, [g, k])).toEqual([g, k]);
+    expect(planFor({ for_user: k }, [g, k])).toEqual([k]);
+    expect(portionFor({ portions: { g: 1.5 } }, g)).toBe(1.5);
+    expect(portionFor({ portions: { g: 1.5 } }, k)).toBe(1);
+  });
+  it("totals each person's day from portions and recipe numbers", () => {
+    const t = planDayTotals(
+      [
+        { kcal_per_serving: 400, protein_g: 20, portions: { g: 1.5, k: 1 } },
+        { kcal_per_serving: 300, protein_g: 30, for_user: g },
+        { recipe_id: "r1", portions: {} },
+        { kcal_per_serving: null, for_user: k },
+      ],
+      [g, k],
+      new Map([["r1", { kcal_per_serving: 500, protein_g: 25 }]]),
+    );
+    expect(t.g).toMatchObject({ kcal: 600 + 300 + 500, protein: 30 + 30 + 25, dishes: 3, unknown: 0 });
+    expect(t.k).toMatchObject({ kcal: 400 + 500, protein: 45, dishes: 3, unknown: 1 });
+  });
+  it("merges one shopping list from many dishes", () => {
+    const out = mergeIngredients([
+      [{ name: "Onions", quantity: "500 g", category: "produce" }, { name: "Paneer", quantity: "200 g", category: "dairy" }],
+      [{ name: "onion", quantity: "2", category: "produce" }],
+    ]);
+    expect(out).toEqual([
+      { name: "Onions", quantity: "500 g + 2", category: "produce" },
+      { name: "Paneer", quantity: "200 g", category: "dairy" },
+    ]);
+  });
+});
+
+describe("related features", () => {
+  it("highlights the most specific shortcut", () => {
+    expect(activeAreaHref("/food/plan", AREAS.food)).toBe("/food/plan");
+    expect(activeAreaHref("/food/goals", AREAS.food)).toBe("/food");
+    expect(activeAreaHref("/medicines/checks", AREAS.meds)).toBe("/medicines/checks");
+    expect(activeAreaHref("/medicines/manage", AREAS.meds)).toBe("/medicines");
+    expect(activeAreaHref("/settings", AREAS.meds)).toBeNull();
+  });
+});
