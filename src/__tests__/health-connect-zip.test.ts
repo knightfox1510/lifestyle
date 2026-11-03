@@ -79,7 +79,7 @@ describe("Health Connect export, read on the device (manual upload)", () => {
       return { default: () => real() };
     });
     const { readExportInBrowser } = await import("@/app/(app)/wearables/read-export");
-    const file = new File([zipSync({ "health_connect_export.db": await exportDb(3) })], "Health Connect.zip");
+    const file = new File([zipSync({ "health_connect_export.db": await exportDb(3) }) as Uint8Array<ArrayBuffer>], "Health Connect.zip");
     const s = await readExportInBrowser(file, "Asia/Kolkata");
     expect(s.days.map((d) => d.steps)).toEqual([9002, 9001, 9000]);
     vi.doUnmock("sql.js");
