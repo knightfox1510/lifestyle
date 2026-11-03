@@ -79,3 +79,19 @@ describe("milestones", () => {
     expect(newMilestones({ ...s, bladderLoggedDays7: null, leaks7: null }, new Set()).map((m) => m.key)).not.toContain("leak_free_week");
   });
 });
+
+describe("supplements in next up", () => {
+  const base = { dueDoses: [], water: null, mealsLogged: null, checkinDone: null };
+  const supps = [
+    { supplementId: "d3", name: "Vitamin D3", dose: "1 tab", time: "08:00" },
+    { supplementId: "mg", name: "Magnesium", dose: null, time: "22:00" },
+    { supplementId: "whey", name: "Whey", dose: "1 scoop", time: null },
+  ];
+  it("shows supplements once their time comes, never the any-time ones", () => {
+    expect(nextUp({ ...base, now: "07:30", dueSupplements: supps }).map((x) => x.kind === "supplement" && x.supplementId)).toEqual(["d3"]);
+    expect(nextUp({ ...base, now: "06:30", dueSupplements: supps })).toEqual([]);
+    const late = nextUp({ ...base, now: "11:00", dueSupplements: supps })[0];
+    expect(late).toMatchObject({ kind: "supplement", supplementId: "d3", overdue: true });
+    expect(nextUp({ ...base, now: "21:30", dueSupplements: supps }).map((x) => x.kind === "supplement" && x.supplementId)).toEqual(["d3", "mg"]);
+  });
+});

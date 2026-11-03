@@ -32,7 +32,7 @@ export default async function HomePage() {
       tz,
       today,
       days: 30,
-      enabled: { medicines: can("medicines"), food: can("food_diary"), checkin: can("checkin") },
+      enabled: { medicines: can("medicines"), food: can("food_diary"), checkin: can("checkin"), supplements: can("supplements") },
       waterTarget: water.target,
     }),
     activityFor(session, subject.user_id, today),
@@ -48,6 +48,7 @@ export default async function HomePage() {
     ? nextUp({
         now,
         dueDoses: day.dueDoses,
+        dueSupplements: day.dueSupplements,
         water: { ml: day.waterMl, target: water.target, start: water.start, end: water.end },
         mealsLogged: can("food_diary") ? day.mealsToday : null,
         checkinDone: can("checkin") ? day.checkinToday : null,

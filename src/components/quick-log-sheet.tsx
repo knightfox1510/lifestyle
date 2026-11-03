@@ -11,11 +11,12 @@ import { CheckinForm } from "@/app/(app)/checkin/checkin-form";
 import { quickLog } from "@/app/(app)/bladder/actions";
 import { logDose } from "@/app/(app)/medicines/actions";
 import { logWater } from "@/lib/water-actions";
-import { getQuickLogData, undoQuickLog, type DueDose } from "@/lib/quick-actions";
+import { getQuickLogData, undoQuickLog, type DueDose, type DueSupplement } from "@/lib/quick-actions";
+import { toggleSupplement } from "@/app/(app)/supplements/actions";
 import { useT } from "@/lib/i18n/client";
 import { haptic, useToast } from "@/components/toaster";
 
-export type QuickLogConfig = { ownerId: string; medicines: boolean; bladder: boolean; body: boolean; checkin: boolean; food: boolean };
+export type QuickLogConfig = { ownerId: string; medicines: boolean; supplements?: boolean; bladder: boolean; body: boolean; checkin: boolean; food: boolean };
 type Step = null | "dose" | "water" | "food" | "bladder" | "weight" | "check";
 type Data = Awaited<ReturnType<typeof getQuickLogData>>;
 
@@ -54,7 +55,7 @@ export function QuickLogSheet({ open, onClose, config }: { open: boolean; onClos
   }
 
   /** Logged: stay open for the next entry, list it under "Added" with Undo. */
-  function done(message: string, undo?: { kind: "water" | "bladder" | "dose"; id?: string }, doseKey?: string) {
+  function done(message: string, undo?: { kind: "water" | "bladder" | "dose" | "supplement"; id?: string }, doseKey?: string) {
     haptic();
     const id = ++seq.current;
     setAdded((xs) => [...xs, { id, label: message, undo: undo?.id ? () => undoQuickLog(undo.kind, undo.id!) : undefined }]);
@@ -73,7 +74,7 @@ export function QuickLogSheet({ open, onClose, config }: { open: boolean; onClos
   if (!open) return null;
 
   const tiles = [
-    { key: "dose" as const, on: config.medicines, label: t("Dose"), Icon: Pill, tint: "text-cat-meds" },
+    { key: "dose" as const, on: config.medicines || Boolean(config.supplements), label: t("Dose"), Icon: Pill, tint: "text-cat-meds" },
     { key: "water" as const, on: true, label: t("Water"), Icon: Droplet, tint: "text-cat-water" },
     { key: "food" as const, on: config.food, label: t("Food"), Icon: Utensils, tint: "text-cat-food" },
     { key: "bladder" as const, on: config.bladder, label: t("Bladder"), Icon: Toilet, tint: "text-fg" },
@@ -171,7 +172,7 @@ export function QuickLogSheet({ open, onClose, config }: { open: boolean; onClos
         {step === "dose" ? (
           !data ? (
             <div className="space-y-2"><Skeleton className="h-14" /><Skeleton className="h-14" /></div>
-          ) : data.due.length === 0 ? (
+          ) : data.due.length === 0 && !(data.dueSupplements ?? []).length ? (
             <p className="rounded-2xl bg-surface-2 p-4 text-sm">✓ {t("All doses for today are done.")}</p>
           ) : (
             <ul className="space-y-2">
@@ -187,6 +188,29 @@ export function QuickLogSheet({ open, onClose, config }: { open: boolean; onClos
                         const r = await logDose(d.medicineId, config.ownerId, d.date, d.time, "taken");
                         if (r.error) toast(r.error, { tone: "error" });
                         else done(t("{name} taken", { name: d.name }), { kind: "dose", id: r.id }, `${d.medicineId}-${d.time}`);
+                      })
+                    }
+                  >
+                    <Check className="size-4" aria-hidden /> {t("Take")}
+                  </Button>
+                </li>
+              ))}
+              {(data.dueSupplements ?? []).map((x: DueSupplement) => (
+                <li key={`s-${x.supplementId}`} className="flex items-center gap-3 rounded-[18px] bg-surface p-3 shadow-[0_0_0_1px_var(--border)]">
+                  <span className="font-mono text-sm tabular text-fg-muted">{x.time ?? "—"}</span>
+                  <span className="min-w-0 flex-1 truncate font-medium">{x.name} <span className="font-normal text-fg-muted">{x.dose ?? t("supplement")}</span></span>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={pending}
+                    onClick={() =>
+                      start(async () => {
+                        const r = await toggleSupplement(x.supplementId, config.ownerId, x.date, true);
+                        if (r.error) toast(r.error, { tone: "error" });
+                        else {
+                          done(t("{name} taken", { name: x.name }), { kind: "supplement", id: `${x.supplementId}|${x.date}` });
+                          setData((cur) => (cur ? { ...cur, dueSupplements: (cur.dueSupplements ?? []).filter((y) => y.supplementId !== x.supplementId) } : cur));
+                        }
                       })
                     }
                   >

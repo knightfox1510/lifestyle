@@ -55,19 +55,22 @@ export function waterPace(now: string, start: string, end: string, target: numbe
 export type NextUpInput = {
   now: string;
   dueDoses: { medicineId: string; name: string; strength: string | null; time: string }[];
+  /** Supplements not ticked yet today; `time` null = any time (e.g. post-workout), never pushed. */
+  dueSupplements?: { supplementId: string; name: string; dose: string | null; time: string | null }[];
   water: { ml: number; target: number; start: string; end: string } | null;
   mealsLogged: string[] | null;
   checkinDone: boolean | null;
 };
 export type NextUpItem =
   | { kind: "dose"; medicineId: string; name: string; strength: string | null; time: string; overdue: boolean }
+  | { kind: "supplement"; supplementId: string; name: string; dose: string | null; time: string; overdue: boolean }
   | { kind: "water"; ml: number; target: number; behind: number }
   | { kind: "meal"; meal: (typeof MAIN_MEALS)[number] }
   | { kind: "check" };
 
 const MEAL_WINDOWS: Record<(typeof MAIN_MEALS)[number], [string, string]> = { breakfast: ["06:30", "11:00"], lunch: ["12:00", "15:30"], dinner: ["19:00", "22:30"] };
 
-/** The few things worth doing now: overdue/soon doses first, then water if behind, the current meal, the evening check-in. */
+/** The few things worth doing now: overdue/soon doses and supplements first, then water if behind, the current meal, the evening check-in. */
 export function nextUp(i: NextUpInput, limit = 5): NextUpItem[] {
   const n = toMin(i.now);
   const out: NextUpItem[] = [];
@@ -76,6 +79,12 @@ export function nextUp(i: NextUpInput, limit = 5): NextUpItem[] {
     .sort((a, b) => a.time.localeCompare(b.time))
     .map((d) => ({ kind: "dose" as const, ...d, overdue: toMin(d.time) < n }));
   out.push(...doses);
+  // Supplements once their time of day has come (or is within the hour); they're gentler than doses, so "overdue" waits 2 hours.
+  const supps = (i.dueSupplements ?? [])
+    .filter((x): x is { supplementId: string; name: string; dose: string | null; time: string } => x.time !== null && toMin(x.time) <= n + 60)
+    .sort((a, b) => a.time.localeCompare(b.time))
+    .map((x) => ({ kind: "supplement" as const, ...x, overdue: toMin(x.time) + 120 < n }));
+  out.push(...supps);
   if (i.water && i.water.ml < i.water.target) {
     const behind = waterPace(i.now, i.water.start, i.water.end, i.water.target) - i.water.ml;
     if (behind >= 200) out.push({ kind: "water", ml: i.water.ml, target: i.water.target, behind });

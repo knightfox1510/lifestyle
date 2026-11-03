@@ -2,14 +2,15 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { lastNDays, localDate, localTime, startOfLocalDayIso } from "@/lib/dates";
-import type { Medicine, MedicineDose, NotificationPrefs } from "@/lib/types";
+import type { Medicine, MedicineDose, NotificationPrefs, Supplement, SupplementLog } from "@/lib/types";
+import { TIMING_TIME } from "@/modules/supplements/meta";
 import { slotsForDay } from "@/modules/medicines/logic";
 import { MAIN_MEALS, dayClosed, rings, type Ring, type RingInput } from "@/modules/engagement/rings";
 
 export type ArcEvent = { time: string; kind: "water" | "food" | "meds" | "check" };
 export type DayStatus = { date: string; rings: Ring[]; closed: boolean; any: boolean };
 
-type Enabled = { medicines: boolean; food: boolean; checkin: boolean };
+type Enabled = { medicines: boolean; food: boolean; checkin: boolean; supplements?: boolean };
 
 /**
  * Everything the day view needs for one person over the last `days` days:
@@ -26,13 +27,19 @@ export async function loadDays(
   const dayList = lastNDays(today, opts.days);
   const from = startOfLocalDayIso(dayList[0]);
   const none = Promise.resolve({ data: [] as unknown[] });
-  const [fl, fd, md, ds, ci] = await Promise.all([
+  const [fl, fd, md, ds, ci, sp, sl] = await Promise.all([
     db.from("fluid_intake").select("volume_ml, occurred_at, drink").eq("owner_id", ownerId).gte("occurred_at", from).limit(3000),
     enabled.food ? db.from("food_entries").select("eaten_at, meal").eq("owner_id", ownerId).gte("eaten_at", from).limit(3000) : none,
     enabled.medicines ? db.from("medicines").select("*").eq("owner_id", ownerId).eq("active", true) : none,
     enabled.medicines ? db.from("medicine_doses").select("*").eq("owner_id", ownerId).gte("scheduled_date", dayList[0]) : none,
     enabled.checkin ? db.from("daily_checkins").select("checkin_date, updated_at").eq("owner_id", ownerId).gte("checkin_date", dayList[0]) : none,
+    enabled.supplements ? db.from("supplements").select("id, name, dose, timing, active, created_at").eq("owner_id", ownerId).eq("active", true) : none,
+    enabled.supplements ? db.from("supplement_logs").select("supplement_id, log_date, taken_at").eq("owner_id", ownerId).gte("log_date", dayList[0]) : none,
   ]);
+  const supps = (sp.data ?? []) as (Pick<Supplement, "id" | "name" | "dose" | "timing" | "active"> & { created_at: string })[];
+  const suppLogs = (sl.data ?? []) as Pick<SupplementLog, "supplement_id" | "log_date" | "taken_at">[];
+  // A supplement counts from the day it was added.
+  const suppsOn = (date: string) => supps.filter((x) => localDate(x.created_at, tz) <= date);
   const fluids = (fl.data ?? []) as { volume_ml: number; occurred_at: string; drink: string }[];
   const foods = (fd.data ?? []) as { eaten_at: string; meal: string }[];
   const meds = (md.data ?? []) as Medicine[];
@@ -47,11 +54,20 @@ export async function loadDays(
     const inputs: RingInput[] = [
       { key: "water", value: water, target: opts.waterTarget },
       ...(enabled.food ? [{ key: "food" as const, value: meals.size, target: 3 }] : []),
-      ...(enabled.medicines ? [{ key: "meds" as const, value: slots.filter((s) => s.dose?.status === "taken").length, target: slots.length }] : []),
+      // Medicines and supplements share one ring: every scheduled dose and every daily supplement counts.
+      ...(enabled.medicines || enabled.supplements
+        ? [
+            {
+              key: "meds" as const,
+              value: slots.filter((s) => s.dose?.status === "taken").length + suppsOn(date).filter((x) => suppLogs.some((l) => l.supplement_id === x.id && l.log_date === date)).length,
+              target: slots.length + suppsOn(date).length,
+            },
+          ]
+        : []),
       ...(enabled.checkin ? [{ key: "check" as const, value: checked ? 1 : 0, target: 1 }] : []),
     ];
     const rs = rings(inputs);
-    return { date, rings: rs, closed: dayClosed(rs), any: water > 0 || meals.size > 0 || checked || slots.some((s) => s.dose) };
+    return { date, rings: rs, closed: dayClosed(rs), any: water > 0 || meals.size > 0 || checked || slots.some((s) => s.dose) || suppLogs.some((l) => l.log_date === date) };
   });
 
   const todayFluids = fluids.filter((f) => localDate(f.occurred_at, tz) === today);
@@ -59,6 +75,7 @@ export async function loadDays(
     ...todayFluids.map((f) => ({ time: localTime(f.occurred_at, tz), kind: "water" as const })),
     ...foods.filter((f) => localDate(f.eaten_at, tz) === today).map((f) => ({ time: localTime(f.eaten_at, tz), kind: "food" as const })),
     ...doses.filter((d) => d.scheduled_date === today && d.status === "taken").map((d) => ({ time: localTime(d.taken_at, tz), kind: "meds" as const })),
+    ...suppLogs.filter((l) => l.log_date === today).map((l) => ({ time: localTime(l.taken_at, tz), kind: "meds" as const })),
     ...checkins.filter((c) => c.checkin_date === today).map((c) => ({ time: localTime(c.updated_at, tz), kind: "check" as const })),
   ].sort((a, b) => a.time.localeCompare(b.time));
 
@@ -71,6 +88,10 @@ export async function loadDays(
     mealsToday: [...new Set(foods.filter((f) => localDate(f.eaten_at, tz) === today).map((f) => f.meal))],
     checkinToday: checkins.some((c) => c.checkin_date === today),
     dueDoses: todaySlots.filter((s) => !s.dose).map((s) => ({ medicineId: s.medicine.id, name: s.medicine.name, strength: s.medicine.strength, time: s.time })),
+    /** Supplements not ticked yet today, with the clock time of their timing (null = any time). */
+    dueSupplements: suppsOn(today)
+      .filter((x) => !suppLogs.some((l) => l.supplement_id === x.id && l.log_date === today))
+      .map((x) => ({ supplementId: x.id, name: x.name, dose: x.dose, timing: x.timing, time: TIMING_TIME[x.timing] })),
     week: lastNDays(today, 7).map((d) => statuses.find((s) => s.date === d) ?? { date: d, rings: [], closed: false, any: false }),
   };
 }

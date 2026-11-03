@@ -162,7 +162,7 @@ async function remindUser(
       tz,
       today,
       days: 1,
-      enabled: { medicines: on("medicines"), food: on("food_diary"), checkin: on("checkin") },
+      enabled: { medicines: on("medicines"), food: on("food_diary"), checkin: on("checkin"), supplements: on("supplements") },
       waterTarget: water.target,
     });
     const left = day.today.rings.filter((r) => r.pct < 1).length;

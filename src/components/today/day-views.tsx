@@ -6,7 +6,7 @@ import type { T } from "@/lib/i18n/core";
 export const RING_META: Record<Ring["key"], { label: string; color: string; bg: string }> = {
   water: { label: "Water", color: "var(--cat-water)", bg: "color-mix(in oklab, var(--cat-water) 12%, var(--surface))" },
   food: { label: "Meals", color: "var(--cat-food)", bg: "color-mix(in oklab, var(--cat-food) 12%, var(--surface))" },
-  meds: { label: "Medicines", color: "var(--cat-meds)", bg: "color-mix(in oklab, var(--cat-meds) 12%, var(--surface))" },
+  meds: { label: "Meds & supplements", color: "var(--cat-meds)", bg: "color-mix(in oklab, var(--cat-meds) 12%, var(--surface))" },
   check: { label: "Check-in", color: "var(--cat-check)", bg: "color-mix(in oklab, var(--cat-check) 14%, var(--surface))" },
 };
 

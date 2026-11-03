@@ -34,6 +34,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   const quickLog = {
     ownerId: session.userId,
     medicines: session.isModuleEnabled("medicines") && !session.isHiddenFor("medicines", session.userId),
+    supplements: session.isModuleEnabled("supplements") && !session.isHiddenFor("supplements", session.userId),
     bladder: session.isModuleEnabled("bladder_diary") && !session.isHiddenFor("bladder_diary", session.userId),
     body: session.isModuleEnabled("body_recomp") && !session.isHiddenFor("body_recomp", session.userId),
     checkin: session.isModuleEnabled("checkin") && !session.isHiddenFor("checkin", session.userId),

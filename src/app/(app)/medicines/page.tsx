@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { getSession } from "@/lib/session";
-import { addDays, localTime, shortDate, todayIn } from "@/lib/dates";
+import { addDays, localDate, localTime, shortDate, todayIn } from "@/lib/dates";
 import { Badge, Card, EmptyState, Notice, buttonClass } from "@/components/ui";
 import { DateJump } from "@/components/date-jump";
 import type { Medicine, MedicineDose } from "@/lib/types";
 import { doseLabel, isCurrentOn, isUpcomingOn, refillInfo, slotsForDay } from "@/modules/medicines/logic";
 import { DoseButtons, AsNeededButton } from "./dose-buttons";
+import { SupplementTakeButton } from "@/app/(app)/supplements/take-button";
+import { TIMING_LABEL, TIMING_TIME } from "@/modules/supplements/meta";
+import type { SupplementTiming } from "@/lib/types";
 import { updateDose } from "./actions";
 import { EditRecord } from "@/components/edit-record";
 import { getT } from "@/lib/i18n/server";
@@ -25,10 +28,19 @@ export default async function MedicinesTodayPage({ searchParams }: PageProps<"/m
   const canWrite = session.accessTo("medicines", ownerId) === "write";
   const t = await getT(session);
 
-  const [{ data: medData }, { data: doseData }] = await Promise.all([
+  const suppsOn = session.isShown("supplements") && session.accessTo("supplements", ownerId) !== "none";
+  const suppWrite = session.accessTo("supplements", ownerId) === "write";
+  const [{ data: medData }, { data: doseData }, suppRes, suppLogRes] = await Promise.all([
     session.supabase.from("medicines").select("*").eq("owner_id", ownerId).eq("active", true).order("name"),
     session.supabase.from("medicine_doses").select("*").eq("owner_id", ownerId).eq("scheduled_date", date),
+    suppsOn ? session.supabase.from("supplements").select("id, name, dose, timing, created_at").eq("owner_id", ownerId).eq("active", true).order("sort") : Promise.resolve({ data: [] }),
+    suppsOn ? session.supabase.from("supplement_logs").select("supplement_id, taken_at").eq("owner_id", ownerId).eq("log_date", date) : Promise.resolve({ data: [] }),
   ]);
+  // Supplements for this day, in schedule order (by their usual time; "any time" ones last).
+  const supps = ((suppRes.data ?? []) as { id: string; name: string; dose: string | null; timing: SupplementTiming; created_at: string }[])
+    .filter((x) => localDate(x.created_at, tz) <= date)
+    .sort((a, b) => (TIMING_TIME[a.timing] ?? "99").localeCompare(TIMING_TIME[b.timing] ?? "99"));
+  const suppTaken = new Map(((suppLogRes.data ?? []) as { supplement_id: string; taken_at: string }[]).map((l) => [l.supplement_id, l.taken_at]));
   const meds = (medData ?? []) as Medicine[];
   const doses = (doseData ?? []) as MedicineDose[];
   // On an earlier day, also show medicines whose start date was set later but has already come
@@ -43,7 +55,7 @@ export default async function MedicinesTodayPage({ searchParams }: PageProps<"/m
   const done = slots.filter((s) => s.dose).length;
   const serious = meds.length ? (await medicineChecksFor(session, ownerId)).findings.filter((f) => f.severity === "high") : [];
 
-  if (meds.length === 0) {
+  if (meds.length === 0 && supps.length === 0) {
     return (
       <EmptyState title={t("No medicines yet")}>
         <Link href="/medicines/manage" className="text-accent underline">{t("Add a prescription or course")}</Link> {t("to get a daily schedule.")}
@@ -141,6 +153,40 @@ export default async function MedicinesTodayPage({ searchParams }: PageProps<"/m
           </ul>
         )}
       </Card>
+
+      {supps.length ? (
+        <Card>
+          <div className="mb-3 flex items-baseline justify-between">
+            <h2 className="font-semibold">{isToday ? t("Supplements today") : t("Supplements on {date}", { date: shortDate(date) })}</h2>
+            <span className="text-sm text-fg-muted">{t("{done}/{total} done", { done: supps.filter((x) => suppTaken.has(x.id)).length, total: supps.length })}</span>
+          </div>
+          <ul className="divide-y divide-border">
+            {supps.map((x) => {
+              const time = TIMING_TIME[x.timing];
+              const takenAt = suppTaken.get(x.id);
+              const late = isToday && !takenAt && time !== null && time < now;
+              return (
+                <li key={x.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
+                  <div className="min-w-0">
+                    <p className="font-medium">
+                      <span className="mr-2 font-mono text-sm text-fg-muted">{time ?? "—"}</span>
+                      {x.name} {x.dose ? <span className="text-fg-muted">{x.dose}</span> : null}
+                    </p>
+                    <p className="text-xs text-fg-muted">{t(TIMING_LABEL[x.timing])}{takenAt ? ` · ${t("taken")} ${localTime(takenAt, tz)}` : ""}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {late ? <Badge tone="warn">{t("due")}</Badge> : null}
+                    {suppWrite ? <SupplementTakeButton key={`${x.id}-${date}-${Boolean(takenAt)}`} supplementId={x.id} ownerId={ownerId} date={date} name={x.name} taken={Boolean(takenAt)} /> : takenAt ? <Badge tone="accent">✓</Badge> : null}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="mt-2 text-xs text-fg-muted">
+            {t("Times are a guide from each supplement's timing.")} <Link href="/supplements" className="text-accent underline">{t("Manage supplements")}</Link>
+          </p>
+        </Card>
+      ) : null}
 
       {asNeeded.length ? (
         <Card>
