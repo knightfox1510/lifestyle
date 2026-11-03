@@ -21,8 +21,8 @@ export type Dish = {
 
 export const DISHES: Dish[] = [
   // South
-  { key: "plain_dosa", name: "Plain dosa", aliases: "dosa dosai sada dosa", region: "South", serving: "1 dosa", servingG: 90, ingredients: [["rice_white", 40], ["urad", 12], ["oil_sunflower", 5]] },
-  { key: "masala_dosa", name: "Masala dosa", aliases: "masala dosai", region: "South", serving: "1 dosa with potato masala", servingG: 220, ingredients: [["rice_white", 40], ["urad", 12], ["oil_sunflower", 9], ["potato", 100], ["onion", 25]] },
+  { key: "plain_dosa", name: "Plain dosa", aliases: "dosa dosai sada dosa", region: "South", serving: "1 dosa", servingG: 80, ingredients: [["rice_white", 32], ["urad", 10], ["oil_sunflower", 4]] },
+  { key: "masala_dosa", name: "Masala dosa", aliases: "masala dosai", region: "South", serving: "1 dosa with potato masala", servingG: 210, ingredients: [["rice_white", 32], ["urad", 10], ["oil_sunflower", 8], ["potato", 100], ["onion", 25]] },
   { key: "idli", name: "Idli", aliases: "idly iddli", region: "South", serving: "2 idlis", servingG: 80, ingredients: [["rice_white", 28], ["urad", 9]] },
   { key: "sambar", name: "Sambar", aliases: "sambhar saaru", region: "South", serving: "1 katori (150 g)", servingG: 150, ingredients: [["toor", 20], ["tomato", 25], ["onion", 20], ["lauki", 30], ["tamarind", 3], ["oil_sunflower", 4]], irritants: ["tomato"] },
   { key: "rasam", name: "Rasam", aliases: "saar chaaru", region: "South", serving: "1 katori (150 ml)", servingG: 150, ingredients: [["toor", 8], ["tomato", 40], ["tamarind", 5], ["oil_sunflower", 3]], irritants: ["tomato", "spicy"] },
@@ -196,7 +196,7 @@ export const DISHES: Dish[] = [
   { key: "masala_omelette", name: "Masala omelette", aliases: "omelette amlet egg omelette", region: "Eggs, salads & sides", serving: "2 eggs (110 g)", servingG: 110, ingredients: [["egg", 100], ["onion", 15], ["oil_sunflower", 5]] },
   { key: "boiled_eggs", name: "Boiled eggs", aliases: "boiled egg ukadlela anda", region: "Eggs, salads & sides", serving: "2 eggs", servingG: 100, ingredients: [["egg", 100]] },
   { key: "raita", name: "Cucumber raita", aliases: "raita kakdi raita", region: "Eggs, salads & sides", serving: "1 katori (140 g)", servingG: 140, ingredients: [["curd", 100], ["cucumber", 40]] },
-  { key: "plain_curd", name: "Dahi (plain curd)", aliases: "dahi curd yogurt", region: "Eggs, salads & sides", serving: "1 katori (100 g)", servingG: 100, ingredients: [["curd", 100]] },
+  { key: "plain_curd", name: "Dahi (plain curd)", aliases: "dahi curd yogurt", region: "Eggs, salads & sides", serving: "1 katori (150 g)", servingG: 150, ingredients: [["curd", 150]] },
   { key: "sprouts_salad", name: "Sprouts salad", aliases: "sprouts chaat moong salad", region: "Eggs, salads & sides", serving: "1 bowl (145 g)", servingG: 145, ingredients: [["moong_sprouts", 80], ["onion", 20], ["tomato", 20], ["cucumber", 20], ["lemon_juice", 5]], irritants: ["citrus"] },
   { key: "beetroot_koshimbir", name: "Beetroot koshimbir", aliases: "beet koshimbir beetroot raita", region: "Eggs, salads & sides", serving: "1 katori (120 g)", servingG: 120, ingredients: [["beetroot", 70], ["curd", 40], ["peanuts", 5]] },
   // ---- More drinks

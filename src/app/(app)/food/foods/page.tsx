@@ -5,7 +5,7 @@ import type { CustomFood } from "@/lib/types";
 import type { Nutrients } from "@/modules/nutrition/nutrients";
 import { FoodAmountLogger } from "../food-logger";
 import { ManualFoodCreator } from "./manual-food";
-import { deleteCustomFood } from "../actions";
+import { deleteCustomFood, forgetFood } from "../actions";
 
 export const metadata = { title: "My foods" };
 
@@ -13,7 +13,11 @@ const SOURCE_LABEL = { manual: "added by hand", label: "from label", openfoodfac
 
 export default async function FoodsPage() {
   const session = await getSession();
-  const { data } = await session.supabase.from("custom_foods").select("*").eq("household_id", session.household.id).order("name");
+  const [{ data }, aliasRes] = await Promise.all([
+    session.supabase.from("custom_foods").select("*").eq("household_id", session.household.id).order("name"),
+    session.supabase.from("food_aliases").select("name_key, label, per100, source, confirmed, uses").eq("household_id", session.household.id).order("uses", { ascending: false }).limit(200),
+  ]);
+  const remembered = (aliasRes.data ?? []) as { name_key: string; label: string; per100: Record<string, number>; source: string | null; confirmed: boolean; uses: number }[];
   const foods = (data ?? []) as CustomFood[];
   const people = session.members.filter((m) => session.accessTo("food_diary", m.user_id) === "write").map((m) => ({ id: m.user_id, name: m.user_id === session.userId ? "Me" : m.display_name }));
   const canLog = session.accessTo("food_diary", session.subject.user_id) === "write";
@@ -63,6 +67,30 @@ export default async function FoodsPage() {
           ))}
         </ul>
       )}
+
+      {remembered.length ? (
+        <Card className="space-y-2">
+          <h2 className="text-sm font-semibold">Remembered matches</h2>
+          <p className="text-xs text-fg-muted">
+            When you log an ingredient, the food it was matched to is remembered, so the same name always gets the same numbers. Ones you picked yourself are marked ✓. Forget one if it&apos;s the wrong food.
+          </p>
+          <ul className="divide-y divide-border text-sm">
+            {remembered.map((a) => (
+              <li key={a.name_key} className="flex items-center justify-between gap-2 py-2">
+                <span className="min-w-0">
+                  <span className="font-medium">{a.name_key}</span> <span className="text-fg-muted">→ {a.label}</span>
+                  <span className="block text-xs text-fg-muted">
+                    {Math.round(Number(a.per100.calories ?? 0))} kcal/100 g · {a.confirmed ? "✓ your pick" : a.source ?? "matched"} · used {a.uses}×
+                  </span>
+                </span>
+                <form action={async () => { "use server"; await forgetFood(a.name_key); }}>
+                  <button className="shrink-0 text-xs text-fg-muted hover:text-danger">Forget</button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
     </div>
   );
 }

@@ -37,6 +37,8 @@ describe("built-in staples", () => {
       const { calories, protein_g, carbs_g, fat_g } = s.per100;
       expect(calories, s.key).toBeTypeOf("number");
       if (s.key === "salt") continue;
+      // Alcohol itself carries ~7 kcal/g, which protein/carbs/fat don't show.
+      if (s.irritants.includes("alcohol")) continue;
       // Total-carb and net-carb (minus fibre) Atwater estimates; real values use food-specific
       // factors, so accept either within tolerance. Still catches typos like a misplaced digit.
       const fibre = s.per100.fiber_g ?? 0;

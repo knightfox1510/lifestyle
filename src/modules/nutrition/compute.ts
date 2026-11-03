@@ -2,7 +2,7 @@ import { forGrams, scale, sum, type Nutrients } from "./nutrients";
 
 export type Accuracy = "calculated" | "label" | "estimated";
 
-export type CalcComponent = { name: string; grams: number; per100: Nutrients | null; matchName?: string | null; source?: string | null; ref?: unknown; irritants?: string[] };
+export type CalcComponent = { name: string; grams: number; per100: Nutrients | null; matchName?: string | null; source?: string | null; ref?: unknown; irritants?: string[]; /** Picked by the person (not the automatic match). */ fixed?: boolean };
 export type CalcItem = {
   description: string;
   quantity: string | null;
@@ -11,6 +11,8 @@ export type CalcItem = {
   components: CalcComponent[];
   estimate: { calories: number; protein_g: number; carbs_g: number; fat_g: number; fiber_g: number };
   irritants: string[];
+  /** The person chose the AI's own estimate over the calculated numbers. */
+  useEstimate?: boolean;
 };
 
 /**
@@ -20,6 +22,10 @@ export type CalcItem = {
  * don't pretend to know micronutrients).
  */
 export function computeItem(item: CalcItem): { nutrients: Nutrients; accuracy: Accuracy; grams: number | null } {
+  if (item.useEstimate) {
+    const grams = item.components.reduce((a, c) => a + (c.grams > 0 ? c.grams : 0), 0) || (item.recipe?.servingG ? Math.round(item.recipe.servingG * item.recipe.servings) : null);
+    return { nutrients: { ...item.estimate }, accuracy: "estimated", grams };
+  }
   if (item.recipe) {
     return {
       nutrients: scale(item.recipe.perServing, item.recipe.servings),
@@ -38,4 +44,21 @@ export function computeItem(item: CalcItem): { nutrients: Nutrients; accuracy: A
 /** Scale an item's nutrients for one person's portion (1 = as described). */
 export function portionFor(nutrients: Nutrients, factor: number) {
   return factor === 1 ? nutrients : scale(nutrients, factor);
+}
+
+/**
+ * When the calculated calories and the AI's own estimate for an item are far
+ * apart (beyond ~1.6× and 40 kcal), one of them is probably wrong: a bad
+ * database match, wrong grams, or a misread dish. Returns both numbers so the
+ * person can choose; null when they agree or there's nothing to compare.
+ */
+export function disagreement(item: CalcItem): { calculated: number; ai: number } | null {
+  if (item.useEstimate) return null;
+  const c = computeItem(item);
+  if (c.accuracy !== "calculated") return null;
+  const calculated = Math.round(c.nutrients.calories ?? 0);
+  const ai = Math.round(item.estimate.calories);
+  if (!ai && !calculated) return null;
+  const ratio = (calculated + 20) / (ai + 20);
+  return Math.abs(calculated - ai) > 40 && (ratio > 1.6 || ratio < 1 / 1.6) ? { calculated, ai } : null;
 }

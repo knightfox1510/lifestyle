@@ -22,3 +22,26 @@ describe("food matching", () => {
     expect(searchStaples("sitaphal")[0].key).toBe("custard_apple");
   });
 });
+
+import { computeItem, disagreement, type CalcItem } from "@/modules/nutrition/compute";
+
+describe("calculated vs AI estimate", () => {
+  const item = (per100kcal: number, est: number): CalcItem => ({
+    description: "Pink guava",
+    quantity: "100 g",
+    components: [{ name: "pink guava", grams: 100, per100: { calories: per100kcal, protein_g: 1, carbs_g: 10, fat_g: 1 } }],
+    estimate: { calories: est, protein_g: 2.6, carbs_g: 14, fat_g: 1, fiber_g: 5 },
+    irritants: [],
+  });
+  it("flags a big gap so the person can choose", () => {
+    expect(disagreement(item(379, 68))).toEqual({ calculated: 379, ai: 68 });
+    expect(disagreement(item(68, 60))).toBeNull();
+    expect(disagreement(item(20, 35))).toBeNull(); // small absolute gap on a light food
+  });
+  it("uses the AI estimate when chosen", () => {
+    const out = computeItem({ ...item(379, 68), useEstimate: true });
+    expect(out).toMatchObject({ accuracy: "estimated", grams: 100 });
+    expect(out.nutrients.calories).toBe(68);
+    expect(disagreement({ ...item(379, 68), useEstimate: true })).toBeNull();
+  });
+});

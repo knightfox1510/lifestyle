@@ -827,4 +827,12 @@ export const PHRASES: Record<string, { hi: string; mr: string }> = {
   "Settings → Household": { hi: "सेटिंग्स → घर", mr: "सेटिंग्ज → घर" },
   "To switch a feature off for the whole household, use": { hi: "पूरे घर के लिए कोई सुविधा बंद करने के लिए देखें", mr: "संपूर्ण घरासाठी वैशिष्ट्य बंद करण्यासाठी वापरा" },
   "Turn off what you don't use. It only changes your own menus and Today; your partner keeps theirs, and nothing is deleted.": { hi: "जो इस्तेमाल नहीं करते उसे बंद करें। इससे सिर्फ़ आपके मेनू और आज बदलते हैं; पार्टनर के वैसे ही रहते हैं, और कुछ नहीं मिटता।", mr: "वापरत नाही ते बंद करा. यामुळे फक्त तुमचे मेनू आणि आज बदलतात; जोडीदाराचे तसेच राहतात, आणि काहीही हटत नाही." },
+  "Using the AI's estimate.": { hi: "AI का अनुमान इस्तेमाल हो रहा है।", mr: "AI चा अंदाज वापरत आहे." },
+  "Use calculated instead": { hi: "गणना वाला इस्तेमाल करें", mr: "मोजलेले वापरा" },
+  "Check this one: food data says {a} kcal, the AI expected about {b}.": { hi: "इसे जाँचें: फ़ूड डेटा {a} kcal बताता है, AI को लगभग {b} की उम्मीद थी।", mr: "हे तपासा: फूड डेटा {a} kcal सांगतो, AI ला सुमारे {b} अपेक्षित होते." },
+  "Usually a wrong food match or wrong grams. Open the ingredients to fix it, or pick:": { hi: "अक्सर ग़लत खाना या ग़लत ग्राम। ठीक करने के लिए सामग्री खोलें, या चुनें:", mr: "बहुतेकदा चुकीचा पदार्थ किंवा चुकीचे ग्रॅम. दुरुस्त करण्यासाठी साहित्य उघडा, किंवा निवडा:" },
+  "Fix ingredients": { hi: "सामग्री ठीक करें", mr: "साहित्य दुरुस्त करा" },
+  "Use AI estimate ({n} kcal)": { hi: "AI अनुमान इस्तेमाल करें ({n} kcal)", mr: "AI अंदाज वापरा ({n} kcal)" },
+  "Change": { hi: "बदलें", mr: "बदला" },
+  "Search the right food for {name}…": { hi: "{name} के लिए सही खाना खोजें…", mr: "{name} साठी योग्य पदार्थ शोधा…" },
 };

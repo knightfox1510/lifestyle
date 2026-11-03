@@ -42,6 +42,22 @@ do $$ begin
   assert (select hidden_modules from public.profiles where id = '5e5e5e5e-0000-0000-0000-000000000052') = '{}', 'cannot change the partner''s list';
 end $$;
 
+-- Remembered food matches: shared in the household, not outside it.
+select set_config('request.jwt.claim.sub', :p, false);
+insert into public.food_aliases (household_id, name_key, label, ref, per100, source, confirmed)
+values (:'hid', 'pink guava', 'Guava (pink or white)', '{"kind": "staple", "key": "guava"}', '{"calories": 68}', 'Built-in', true);
+select set_config('request.jwt.claim.sub', :q, false);
+do $$ begin
+  assert (select count(*) from public.food_aliases) = 1, 'partner sees the household''s remembered foods';
+end $$;
+select set_config('request.jwt.claim.sub', :r, false);
+do $$ begin
+  assert (select count(*) from public.food_aliases) = 0, 'stranger sees none';
+  insert into public.food_aliases (household_id, name_key, label, ref, per100) values (current_setting('test.hid')::uuid, 'x', 'x', '{}', '{}');
+  raise exception 'SHOULD_FAIL: stranger insert';
+exception when insufficient_privilege then null;
+end $$;
+
 -- Per-person dishes: only for members of the same household.
 select set_config('request.jwt.claim.sub', :p, false);
 insert into public.meal_plan (household_id, plan_date, meal, title, for_user, portions, kcal_per_serving, ingredients)

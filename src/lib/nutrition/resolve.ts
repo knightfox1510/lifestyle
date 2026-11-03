@@ -6,6 +6,7 @@ import { STAPLE_BY_KEY, searchStaples } from "@/modules/nutrition/staples";
 import { DISH_BY_KEY, dishNutrition, dishPer100, searchDishes, type Dish } from "@/modules/nutrition/dishes";
 import { parseFdcFood, type FdcSearchFood } from "@/modules/nutrition/sources";
 import { plausibleKcal, rankUsda } from "@/modules/nutrition/usda-rank";
+import { dishKey } from "@/modules/food/plan";
 import { NUTRIENT_KEYS, type Nutrients } from "@/modules/nutrition/nutrients";
 import { cleanIrritants, type Irritant } from "@/modules/nutrition/irritants";
 
@@ -13,7 +14,7 @@ import { cleanIrritants, type Irritant } from "@/modules/nutrition/irritants";
 export type ResolvedFood = {
   ref: FoodRef;
   name: string;
-  source: "Built-in" | "Your foods" | "USDA" | "Recipe" | "Indian dish";
+  source: "Built-in" | "Your foods" | "USDA" | "Recipe" | "Indian dish" | "Your pick" | "Remembered";
   per100: Nutrients | null;
   perServing?: Nutrients | null;
   servingG?: number | null;
@@ -89,15 +90,20 @@ async function usdaById(id: string): Promise<ResolvedFood | null> {
   return r;
 }
 
+export type FoodAlias = { name_key: string; label: string; ref: FoodRef; per100: Nutrients; source: string | null; confirmed: boolean };
+
 /** Loads the household's own foods and recipes once per request. */
 export async function householdFoods(session: AppSession) {
-  const [{ data: foods }, { data: recipes }] = await Promise.all([
+  const [{ data: foods }, { data: recipes }, aliasRes] = await Promise.all([
     session.supabase.from("custom_foods").select("*").eq("household_id", session.household.id).order("name").limit(500),
     session.isModuleEnabled("recipes")
       ? session.supabase.from("recipes").select("id, title, servings, nutrition, total_weight_g, irritants").eq("household_id", session.household.id).not("nutrition", "is", null).limit(300)
       : Promise.resolve({ data: [] }),
+    // Remembered matches (empty on a database that hasn't been updated yet).
+    session.supabase.from("food_aliases").select("name_key, label, ref, per100, source, confirmed").eq("household_id", session.household.id).limit(2000),
   ]);
-  return { foods: (foods ?? []) as CustomFood[], recipes: (recipes ?? []) as Recipe[] };
+  const aliases = new Map(((aliasRes.data ?? []) as FoodAlias[]).map((a) => [a.name_key, a]));
+  return { foods: (foods ?? []) as CustomFood[], recipes: (recipes ?? []) as Recipe[], aliases };
 }
 
 export async function resolveRef(session: AppSession, ref: FoodRef, cache?: Awaited<ReturnType<typeof householdFoods>>): Promise<ResolvedFood | null> {
@@ -142,6 +148,13 @@ export async function matchIngredient(
   hh: Awaited<ReturnType<typeof householdFoods>>,
 ): Promise<ResolvedFood | null> {
   const expected = hint.kcal_per_100g ?? null;
+  // 1. What you've logged (or fixed) before for this name: same food, same numbers every time.
+  for (const key of [dishKey(hint.name), hint.search ? dishKey(hint.search) : ""].filter(Boolean)) {
+    const a = hh.aliases?.get(key);
+    if (a && a.per100?.calories !== undefined && (a.confirmed || plausibleKcal(a.per100.calories, expected, 2.5))) {
+      return { ref: a.ref, name: a.label, source: a.confirmed ? "Your pick" : "Remembered", per100: a.per100, irritants: [] };
+    }
+  }
   // Every candidate must be believable next to the AI's own estimate, so a
   // wrong database hit (guava → guava pastry) can't slip through.
   const ok = (f: ResolvedFood | null, tolerance = 2) => Boolean(f && f.per100?.calories !== undefined && plausibleKcal(f.per100.calories, expected, tolerance));

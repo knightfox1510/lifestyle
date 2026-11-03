@@ -7,13 +7,13 @@ import { AccuracyBadge, FoodSearch, PeoplePortions, type FoodHit, type PersonPor
 import { compressImage } from "@/lib/compress-image";
 import type { Meal } from "@/lib/types";
 import { MEAL_DEFAULT_TIME, MEAL_META, MEAL_ORDER, eatenAtFor, mealForHour, type LogDay } from "@/modules/food/meta";
-import { computeItem, type CalcItem } from "@/modules/nutrition/compute";
+import { computeItem, disagreement, type CalcItem } from "@/modules/nutrition/compute";
 import { IRRITANT_META, type Irritant } from "@/modules/nutrition/irritants";
-import { logFoodForPeople } from "./actions";
+import { logFoodForPeople, rememberFoods } from "./actions";
 import { PantryUsePrompt } from "@/components/pantry-use-prompt";
 import { useT } from "@/lib/i18n/client";
 
-type Item = CalcItem & { keep: boolean; open: boolean };
+type Item = CalcItem & { keep: boolean; open: boolean; fixing?: number | null };
 
 /**
  * Describe, say or photograph a meal → AI breaks it into your saved recipes or
@@ -82,6 +82,14 @@ export function FoodAiAdd({ ownerId, people, day, meal: preset }: { ownerId: str
       if (res.error) setMsg({ tone: "danger", text: res.error });
       else {
         setMsg({ tone: "accent", text: res.message ?? "Added." });
+        // Remember each ingredient's food so the same name gets the same numbers next time.
+        void rememberFoods(
+          items
+            .filter((i) => i.keep && !i.useEstimate && !i.recipe)
+            .flatMap((i) => i.components)
+            .filter((c) => c.per100 && c.matchName && c.ref && typeof c.per100.calories === "number")
+            .map((c) => ({ name: c.name, label: c.matchName!, ref: c.ref as Record<string, unknown>, per100: c.per100 as Record<string, number>, source: c.source ?? null, fixed: Boolean(c.fixed) })),
+        );
         // Home-cooked meals: offer to update the pantry for the ingredients used.
         const names = items.filter((i) => i.keep).flatMap((i) => (i.components.length ? i.components.flatMap((c) => [c.name, c.matchName ?? ""]) : [i.description]));
         if (names.length) setUsedNames(names);
@@ -149,6 +157,28 @@ export function FoodAiAdd({ ownerId, people, day, meal: preset }: { ownerId: str
                     {c.nutrients.calcium_mg != null ? ` · calcium ${Math.round(c.nutrients.calcium_mg)} mg` : ""}
                     {c.grams ? ` · ${Math.round(c.grams)} g` : ""}
                   </p>
+                  {(() => {
+                    const d = disagreement(it);
+                    if (it.useEstimate) {
+                      return (
+                        <p className="mt-1 text-xs text-fg-muted">
+                          {t("Using the AI's estimate.")}{" "}
+                          <button type="button" className="text-accent underline" onClick={() => update(i, { useEstimate: false })}>{t("Use calculated instead")}</button>
+                        </p>
+                      );
+                    }
+                    if (!d) return null;
+                    return (
+                      <div className="mt-1.5 rounded-lg bg-warn-soft p-2 text-xs">
+                        <p className="font-medium">⚠ {t("Check this one: food data says {a} kcal, the AI expected about {b}.", { a: d.calculated, b: d.ai })}</p>
+                        <p className="mt-0.5 text-fg-muted">{t("Usually a wrong food match or wrong grams. Open the ingredients to fix it, or pick:")}</p>
+                        <div className="mt-1.5 flex flex-wrap gap-1.5">
+                          <button type="button" className="rounded-full border border-border bg-surface px-2.5 py-1" onClick={() => update(i, { open: true })}>{t("Fix ingredients")}</button>
+                          <button type="button" className="rounded-full border border-border bg-surface px-2.5 py-1" onClick={() => update(i, { useEstimate: true })}>{t("Use AI estimate ({n} kcal)", { n: d.ai })}</button>
+                        </div>
+                      </div>
+                    );
+                  })()}
                   {it.irritants.length ? (
                     <p className="text-xs text-fg-muted">Bladder irritants: {it.irritants.map((x) => `${IRRITANT_META[x as Irritant]?.icon ?? ""} ${IRRITANT_META[x as Irritant]?.label ?? x}`).join(", ")}</p>
                   ) : null}
@@ -177,8 +207,24 @@ export function FoodAiAdd({ ownerId, people, day, meal: preset }: { ownerId: str
                             <div key={k} className="flex flex-wrap items-center gap-1.5 text-xs">
                               <Input type="number" min={0} value={comp.grams} onChange={(e) => updateComp(i, k, { grams: Math.max(0, Number(e.target.value) || 0) })} className="!h-7 w-20" aria-label={`${comp.name} grams`} />
                               g <span className="font-medium">{comp.name}</span>
-                              <span className={comp.per100 ? "text-fg-muted" : "text-danger"}>→ {comp.matchName ? `${comp.matchName} (${comp.source})` : "not matched"}</span>
+                              <span className={comp.per100 ? "text-fg-muted" : "text-danger"}>
+                                → {comp.matchName ? `${comp.matchName} (${comp.source})` : "not matched"}
+                                {comp.per100?.calories != null ? ` · ${Math.round(comp.per100.calories)} kcal/100 g` : ""}
+                              </span>
+                              <button type="button" className="text-accent underline" onClick={() => update(i, { fixing: it.fixing === k ? null : k })}>{it.fixing === k ? t("Cancel") : t("Change")}</button>
                               <button type="button" className="text-fg-muted hover:text-danger" aria-label="Remove ingredient" onClick={() => update(i, { components: it.components.filter((_, x) => x !== k) })}>✕</button>
+                              {it.fixing === k ? (
+                                <div className="basis-full">
+                                  <FoodSearch
+                                    autoFocus
+                                    placeholder={t("Search the right food for {name}…", { name: comp.name })}
+                                    onPick={(f: FoodHit) => {
+                                      updateComp(i, k, { per100: f.per100 ?? null, matchName: f.name, source: f.source, ref: f.ref, fixed: true });
+                                      setItems((cur) => cur!.map((x, j) => (j === i ? { ...x, fixing: null, useEstimate: false } : x)));
+                                    }}
+                                  />
+                                </div>
+                              ) : null}
                             </div>
                           ))}
                           <FoodSearch

@@ -8,6 +8,7 @@ import type { ActionResult } from "@/lib/types";
 import { NUTRIENT_KEYS, scale, splitMacros, type Nutrients } from "@/modules/nutrition/nutrients";
 import { cleanIrritants } from "@/modules/nutrition/irritants";
 import { addDays, localDate, localTime, zonedIso } from "@/lib/dates";
+import { dishKey } from "@/modules/food/plan";
 
 const MODULE = "food_diary";
 const when = z.iso.datetime({ offset: true }).optional();
@@ -378,4 +379,66 @@ export async function copyMeal(ownerId: string, fromDate: string, meal: (typeof 
   } catch (e) {
     return { error: errorMessage(e) };
   }
+}
+
+const rememberSchema = z
+  .array(
+    z.object({
+      name: z.string().trim().min(1).max(80),
+      label: z.string().trim().min(1).max(200),
+      ref: z.record(z.string(), z.unknown()),
+      per100: z.record(z.string(), z.number().min(0).max(100000)),
+      source: z.string().max(40).nullable(),
+      fixed: z.boolean(),
+    }),
+  )
+  .max(40);
+
+/**
+ * Remembers the food each logged ingredient was matched to, so the same name
+ * gets the same numbers next time. One you picked yourself ("fixed") is never
+ * replaced by an automatic match.
+ */
+export async function rememberFoods(input: unknown): Promise<ActionResult> {
+  const parsed = rememberSchema.safeParse(input);
+  if (!parsed.success || !parsed.data.length) return { ok: true };
+  try {
+    const session = await getSession();
+    const keys = [...new Set(parsed.data.map((c) => dishKey(c.name)).filter(Boolean))];
+    const { data: existing, error: readError } = await session.supabase.from("food_aliases").select("name_key, confirmed, uses").eq("household_id", session.household.id).in("name_key", keys);
+    if (readError) return { ok: true }; // database not updated yet: nothing to remember
+    const have = new Map(((existing ?? []) as { name_key: string; confirmed: boolean; uses: number }[]).map((e) => [e.name_key, e]));
+    const rows = new Map<string, Record<string, unknown>>();
+    for (const c of parsed.data) {
+      const key = dishKey(c.name);
+      if (!key || c.per100.calories === undefined) continue;
+      const prev = have.get(key);
+      if (prev?.confirmed && !c.fixed) continue;
+      rows.set(key, {
+        household_id: session.household.id,
+        name_key: key,
+        label: c.label,
+        ref: c.ref,
+        per100: c.per100,
+        source: c.source,
+        confirmed: c.fixed || Boolean(prev?.confirmed),
+        uses: (prev?.uses ?? 0) + 1,
+        created_by: session.userId,
+        updated_at: new Date().toISOString(),
+      });
+    }
+    if (rows.size) await session.supabase.from("food_aliases").upsert([...rows.values()], { onConflict: "household_id,name_key" });
+    return { ok: true };
+  } catch {
+    return { ok: true };
+  }
+}
+
+/** Forget a remembered match (e.g. it was the wrong food). */
+export async function forgetFood(nameKey: string): Promise<ActionResult> {
+  const session = await getSession();
+  const { error } = await session.supabase.from("food_aliases").delete().eq("household_id", session.household.id).eq("name_key", nameKey);
+  if (error) return { error: "Couldn't remove it." };
+  refreshModule("/food");
+  return { ok: true, message: "Forgotten. It will be matched afresh next time." };
 }
