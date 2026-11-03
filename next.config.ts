@@ -8,16 +8,15 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  // Health Connect exports are SQLite: sql.js reads them with its WebAssembly file,
-  // which has to ship with the functions that import exports.
-  serverExternalPackages: ["sql.js"],
-  outputFileTracingIncludes: {
-    "/api/ingest/health-connect/*": ["./node_modules/sql.js/dist/sql-wasm.wasm"],
-    "/wearables": ["./node_modules/sql.js/dist/sql-wasm.wasm"],
-  },
   // Every screen here is per-user and session-bound, so we use classic dynamic
   // rendering instead of Cache Components / partial prerendering.
   turbopack: {
+    // sql.js (reads Health Connect exports in the browser) mentions Node's fs/path/crypto in code that only runs under Node.
+    resolveAlias: {
+      fs: { browser: "./src/lib/shims/empty.ts" },
+      path: { browser: "./src/lib/shims/empty.ts" },
+      crypto: { browser: "./src/lib/shims/empty.ts" },
+    },
     rules: {
       "*.css": {
         loaders: ["@tailwindcss/turbopack"],

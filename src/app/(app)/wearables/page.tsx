@@ -62,7 +62,7 @@ export default async function WearablesPage() {
         <>
           <Card className="space-y-3">
             <h2 className="font-semibold">Health Connect (Android)</h2>
-            <HealthConnectSync origin={origin} status={(hc.data ?? null) as SyncStatus} />
+            <HealthConnectSync origin={origin} status={(hc.data ?? null) as SyncStatus} tz={session.profile.timezone} />
           </Card>
           <Card className="space-y-2">
             <h2 className="font-semibold">Add a day by hand</h2>

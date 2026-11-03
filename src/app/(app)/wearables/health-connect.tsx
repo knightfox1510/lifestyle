@@ -3,8 +3,8 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Notice } from "@/components/ui";
-import { createClient } from "@/lib/supabase/client";
-import { createIngestToken, importHealthConnectUpload, prepareHealthConnectUpload } from "./actions";
+import { createIngestToken, finishHealthConnectImport, saveHealthConnectChunk } from "./actions";
+import { readExportInBrowser } from "./read-export";
 
 export type SyncStatus = { last_run_at: string | null; last_status: string | null; last_message: string | null; last_day: string | null; days_imported: number } | null;
 
@@ -26,18 +26,22 @@ function syncHealthConnect() {
     if (!newest || f.getLastUpdated() > newest.getLastUpdated()) newest = f;
   }
   if (!newest) { console.log("No Health Connect export found in Drive."); return; }
-  const meta = { name: newest.getName(), modified: newest.getLastUpdated().toISOString() };
-  const auth = { Authorization: "Bearer " + TOKEN };
-  const step1 = JSON.parse(UrlFetchApp.fetch(HEARTH + "/api/ingest/health-connect/upload-url", {
-    method: "post", contentType: "application/json", headers: auth, payload: JSON.stringify(meta), muteHttpExceptions: true,
-  }).getContentText());
-  if (step1.skip) { console.log(step1.reason); return; }
-  if (!step1.url) { console.log("Hearth said: " + JSON.stringify(step1)); return; }
-  UrlFetchApp.fetch(step1.url, { method: "put", contentType: "application/zip", payload: newest.getBlob().getBytes(), muteHttpExceptions: true });
-  const step2 = UrlFetchApp.fetch(HEARTH + "/api/ingest/health-connect/process", {
-    method: "post", contentType: "application/json", headers: auth, payload: JSON.stringify(Object.assign({ path: step1.path }, meta)), muteHttpExceptions: true,
+  // Only the file's id and a short-lived Google token are sent, not the file
+  // (exports are too big for Apps Script). Hearth reads just the part it needs
+  // from Drive with that token; the token expires within an hour.
+  const res = UrlFetchApp.fetch(HEARTH + "/api/ingest/health-connect/process", {
+    method: "post",
+    contentType: "application/json",
+    headers: { Authorization: "Bearer " + TOKEN },
+    payload: JSON.stringify({
+      fileId: newest.getId(),
+      name: newest.getName(),
+      modified: newest.getLastUpdated().toISOString(),
+      accessToken: ScriptApp.getOAuthToken(),
+    }),
+    muteHttpExceptions: true,
   });
-  console.log(step2.getContentText());
+  console.log(res.getResponseCode() + " " + res.getContentText());
 }
 
 // Run this once: it imports now and sets up the daily run (around 9 am).
@@ -49,7 +53,7 @@ function setup() {
 `;
 }
 
-export function HealthConnectSync({ origin, status }: { origin: string; status: SyncStatus }) {
+export function HealthConnectSync({ origin, status, tz }: { origin: string; status: SyncStatus; tz: string }) {
   const router = useRouter();
   const [msg, setMsg] = useState<{ tone: "accent" | "danger"; text: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -59,18 +63,27 @@ export function HealthConnectSync({ origin, status }: { origin: string; status: 
 
   async function upload(file: File) {
     setMsg(null);
-    setBusy("Uploading…");
+    setBusy("Reading the export on this device…");
     try {
-      const prep = await prepareHealthConnectUpload();
-      if (!prep.path || !prep.token) throw new Error(prep.error ?? "Couldn't prepare the upload.");
-      const { error } = await createClient().storage.from("health-imports").uploadToSignedUrl(prep.path, prep.token, file, { contentType: "application/zip" });
-      if (error) throw new Error(`Upload failed: ${error.message}`);
-      setBusy("Reading the export… (large exports take a minute)");
-      const r = await importHealthConnectUpload(prep.path, file.name);
-      setMsg(r.error ? { tone: "danger", text: r.error } : { tone: "accent", text: r.message ?? "Imported." });
+      // Let the label repaint before the (blocking) read starts.
+      await new Promise((r) => setTimeout(r, 50));
+      const summary = await readExportInBrowser(file, tz);
+      const lastWeigh = [...new Map(summary.weights.map((w) => [w.day, w])).values()];
+      let days = 0;
+      let weights = 0;
+      for (let i = 0; i < Math.max(summary.days.length, 1); i += 400) {
+        setBusy(`Saving days ${i + 1}–${Math.min(i + 400, summary.days.length)} of ${summary.days.length}…`);
+        const r = await saveHealthConnectChunk({ days: summary.days.slice(i, i + 400), weights: i === 0 ? lastWeigh.slice(-2000) : [], found: summary.found, missing: summary.missing });
+        if (r.error) throw new Error(r.error);
+        days += r.days ?? 0;
+        weights += r.weights ?? 0;
+      }
+      const r = await finishHealthConnectImport({ file: file.name, days, weights, firstDay: summary.days[0]?.day ?? null, lastDay: summary.days.at(-1)?.day ?? null, found: summary.found });
+      setMsg(r.error ? { tone: "danger", text: `${r.error} Tables in the file: ${summary.tables.slice(0, 15).join(", ") || "none"}.` } : { tone: "accent", text: r.message ?? "Imported." });
       router.refresh();
     } catch (e) {
-      setMsg({ tone: "danger", text: (e as Error).message });
+      const m = (e as Error).message;
+      setMsg({ tone: "danger", text: /memory|allocation|Array buffer/i.test(m) ? "This device ran out of memory reading the export. Use the daily Google Drive sync below, or try on a computer." : m });
     } finally {
       setBusy(null);
     }
@@ -87,7 +100,7 @@ export function HealthConnectSync({ origin, status }: { origin: string; status: 
 
       <div className="space-y-2">
         <p className="text-sm font-medium">Import an export now</p>
-        <p className="text-xs text-fg-muted">Pick the .zip (or the .db inside it) from Health Connect → Export data. Steps, sleep (with deep sleep), heart rate, resting heart rate, HRV, calories, workouts and weight are read.</p>
+        <p className="text-xs text-fg-muted">Pick the .zip (or the .db inside it) from Health Connect → Export data. It&apos;s read on this device and only the daily totals are saved: steps, sleep (with deep sleep), heart rate, resting heart rate, HRV, calories, workouts and weight. Big exports need a lot of memory, so a computer works best.</p>
         <label className="pressable inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border border-border bg-surface px-4 text-sm font-medium hover:bg-surface-2">
           📦 {busy ?? "Choose export file"}
           <input type="file" accept=".zip,.db,application/zip" className="sr-only" disabled={Boolean(busy)} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void upload(f); }} />
@@ -102,7 +115,8 @@ export function HealthConnectSync({ origin, status }: { origin: string; status: 
           <li>Tap <strong>Make my sync script</strong> below and copy it.</li>
           <li>Open <a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener noreferrer" className="text-accent underline">script.google.com → New project</a> (same Google account as the Drive), delete what&apos;s there and paste.</li>
           <li>Choose the <strong>setup</strong> function and press ▶ Run. Allow access to Drive when asked (&quot;Google hasn&apos;t verified this app&quot; → Advanced → Go to project; it&apos;s your own script).</li>
-          <li>Done: it imports now and then every morning around 9. The result shows here.</li>
+          <li>Done: it imports now and then every morning around 9. Big exports take a few minutes; the result shows here (refresh the page).</li>
+          <li>Already set it up before? Paste the new script over the old one and run <strong>setup</strong> again: the old one uploaded the whole file, which stops working past 50 MB.</li>
         </ol>
         <Button
           size="sm"

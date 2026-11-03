@@ -12,7 +12,8 @@
  * with the most (not the sum), which is what Health Connect itself shows.
  */
 
-export type Query = (sql: string) => Record<string, unknown>[];
+/** Runs SQL and yields rows (an iterator, so millions of heart-rate samples needn't sit in memory at once). */
+export type Query = (sql: string) => Iterable<Record<string, unknown>>;
 
 export type HcDay = {
   day: string;
@@ -31,17 +32,23 @@ export type HcSummary = { days: HcDay[]; weights: HcWeight[]; found: string[]; m
 const MIN = 60_000;
 
 /** Local calendar day of an epoch-ms time, using the record's own zone offset (seconds) when stored, else `tz`. */
+const formatters = new Map<string, Intl.DateTimeFormat>();
 function dayOf(ms: number, offsetSec: number | null | undefined, tz: string) {
   if (offsetSec != null && Number.isFinite(Number(offsetSec))) return new Date(ms + Number(offsetSec) * 1000).toISOString().slice(0, 10);
-  return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ms));
+  let f = formatters.get(tz);
+  if (!f) formatters.set(tz, (f = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" })));
+  return f.format(new Date(ms));
 }
 
 export function summarizeHealthConnect(query: Query, tz: string, opts: { sinceDay?: string } = {}): HcSummary {
-  const tables = query("SELECT name FROM sqlite_master WHERE type = 'table'").map((r) => String(r.name));
-  const cols = (t: string) => new Set(query(`PRAGMA table_info("${t.replace(/"/g, "")}")`).map((r) => String(r.name)));
+  const tables = Array.from(query("SELECT name FROM sqlite_master WHERE type = 'table'"), (r) => String(r.name));
+  const cols = (t: string) => new Set(Array.from(query(`PRAGMA table_info("${t.replace(/"/g, "")}")`), (r) => String(r.name)));
   const find = (re: RegExp) => tables.find((t) => re.test(t));
   const pick = (c: Set<string>, ...names: string[]) => names.find((n) => c.has(n)) ?? null;
   const since = opts.sinceDay ?? "0000-00-00";
+  // Only rows from (a day before) `sinceDay` are read; the day check below is exact.
+  const cutoff = opts.sinceDay ? Date.parse(`${opts.sinceDay}T00:00:00Z`) - 2 * 864e5 : null;
+  const after = (col: string) => (cutoff == null ? "" : ` WHERE "${col}" >= ${cutoff}`);
   const days = new Map<string, HcDay>();
   const get = (d: string) => days.get(d) ?? (days.set(d, { day: d }), days.get(d)!);
   const found: string[] = [];
@@ -50,7 +57,7 @@ export function summarizeHealthConnect(query: Query, tz: string, opts: { sinceDa
 
   /** Sums a per-record value per day and per app, then keeps the biggest app per day. */
   const perDayMaxApp = (table: string, valueCol: string, timeCol: string, offCol: string | null, appCol: string | null) => {
-    const rows = query(`SELECT "${valueCol}" AS v, "${timeCol}" AS t${offCol ? `, "${offCol}" AS o` : ""}${appCol ? `, "${appCol}" AS a` : ""} FROM "${table}"`);
+    const rows = query(`SELECT "${valueCol}" AS v, "${timeCol}" AS t${offCol ? `, "${offCol}" AS o` : ""}${appCol ? `, "${appCol}" AS a` : ""} FROM "${table}"${after(timeCol)}`);
     const byDay = new Map<string, Map<string, number>>();
     for (const r of rows) {
       const t = num(r.t);
@@ -102,15 +109,18 @@ export function summarizeHealthConnect(query: Query, tz: string, opts: { sinceDa
     const t = pick(c, "epoch_millis", "time", "sample_time");
     if (v && t) {
       const acc = new Map<string, { s: number; n: number }>();
-      for (const r of query(`SELECT "${v}" AS v, "${t}" AS t FROM "${hrSeries}"`)) {
-        const bpm = num(r.v);
-        const ms = num(r.t);
-        if (bpm == null || ms == null || bpm < 25 || bpm > 230) continue;
-        const d = dayOf(ms, null, tz);
+      // A band writes a sample every minute or so (millions of rows), so SQLite adds them up per
+      // 15 minutes (every time zone's offset is a multiple of that) and only those are placed on days.
+      const q = 900_000;
+      const cond = `"${v}" BETWEEN 25 AND 230${cutoff == null ? "" : ` AND "${t}" >= ${cutoff}`}`;
+      for (const r of query(`SELECT CAST("${t}" / ${q} AS INTEGER) AS b, SUM("${v}") AS s, COUNT(*) AS n FROM "${hrSeries}" WHERE ${cond} GROUP BY b`)) {
+        const b = num(r.b);
+        if (b == null) continue;
+        const d = dayOf(b * q, null, tz);
         if (d < since) continue;
         const a = acc.get(d) ?? { s: 0, n: 0 };
-        a.s += bpm;
-        a.n += 1;
+        a.s += Number(r.s);
+        a.n += Number(r.n);
         acc.set(d, a);
       }
       for (const [d, a] of acc) get(d).avg_hr = Math.round(a.s / a.n);
@@ -126,7 +136,7 @@ export function summarizeHealthConnect(query: Query, tz: string, opts: { sinceDa
     const t = pick(c, "time", "start_time");
     if (v && t) {
       const off = pick(c, "zone_offset", "start_zone_offset");
-      for (const r of query(`SELECT "${v}" AS v, "${t}" AS t${off ? `, "${off}" AS o` : ""} FROM "${rhr}"`)) {
+      for (const r of query(`SELECT "${v}" AS v, "${t}" AS t${off ? `, "${off}" AS o` : ""} FROM "${rhr}"${after(t)}`)) {
         const bpm = num(r.v);
         const ms = num(r.t);
         if (bpm == null || ms == null || bpm < 20 || bpm > 220) continue;
@@ -147,7 +157,7 @@ export function summarizeHealthConnect(query: Query, tz: string, opts: { sinceDa
     const t = pick(c, "time", "start_time");
     if (v && t) {
       const acc = new Map<string, { s: number; n: number }>();
-      for (const r of query(`SELECT "${v}" AS v, "${t}" AS t FROM "${hrv}"`)) {
+      for (const r of query(`SELECT "${v}" AS v, "${t}" AS t FROM "${hrv}"${after(t)}`)) {
         const x = num(r.v);
         const ms = num(r.t);
         if (x == null || ms == null || x <= 0 || x > 500) continue;
@@ -173,7 +183,7 @@ export function summarizeHealthConnect(query: Query, tz: string, opts: { sinceDa
       const off = pick(c, "end_zone_offset", "zone_offset");
       const id = pick(c, "row_id", "id", "uuid");
       const app = pick(c, "app_info_id", "app_id");
-      const sessions = query(`SELECT "${s}" AS s, "${e}" AS e${off ? `, "${off}" AS o` : ""}${id ? `, "${id}" AS id` : ""}${app ? `, "${app}" AS a` : ""} FROM "${sl}"`);
+      const sessions = query(`SELECT "${s}" AS s, "${e}" AS e${off ? `, "${off}" AS o` : ""}${id ? `, "${id}" AS id` : ""}${app ? `, "${app}" AS a` : ""} FROM "${sl}"${after(e)}`);
       const byDay = new Map<string, Map<string, number>>();
       const sessionDay = new Map<string, string>();
       for (const r of sessions) {
@@ -199,7 +209,7 @@ export function summarizeHealthConnect(query: Query, tz: string, opts: { sinceDa
         const ty = pick(sc, "stage_type", "type");
         if (ps && ss && se && ty) {
           const deep = new Map<string, number>();
-          for (const r of query(`SELECT "${ps}" AS p, "${ss}" AS s, "${se}" AS e, "${ty}" AS ty FROM "${stages}"`)) {
+          for (const r of query(`SELECT "${ps}" AS p, "${ss}" AS s, "${se}" AS e, "${ty}" AS ty FROM "${stages}"${after(se)}`)) {
             if (Number(r.ty) !== 5) continue;
             const d = sessionDay.get(String(r.p));
             const ms0 = num(r.s);
@@ -223,7 +233,7 @@ export function summarizeHealthConnect(query: Query, tz: string, opts: { sinceDa
     if (s && e) {
       const off = pick(c, "start_zone_offset", "zone_offset");
       const acc = new Map<string, number>();
-      for (const r of query(`SELECT "${s}" AS s, "${e}" AS e${off ? `, "${off}" AS o` : ""} FROM "${ex}"`)) {
+      for (const r of query(`SELECT "${s}" AS s, "${e}" AS e${off ? `, "${off}" AS o` : ""} FROM "${ex}"${after(s)}`)) {
         const ms0 = num(r.s);
         const ms1 = num(r.e);
         if (ms0 == null || ms1 == null || ms1 <= ms0) continue;
@@ -245,7 +255,7 @@ export function summarizeHealthConnect(query: Query, tz: string, opts: { sinceDa
     const t = pick(c, "time", "start_time");
     if (v && t) {
       const off = pick(c, "zone_offset", "start_zone_offset");
-      for (const r of query(`SELECT "${v}" AS v, "${t}" AS t${off ? `, "${off}" AS o` : ""} FROM "${wt}" ORDER BY "${t}"`)) {
+      for (const r of query(`SELECT "${v}" AS v, "${t}" AS t${off ? `, "${off}" AS o` : ""} FROM "${wt}"${after(t)} ORDER BY "${t}"`)) {
         const raw = num(r.v);
         const ms = num(r.t);
         if (raw == null || ms == null) continue;
