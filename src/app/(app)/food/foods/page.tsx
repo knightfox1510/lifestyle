@@ -58,7 +58,7 @@ export default async function FoodsPage() {
                   <details>
                     <summary className="cursor-pointer text-sm text-accent">Log some</summary>
                     <div className="mt-2">
-                      <FoodAmountLogger name={f.name} per100={f.nutrients as Nutrients} servingG={f.serving_g ? Number(f.serving_g) : null} servingLabel={f.serving_label} irritants={f.irritants} accuracy={f.source === "manual" ? "calculated" : "label"} me={session.subject.user_id} people={people} />
+                      <FoodAmountLogger name={f.name} per100={f.nutrients as Nutrients} servingG={f.serving_g ? Number(f.serving_g) : null} servingLabel={f.serving_label} liquid={/\bml\b/i.test(f.serving_label ?? "")} irritants={f.irritants} accuracy={f.source === "manual" ? "calculated" : "label"} me={session.subject.user_id} people={people} />
                     </div>
                   </details>
                 ) : null}

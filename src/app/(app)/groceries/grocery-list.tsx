@@ -325,6 +325,35 @@ function Row({
 }) {
   const by = item.checked ? item.checked_by : item.created_by;
   const who = by && by !== userId ? names[by] : null;
+  const [editing, setEditing] = useState(false);
+  const [eName, setEName] = useState(item.name);
+  const [eQty, setEQty] = useState(item.quantity ?? "");
+  const [eCat, setECat] = useState<GroceryCategory>(item.category);
+  if (editing) {
+    return (
+      <li className="rounded-xl border border-accent/40 bg-surface px-3 py-2">
+        <form
+          className="flex flex-wrap gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!eName.trim()) return;
+            void onChange({ ...item, name: eName.trim().slice(0, 120), quantity: eQty.trim().slice(0, 40) || null, category: eCat });
+            setEditing(false);
+          }}
+        >
+          <Input value={eName} onChange={(e) => setEName(e.target.value)} aria-label="Item" className="!h-9 min-w-32 flex-[3]" maxLength={120} autoFocus />
+          <Input value={eQty} onChange={(e) => setEQty(e.target.value)} aria-label="Quantity" placeholder="Qty" className="!h-9 w-20 flex-1" maxLength={40} />
+          <Select value={eCat} onChange={(e) => setECat(e.target.value as GroceryCategory)} aria-label="Category" className="!h-9 w-36 flex-1">
+            {GROCERY_CATEGORIES.map((c) => (
+              <option key={c} value={c}>{CATEGORY_META[c].icon} {CATEGORY_META[c].label}</option>
+            ))}
+          </Select>
+          <Button type="submit" size="sm">Save</Button>
+          <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(false)}>Cancel</Button>
+        </form>
+      </li>
+    );
+  }
   return (
     <li className={cx("flex items-center gap-3 rounded-xl border border-border bg-surface px-3 py-2", item.checked && "opacity-60")}>
       <button
@@ -357,6 +386,19 @@ function Row({
           </p>
         ) : null}
       </div>
+      <button
+        type="button"
+        aria-label={`Edit ${item.name}`}
+        className="px-1 text-xs text-fg-muted hover:text-fg"
+        onClick={() => {
+          setEName(item.name);
+          setEQty(item.quantity ?? "");
+          setECat(item.category);
+          setEditing(true);
+        }}
+      >
+        ✎
+      </button>
       <button
         type="button"
         aria-label={`Remove ${item.name}`}

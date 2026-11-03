@@ -1,6 +1,7 @@
 /** The meal-breakdown prompt, shared by the food estimate route and the accuracy check (pure). */
 import { MEASURE_HINTS, STAPLES } from "@/modules/nutrition/staples";
 import { DISHES } from "@/modules/nutrition/dishes";
+import { measureRulesForAi } from "@/modules/nutrition/measures";
 
 export function mealCalcSystemPrompt(household: { foods: string[]; recipes: string[] }) {
   const context = [
@@ -9,6 +10,7 @@ export function mealCalcSystemPrompt(household: { foods: string[]; recipes: stri
     household.recipes.length ? `Household's saved recipes (calculated nutrition): ${household.recipes.join("; ")}` : "",
     `Built-in Indian dishes (key: name — standard serving): ${DISHES.map((d) => `${d.key}: ${d.name} — ${d.serving}`).join("; ")}`,
     MEASURE_HINTS,
+    measureRulesForAi(),
   ]
     .filter(Boolean)
     .join("\n\n");

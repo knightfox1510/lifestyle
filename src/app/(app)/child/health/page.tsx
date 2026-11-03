@@ -6,7 +6,8 @@ import { LineChart } from "@/components/charts";
 import type { Dependent, GrowthRecord, Vaccination } from "@/lib/types";
 import { formatDate } from "@/modules/medical/meta";
 import { GrowthForm, VaccineForm } from "../client";
-import { deleteVaccine, setVaccineGiven } from "../actions";
+import { deleteGrowth, deleteVaccine, setVaccineGiven, updateGrowth, updateVaccine } from "../actions";
+import { EditRecord } from "@/components/edit-record";
 
 export const metadata = { title: "Vaccinations & growth" };
 
@@ -56,6 +57,15 @@ export default async function ChildHealthPage({ searchParams }: PageProps<"/chil
                       <input type="date" name="given_on" defaultValue={today} max={today} className="h-8 rounded-lg border border-border bg-surface px-2 text-sm" aria-label="Date given" />
                       <button className={buttonClass("secondary", "sm")}>Given</button>
                     </form>
+                    <EditRecord
+                      fields={[
+                        { name: "vaccine", label: "Vaccine", type: "text", maxLength: 120 },
+                        { name: "due_on", label: "Due", type: "date" },
+                        { name: "given_on", label: "Given on", type: "date" },
+                      ]}
+                      values={{ vaccine: x.vaccine, due_on: x.due_on, given_on: x.given_on }}
+                      onSave={updateVaccine.bind(null, x.id)}
+                    />
                     <form action={deleteVaccine.bind(null, x.id)}>
                       <button className="px-1 text-xs text-fg-muted hover:text-danger" aria-label={`Remove ${x.vaccine}`}>✕</button>
                     </form>
@@ -73,10 +83,19 @@ export default async function ChildHealthPage({ searchParams }: PageProps<"/chil
             <summary className="cursor-pointer text-sm text-fg-muted">Given ({given.length})</summary>
             <ul className="mt-2 space-y-1 text-sm">
               {given.map((x) => (
-                <li key={x.id} className="flex justify-between gap-2">
+                <li key={x.id} className="flex flex-wrap justify-between gap-2">
                   <span>✓ {x.vaccine}</span>
                   <span className="flex items-center gap-2 text-fg-muted">
                     {formatDate(x.given_on)}
+                    <EditRecord
+                      fields={[
+                        { name: "vaccine", label: "Vaccine", type: "text", maxLength: 120 },
+                        { name: "due_on", label: "Due", type: "date" },
+                        { name: "given_on", label: "Given on", type: "date" },
+                      ]}
+                      values={{ vaccine: x.vaccine, due_on: x.due_on, given_on: x.given_on }}
+                      onSave={updateVaccine.bind(null, x.id)}
+                    />
                     <form action={setVaccineGiven.bind(null, x.id, false)}>
                       <button className="text-xs hover:underline">undo</button>
                     </form>
@@ -102,7 +121,7 @@ export default async function ChildHealthPage({ searchParams }: PageProps<"/chil
         {growth.length ? (
           <table className="w-full text-sm tabular-nums">
             <thead className="text-xs text-fg-muted">
-              <tr><th className="text-left font-medium">Date</th><th className="text-right font-medium">Weight</th><th className="text-right font-medium">Height</th><th className="text-right font-medium">Head</th></tr>
+              <tr><th className="text-left font-medium">Date</th><th className="text-right font-medium">Weight</th><th className="text-right font-medium">Height</th><th className="text-right font-medium">Head</th><th /></tr>
             </thead>
             <tbody>
               {[...growth].reverse().map((x) => (
@@ -111,6 +130,23 @@ export default async function ChildHealthPage({ searchParams }: PageProps<"/chil
                   <td className="text-right">{x.weight_kg ?? "–"}</td>
                   <td className="text-right">{x.height_cm ?? "–"}</td>
                   <td className="text-right">{x.head_cm ?? "–"}</td>
+                  <td className="pl-2 text-right">
+                    <span className="inline-flex items-center gap-1">
+                      <EditRecord
+                        fields={[
+                          { name: "measured_on", label: "Date", type: "date" },
+                          { name: "weight_kg", label: "Weight (kg)", type: "number", min: 0.3, max: 200 },
+                          { name: "height_cm", label: "Height (cm)", type: "number", min: 20, max: 250 },
+                          { name: "head_cm", label: "Head (cm)", type: "number", min: 20, max: 70 },
+                        ]}
+                        values={{ measured_on: x.measured_on, weight_kg: x.weight_kg, height_cm: x.height_cm, head_cm: x.head_cm }}
+                        onSave={updateGrowth.bind(null, x.id)}
+                      />
+                      <form action={deleteGrowth.bind(null, x.id)}>
+                        <button className="text-xs text-fg-muted hover:text-danger" aria-label="Delete measurement">✕</button>
+                      </form>
+                    </span>
+                  </td>
                 </tr>
               ))}
             </tbody>

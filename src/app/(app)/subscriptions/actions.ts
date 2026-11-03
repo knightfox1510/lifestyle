@@ -53,3 +53,18 @@ export async function deleteSubscription(id: string) {
   await session.supabase.from("subscriptions").delete().eq("id", id).eq("household_id", session.household.id);
   refreshModule("/subscriptions");
 }
+
+/** Edit a subscription: name, cost, cycle, renewal date, who pays, auto-renew. */
+export async function updateSubscription(id: string, input: Record<string, unknown>): Promise<ActionResult> {
+  const parsed = subSchema.safeParse({ ...Object.fromEntries(Object.entries(input).map(([k, v]) => [k, v == null ? "" : v])), auto_renew: Boolean(input.auto_renew) });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  try {
+    const session = await requireModule("subscriptions");
+    const { data, error } = await session.supabase.from("subscriptions").update(parsed.data).eq("id", id).eq("household_id", session.household.id).select("id");
+    if (error || !data?.length) return { error: "Couldn't save the changes." };
+  } catch (e) {
+    return { error: errorMessage(e) };
+  }
+  refreshModule("/subscriptions");
+  return { ok: true, message: "Saved." };
+}

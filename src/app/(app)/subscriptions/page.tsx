@@ -6,7 +6,9 @@ import { formatDate } from "@/modules/medical/meta";
 import { daysUntil } from "@/modules/pantry/match";
 import { monthlyCost } from "@/modules/subscriptions/logic";
 import { SubForm } from "./sub-form";
-import { deleteSubscription, markRenewed, setSubscriptionActive } from "./actions";
+import { deleteSubscription, markRenewed, setSubscriptionActive, updateSubscription } from "./actions";
+import { EditRecord } from "@/components/edit-record";
+import { BILLING_CYCLES, SUB_CATEGORIES } from "@/lib/types";
 
 export const metadata = { title: "Subscriptions" };
 
@@ -70,6 +72,22 @@ export default async function SubscriptionsPage() {
                       <form action={setSubscriptionActive.bind(null, s.id, !s.active)}>
                         <button className={buttonClass("ghost", "sm")}>{s.active ? "Cancelled" : "Reactivate"}</button>
                       </form>
+                      <EditRecord
+                        fields={[
+                          { name: "name", label: "Name", type: "text", maxLength: 80 },
+                          { name: "category", label: "Category", type: "select", options: SUB_CATEGORIES.map((c) => ({ value: c, label: c[0].toUpperCase() + c.slice(1) })) },
+                          { name: "cost", label: "Cost", type: "number", min: 0 },
+                          { name: "currency", label: "Currency", type: "text", maxLength: 3 },
+                          { name: "billing_cycle", label: "Billed", type: "select", options: BILLING_CYCLES.map((c) => ({ value: c, label: c.replace("_", "-") })) },
+                          { name: "next_renewal_on", label: "Next renewal", type: "date" },
+                          { name: "paid_by", label: "Paid by", type: "select", allowEmpty: true, options: Object.entries(names).map(([id, n]) => ({ value: id, label: n })) },
+                          { name: "url", label: "Link", type: "text", maxLength: 300 },
+                          { name: "auto_renew", label: "Renews automatically", type: "checkbox" },
+                          { name: "notes", label: "Notes", type: "textarea", maxLength: 300 },
+                        ]}
+                        values={{ name: s.name, category: s.category, cost: s.cost, currency: s.currency, billing_cycle: s.billing_cycle, next_renewal_on: s.next_renewal_on, paid_by: s.paid_by, url: s.url, auto_renew: s.auto_renew, notes: s.notes }}
+                        onSave={updateSubscription.bind(null, s.id)}
+                      />
                       <form action={deleteSubscription.bind(null, s.id)}>
                         <button className="px-1 text-xs text-fg-muted hover:text-danger" aria-label={`Delete ${s.name}`}>✕</button>
                       </form>

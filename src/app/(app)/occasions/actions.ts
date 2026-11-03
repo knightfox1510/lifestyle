@@ -80,3 +80,42 @@ export async function deleteGift(id: string) {
   await session.supabase.from("gift_ideas").delete().eq("id", id).eq("owner_id", session.userId);
   refreshModule("/occasions");
 }
+
+const asForm = (input: Record<string, unknown>) => Object.fromEntries(Object.entries(input).map(([k, v]) => [k, v == null ? "" : v]));
+
+/** Edit an occasion (birthday, anniversary, festival…). */
+export async function updateOccasion(id: string, input: Record<string, unknown>): Promise<ActionResult> {
+  const parsed = occSchema.safeParse({ ...asForm(input), year_known: Boolean(input.year_known), recurring: Boolean(input.recurring) });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  try {
+    const session = await requireModule("occasions");
+    const { date, year_known, ...v } = parsed.data;
+    const [y, m, d] = date.split("-").map(Number);
+    const { data, error } = await session.supabase
+      .from("occasions")
+      .update({ ...v, month: m, day: d, year: year_known || !v.recurring ? y : null })
+      .eq("id", id)
+      .eq("household_id", session.household.id)
+      .select("id");
+    if (error || !data?.length) return { error: "Couldn't save the changes." };
+  } catch (e) {
+    return { error: errorMessage(e) };
+  }
+  refreshModule("/occasions");
+  return { ok: true, message: "Saved." };
+}
+
+/** Edit a gift idea. */
+export async function updateGift(id: string, input: Record<string, unknown>): Promise<ActionResult> {
+  const parsed = giftSchema.safeParse(asForm(input));
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  try {
+    const session = await requireModule("occasions");
+    const { data, error } = await session.supabase.from("gift_ideas").update(parsed.data).eq("id", id).eq("household_id", session.household.id).select("id");
+    if (error || !data?.length) return { error: "Couldn't save the changes." };
+  } catch (e) {
+    return { error: errorMessage(e) };
+  }
+  refreshModule("/occasions");
+  return { ok: true, message: "Saved." };
+}

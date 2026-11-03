@@ -67,3 +67,11 @@ export async function deleteTask(id: string) {
   await session.supabase.from("maintenance_tasks").delete().eq("id", id).eq("household_id", session.household.id);
   refreshModule("/maintenance");
 }
+
+/** Edit a maintenance task (same rules as adding one). */
+export async function updateTask(id: string, input: Record<string, unknown>): Promise<ActionResult> {
+  const fd = new FormData();
+  fd.set("id", id);
+  for (const [k, v] of Object.entries(input)) fd.set(k, v == null ? "" : String(v));
+  return saveTask(null, fd);
+}

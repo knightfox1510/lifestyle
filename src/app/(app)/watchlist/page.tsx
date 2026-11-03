@@ -4,7 +4,8 @@ import { Badge, Card, EmptyState, buttonClass, cx } from "@/components/ui";
 import type { WatchItem, WatchProgress } from "@/lib/types";
 import { AddWatchForm } from "./add-form";
 import { ProgressControls, Stars } from "./progress-controls";
-import { deleteWatchItem, setMyPosition, setWatchStatus } from "./actions";
+import { deleteWatchItem, setMyPosition, setWatchStatus, updateWatchItem } from "./actions";
+import { EditRecord } from "@/components/edit-record";
 
 export const metadata = { title: "Watchlist" };
 
@@ -114,6 +115,19 @@ export default async function WatchlistPage({ searchParams }: PageProps<"/watchl
                     {it.status !== "dropped" && it.status !== "finished" ? (
                       <form action={setWatchStatus.bind(null, it.id, "dropped")}><button className={buttonClass("ghost", "sm")}>Drop</button></form>
                     ) : null}
+                    <EditRecord
+                      fields={[
+                        { name: "title", label: "Title", type: "text", maxLength: 150 },
+                        { name: "kind", label: "Kind", type: "select", options: ["series", "movie", "documentary", "anime", "other"].map((k) => ({ value: k, label: k[0].toUpperCase() + k.slice(1) })) },
+                        { name: "platform", label: "Where", type: "text", maxLength: 60 },
+                        { name: "status", label: "Status", type: "select", options: ["want", "watching", "paused", "finished", "dropped"].map((k) => ({ value: k, label: k[0].toUpperCase() + k.slice(1) })) },
+                        { name: "total_seasons", label: "Seasons", type: "number", min: 1, max: 100, step: 1 },
+                        { name: "together", label: "Watching together", type: "checkbox" },
+                        { name: "notes", label: "Notes", type: "textarea", maxLength: 500 },
+                      ]}
+                      values={{ title: it.title, kind: it.kind, platform: it.platform, status: it.status, total_seasons: it.total_seasons, together: it.together, notes: it.notes }}
+                      onSave={updateWatchItem.bind(null, it.id)}
+                    />
                     <form action={deleteWatchItem.bind(null, it.id)}>
                       <button className="px-1 text-xs text-fg-muted hover:text-danger" aria-label={`Delete ${it.title}`}>✕</button>
                     </form>

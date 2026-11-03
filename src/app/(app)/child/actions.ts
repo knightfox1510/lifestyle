@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { errorMessage, refreshModule, requireModule } from "@/lib/guards";
-import { addDays } from "@/lib/dates";
+import { addDays, localInputToIso } from "@/lib/dates";
 import { IAP_SCHEDULE } from "@/modules/child/vaccines";
 import { CHILD_LOG_KINDS, type ActionResult } from "@/lib/types";
 
@@ -138,4 +138,73 @@ export async function addGrowth(_: ActionResult | null, form: FormData): Promise
   if (error) return { error: "Couldn't save." };
   refreshModule("/child");
   return { ok: true, message: "Saved." };
+}
+
+const asText = (input: Record<string, unknown>) => Object.fromEntries(Object.entries(input).map(([k, v]) => [k, v == null ? "" : String(v)]));
+
+/** Fix a feed / sleep / nappy / medicine / temperature entry: type, times and details. */
+export async function updateChildLog(id: string, input: Record<string, unknown>): Promise<ActionResult> {
+  const parsed = logSchema.omit({ dependentId: true, started_at: true }).safeParse(asText(input));
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  try {
+    const session = await requireModule("child");
+    const tz = session.profile.timezone;
+    const started = localInputToIso(input.started, tz);
+    const ended = input.ended ? localInputToIso(input.ended, tz) : null;
+    if (!started) return { error: "Pick a start time that isn't in the future." };
+    if (ended && ended < started) return { error: "It ended before it started." };
+    const { data, error } = await session.supabase
+      .from("child_logs")
+      .update({ ...parsed.data, started_at: started, ...(parsed.data.kind === "sleep" ? { ended_at: ended } : {}) })
+      .eq("id", id)
+      .eq("household_id", session.household.id)
+      .select("id");
+    if (error || !data?.length) return { error: "Couldn't save the changes." };
+  } catch (e) {
+    return { error: errorMessage(e) };
+  }
+  refreshModule("/child");
+  return { ok: true, message: "Saved." };
+}
+
+/** Fix a vaccination: its name, due date, or the date it was given. */
+export async function updateVaccine(id: string, input: Record<string, unknown>): Promise<ActionResult> {
+  const parsed = z
+    .object({
+      vaccine: z.string().trim().min(1).max(120),
+      due_on: z.preprocess(blank, z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable()),
+      given_on: z.preprocess(blank, z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable()),
+    })
+    .safeParse(asText(input));
+  if (!parsed.success) return { error: "Check the vaccine details." };
+  try {
+    const session = await requireModule("child");
+    const { data, error } = await session.supabase.from("vaccinations").update(parsed.data).eq("id", id).eq("household_id", session.household.id).select("id");
+    if (error || !data?.length) return { error: "Couldn't save the changes." };
+  } catch (e) {
+    return { error: errorMessage(e) };
+  }
+  refreshModule("/child");
+  return { ok: true, message: "Saved." };
+}
+
+/** Fix a growth measurement. */
+export async function updateGrowth(id: string, input: Record<string, unknown>): Promise<ActionResult> {
+  const parsed = growthSchema.omit({ dependentId: true }).safeParse(asText(input));
+  if (!parsed.success) return { error: "Check the numbers." };
+  try {
+    const session = await requireModule("child");
+    const { data, error } = await session.supabase.from("growth_records").update(parsed.data).eq("id", id).eq("household_id", session.household.id).select("id");
+    if (error || !data?.length) return { error: "Couldn't save the changes." };
+  } catch (e) {
+    return { error: errorMessage(e) };
+  }
+  refreshModule("/child");
+  return { ok: true, message: "Saved." };
+}
+
+export async function deleteGrowth(id: string) {
+  const session = await requireModule("child");
+  await session.supabase.from("growth_records").delete().eq("id", id).eq("household_id", session.household.id);
+  refreshModule("/child");
 }

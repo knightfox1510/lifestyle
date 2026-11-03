@@ -241,3 +241,25 @@ export async function eatLeftover(pantryId: string, people: { ownerId: string; s
   refreshModule("/pantry");
   return { ok: true, message: `${res.message ?? "Logged."}${left > 0 ? ` ${left} left.` : " All gone."}` };
 }
+
+/** Fix a pantry item: name, quantity, where it's kept, category, expiry and portions left. */
+export async function updatePantryItem(id: string, input: Record<string, unknown>): Promise<ActionResult> {
+  const parsed = itemSchema.safeParse(Object.fromEntries(Object.entries(input).filter(([k]) => k !== "portions").map(([k, v]) => [k, v == null ? "" : String(v)])));
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const portions = input.portions == null || input.portions === "" ? undefined : Number(input.portions);
+  if (portions !== undefined && (!Number.isFinite(portions) || portions < 0 || portions > 100)) return { error: "Portions must be 0–100." };
+  try {
+    const session = await requireModule("pantry");
+    const { data, error } = await session.supabase
+      .from("pantry_items")
+      .update({ ...parsed.data, category: parsed.data.category ?? guessCategory(parsed.data.name), ...(parsed.data.expires_on ? { expiry_estimated: false } : {}), ...(portions !== undefined ? { portions } : {}) })
+      .eq("id", id)
+      .eq("household_id", session.household.id)
+      .select("id");
+    if (error || !data?.length) return { error: "Couldn't save the changes." };
+  } catch (e) {
+    return { error: errorMessage(e) };
+  }
+  refreshModule("/pantry");
+  return { ok: true, message: "Saved." };
+}

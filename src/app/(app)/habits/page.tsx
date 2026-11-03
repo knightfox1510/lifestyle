@@ -5,7 +5,8 @@ import { Badge, Card, EmptyState, buttonClass } from "@/components/ui";
 import type { Habit, HabitLog } from "@/lib/types";
 import { HabitGrid } from "./habit-grid";
 import { AddHabitForm } from "./add-habit-form";
-import { archiveHabit, deleteHabit } from "./actions";
+import { archiveHabit, deleteHabit, updateHabit } from "./actions";
+import { EditRecord } from "@/components/edit-record";
 
 export const metadata = { title: "Habits" };
 
@@ -59,8 +60,19 @@ export default async function HabitsPage() {
                       This week {thisWeek}/{x.target_per_week} · streak {streak(dates, today)} days · last 30 days {lastNDays(today, 30).filter((d) => dates.has(d)).length}
                     </p>
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex flex-wrap items-center justify-end gap-1">
                     {thisWeek >= x.target_per_week ? <Badge tone="accent">week target met</Badge> : null}
+                    {canWrite ? (
+                      <EditRecord
+                        fields={[
+                          { name: "icon", label: "Icon (emoji)", type: "text", maxLength: 8 },
+                          { name: "name", label: "Habit", type: "text", maxLength: 80 },
+                          { name: "target_per_week", label: "Days per week", type: "number", min: 1, max: 7, step: 1 },
+                        ]}
+                        values={{ icon: x.icon, name: x.name, target_per_week: x.target_per_week }}
+                        onSave={updateHabit.bind(null, x.id, ownerId)}
+                      />
+                    ) : null}
                     {canWrite ? (
                       <form action={archiveHabit.bind(null, x.id, ownerId, !x.active)}>
                         <button className={buttonClass("ghost", "sm")}>{x.active ? "Archive" : "Restore"}</button>

@@ -56,3 +56,18 @@ export async function deleteHabit(id: string) {
   await session.supabase.from("habits").delete().eq("id", id).eq("owner_id", session.userId);
   refreshModule("/habits");
 }
+
+/** Rename a habit, change its icon or weekly target. */
+export async function updateHabit(id: string, ownerId: string, input: Record<string, unknown>): Promise<ActionResult> {
+  const parsed = habitSchema.omit({ ownerId: true }).safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  try {
+    const session = await requireWrite("habits", ownerId);
+    const { data, error } = await session.supabase.from("habits").update(parsed.data).eq("id", id).eq("owner_id", ownerId).select("id");
+    if (error || !data?.length) return { error: "Couldn't save the changes." };
+  } catch (e) {
+    return { error: errorMessage(e) };
+  }
+  refreshModule("/habits");
+  return { ok: true, message: "Saved." };
+}

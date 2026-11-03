@@ -37,6 +37,12 @@ const MEALS: [string, number, number][] = [
   ["2 slices brown bread with 1 tbsp peanut butter", 200, 300],
   ["1 bowl moong dal khichdi", 180, 300],
   ["1 samosa", 220, 320],
+  // Measures: weighed whole, pieces, spoons and volumes.
+  ["200 g banana weighed with the peel", 100, 130],
+  ["300 g watermelon weighed with the rind", 38, 60],
+  ["2 tablespoons honey", 115, 140],
+  ["1 katori cooked rice", 110, 200],
+  ["3 medium guavas", 160, 230],
 ];
 
 const strongStaple = (name: string) =>

@@ -10,7 +10,8 @@ import type { GroceryCategory, Meal } from "@/lib/types";
 import { MEAL_META } from "@/modules/food/meta";
 import { PLAN_MEALS, WEEKDAY_SHORT, mergeIngredients, planDayTotals } from "@/modules/food/plan";
 import { addToGroceryList, saveIdeaAsRecipe } from "@/app/(app)/recipes/actions";
-import { addPlanEntries, copyPreviousWeek, linkPlanRecipe, logPlannedMeal, removePlanEntry, setPlanPortions, setShoppingDay } from "./actions";
+import { addPlanEntries, copyPreviousWeek, linkPlanRecipe, logPlannedMeal, removePlanEntry, setPlanPortions, setShoppingDay, updatePlanEntry } from "./actions";
+import { EditRecord } from "@/components/edit-record";
 
 type ShopItem = { name: string; quantity: string | null; category: GroceryCategory };
 
@@ -65,7 +66,7 @@ export function PlannedDish({
   weekStart,
   macros,
 }: {
-  entry: { id: string; for_user: string | null; portions: Record<string, number>; recipe_id: string | null; logged: boolean; servings: number };
+  entry: { id: string; for_user: string | null; portions: Record<string, number>; recipe_id: string | null; logged: boolean; servings: number; plan_date: string; meal: Meal };
   title: string;
   recipeHref: string | null;
   people: PlanPerson[];
@@ -119,6 +120,17 @@ export function PlannedDish({
                 ✓ {t("We ate this")}
               </Button>
             ) : null}
+            <EditRecord
+              iconOnly={false}
+              label={t("Rename / move")}
+              fields={[
+                ...(entry.recipe_id ? [] : [{ name: "title", label: t("Dish"), type: "text" as const, maxLength: 150 }]),
+                { name: "plan_date", label: t("Day"), type: "date" },
+                { name: "meal", label: t("Meal"), type: "select", options: PLAN_MEALS.concat(["other"]).map((m) => ({ value: m, label: t(MEAL_META[m].label) })) },
+              ]}
+              values={{ title: entry.recipe_id ? null : title, plan_date: entry.plan_date, meal: entry.meal }}
+              onSave={updatePlanEntry.bind(null, entry.id)}
+            />
             {recipeHref ? (
               <a href={recipeHref} className={cx(buttonClass("secondary", "sm"))}>📖 {t("Recipe")}</a>
             ) : (

@@ -80,6 +80,7 @@ export function FoodQuickSearch({ ownerId, people, day, meal, recent, compact }:
           meal={targetMeal}
           day={day}
           onLogged={() => { setPicked(null); setQ(""); }}
+          stapleKey={picked.ref.kind === "staple" ? picked.ref.key : null}
         />
       </Card>
     );

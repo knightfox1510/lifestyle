@@ -8,7 +8,9 @@ import { formatDate } from "@/modules/medical/meta";
 import { daysUntil } from "@/modules/pantry/match";
 import { BUILTIN_TEMPLATES, ITEM_META } from "@/modules/travel/templates";
 import { PackingList, TripItemForm, TripPlanner } from "../client";
-import { deleteTrip, deleteTripItem, saveAsTemplate, setTripStatus, toggleBooked } from "../actions";
+import { deleteTrip, deleteTripItem, saveAsTemplate, setTripStatus, toggleBooked, updateTrip, updateTripItem } from "../actions";
+import { EditRecord } from "@/components/edit-record";
+import { TRIP_ITEM_KINDS } from "@/lib/types";
 
 export default async function TripPage({ params }: PageProps<"/travel/[id]">) {
   const { id } = await params;
@@ -40,12 +42,26 @@ export default async function TripPage({ params }: PageProps<"/travel/[id]">) {
         {ITEM_META[i.kind].icon} {i.url ? <a href={i.url} target="_blank" rel="noopener noreferrer" className="underline">{i.title}</a> : i.title}
         <span className="text-xs text-fg-muted">{i.location ? ` · ${i.location}` : ""}{i.cost != null ? ` · ${trip.currency} ${Number(i.cost).toLocaleString("en-IN")}` : ""}{i.notes ? ` · ${i.notes}` : ""}</span>
       </span>
-      <span className="flex items-center gap-1">
+      <span className="flex flex-wrap items-center gap-1">
         {["flight", "stay", "transport", "activity"].includes(i.kind) ? (
           <form action={toggleBooked.bind(null, i.id, !i.booked)}>
             <button className={cx("rounded-full px-2 py-0.5 text-xs", i.booked ? "bg-accent-soft text-accent" : "bg-surface-2 text-fg-muted")}>{i.booked ? "booked ✓" : "not booked"}</button>
           </form>
         ) : null}
+        <EditRecord
+          fields={[
+            { name: "kind", label: "Type", type: "select", options: TRIP_ITEM_KINDS.map((k) => ({ value: k, label: `${ITEM_META[k].icon} ${ITEM_META[k].label}` })) },
+            { name: "title", label: "What", type: "text", maxLength: 200 },
+            { name: "day_date", label: "Day", type: "date" },
+            { name: "start_time", label: "Time", type: "time" },
+            { name: "location", label: "Where", type: "text", maxLength: 200 },
+            { name: "cost", label: `Cost (${trip.currency})`, type: "number", min: 0 },
+            { name: "url", label: "Link", type: "text", maxLength: 500 },
+            { name: "notes", label: "Notes", type: "textarea", maxLength: 1000 },
+          ]}
+          values={{ kind: i.kind, title: i.title, day_date: i.day_date, start_time: i.start_time?.slice(0, 5) ?? null, location: i.location, cost: i.cost, url: i.url, notes: i.notes }}
+          onSave={updateTripItem.bind(null, i.id)}
+        />
         <form action={deleteTripItem.bind(null, i.id)}><button className="px-1 text-xs text-fg-muted hover:text-danger" aria-label="Delete">✕</button></form>
       </span>
     </li>
@@ -64,6 +80,22 @@ export default async function TripPage({ params }: PageProps<"/travel/[id]">) {
             </p>
           </div>
           <div className="flex flex-wrap gap-1">
+            <EditRecord
+              iconOnly={false}
+              label="Edit trip"
+              fields={[
+                { name: "title", label: "Trip", type: "text", maxLength: 120 },
+                { name: "destination", label: "Destination", type: "text", maxLength: 120 },
+                { name: "start_date", label: "From", type: "date" },
+                { name: "end_date", label: "To", type: "date" },
+                { name: "status", label: "Status", type: "select", options: ["idea", "planning", "booked", "done"].map((x) => ({ value: x, label: x[0].toUpperCase() + x.slice(1) })) },
+                { name: "budget", label: "Budget", type: "number", min: 0 },
+                { name: "currency", label: "Currency", type: "text", maxLength: 3 },
+                { name: "notes", label: "Notes", type: "textarea", maxLength: 2000 },
+              ]}
+              values={{ title: trip.title, destination: trip.destination, start_date: trip.start_date, end_date: trip.end_date, status: trip.status, budget: trip.budget, currency: trip.currency, notes: trip.notes }}
+              onSave={updateTrip.bind(null, trip.id)}
+            />
             {(["idea", "planning", "booked", "done"] as const).map((s) => (
               <form key={s} action={setTripStatus.bind(null, trip.id, s)}>
                 <button className={cx("rounded-full px-2.5 py-1 text-xs", trip.status === s ? "bg-accent text-accent-fg" : "bg-surface-2 text-fg-muted")}>{s}</button>

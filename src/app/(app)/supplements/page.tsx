@@ -5,7 +5,10 @@ import type { Supplement, SupplementLog } from "@/lib/types";
 import { TIMING_LABEL } from "@/modules/supplements/meta";
 import { SupplementChecklist } from "./checklist";
 import { AddSupplementForm } from "./add-form";
-import { deleteSupplement, setSupplementActive, setSupplementAi } from "./actions";
+import { deleteSupplement, setSupplementActive, setSupplementAi, updateSupplement } from "./actions";
+import { SupplementDayCell } from "./day-cell";
+import { EditRecord } from "@/components/edit-record";
+import { SUPPLEMENT_TIMINGS } from "@/lib/types";
 import { SupplementNutrientsEditor } from "./nutrients-editor";
 import { NUTRIENT_META, formatNutrient, type NutrientKey } from "@/modules/nutrition/nutrients";
 import { getT } from "@/lib/i18n/server";
@@ -76,10 +79,26 @@ export default async function SupplementsPage() {
                       {[s.dose, TIMING_LABEL[s.timing], s.stock_count !== null ? `${s.stock_count} left` : null].filter(Boolean).join(" · ")}
                     </span>
                     {!s.include_in_ai ? <Badge>hidden from AI</Badge> : null}
+                    {canWrite ? (
+                      <EditRecord
+                        fields={[
+                          { name: "name", label: "Name", type: "text", maxLength: 120 },
+                          { name: "dose", label: "Dose", type: "text", maxLength: 60 },
+                          { name: "timing", label: "When", type: "select", options: SUPPLEMENT_TIMINGS.map((x) => ({ value: x, label: TIMING_LABEL[x] })) },
+                          { name: "stock_count", label: "In stock", type: "number", min: 0, step: 1 },
+                        ]}
+                        values={{ name: s.name, dose: s.dose, timing: s.timing, stock_count: s.stock_count }}
+                        onSave={updateSupplement.bind(null, s.id, ownerId)}
+                      />
+                    ) : null}
                   </td>
                   {days.map((d) => (
                     <td key={d} className="px-0.5 text-center" title={`${shortDate(d)}: ${has(s.id, d) ? "taken" : "not taken"}`}>
-                      <span className={`inline-block size-4 rounded ${has(s.id, d) ? "bg-accent" : "bg-surface-2 ring-1 ring-border"}`} />
+                      {canWrite ? (
+                        <SupplementDayCell supplementId={s.id} ownerId={ownerId} date={d} taken={has(s.id, d)} label={`${s.name}, ${shortDate(d)}`} />
+                      ) : (
+                        <span className={`inline-block size-4 rounded ${has(s.id, d) ? "bg-accent" : "bg-surface-2 ring-1 ring-border"}`} />
+                      )}
                     </td>
                   ))}
                   <td className="pl-2 text-right tabular-nums">{pct30(s.id)}%</td>

@@ -5,7 +5,9 @@ import { ColumnChart } from "@/components/charts";
 import type { FitnessClass, WorkoutLog } from "@/lib/types";
 import { KIND_META, classesOn } from "@/modules/fitness/meta";
 import { ClassButtons, WorkoutForm } from "./client";
-import { deleteWorkout } from "./actions";
+import { deleteWorkout, updateWorkout } from "./actions";
+import { EditRecord } from "@/components/edit-record";
+import { WORKOUT_KINDS } from "@/lib/types";
 
 export const metadata = { title: "Fitness" };
 
@@ -75,11 +77,25 @@ export default async function FitnessPage() {
                   );
                 })}
                 {extra.map((x) => (
-                  <li key={x.id} className="flex items-center justify-between gap-2 text-sm">
+                  <li key={x.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
                     <span>
                       {KIND_META[x.kind].icon} {x.title}
                       <span className="text-xs text-fg-muted">{x.duration_minutes ? ` · ${x.duration_minutes} min` : ""}{x.intensity ? ` · effort ${x.intensity}/5` : ""}</span>
                     </span>
+                    {canWrite ? (
+                      <EditRecord
+                        fields={[
+                          { name: "performed_on", label: "Date", type: "date" },
+                          { name: "kind", label: "Type", type: "select", options: WORKOUT_KINDS.map((k) => ({ value: k, label: `${KIND_META[k].icon} ${KIND_META[k].label}` })) },
+                          { name: "title", label: "What", type: "text", maxLength: 100 },
+                          { name: "duration_minutes", label: "Minutes", type: "number", min: 1, max: 600, step: 1 },
+                          { name: "intensity", label: "Effort (1–5)", type: "number", min: 1, max: 5, step: 1 },
+                          { name: "notes", label: "Notes", type: "textarea", maxLength: 500 },
+                        ]}
+                        values={{ performed_on: x.performed_on, kind: x.kind, title: x.title, duration_minutes: x.duration_minutes, intensity: x.intensity, notes: x.notes }}
+                        onSave={updateWorkout.bind(null, x.id, ownerId)}
+                      />
+                    ) : null}
                     {ownerId === session.userId ? (
                       <form action={deleteWorkout.bind(null, x.id)}>
                         <button className="text-xs text-fg-muted hover:text-danger" aria-label="Delete workout">✕</button>

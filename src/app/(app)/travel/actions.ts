@@ -188,3 +188,35 @@ export async function importPlan(tripId: string, plan: unknown, parts: { itinera
   refreshModule("/travel");
   return { ok: true, message: "Added to the trip." };
 }
+
+/** Shared: run a household-scoped update with a schema, for the inline editors. */
+async function householdUpdate(module: string, table: string, id: string, values: Record<string, unknown>, path: string): Promise<ActionResult> {
+  try {
+    const session = await requireModule(module);
+    const { data, error } = await session.supabase.from(table).update(values).eq("id", id).eq("household_id", session.household.id).select("id");
+    if (error || !data?.length) return { error: "Couldn't save the changes." };
+  } catch (e) {
+    return { error: errorMessage(e) };
+  }
+  refreshModule(path);
+  return { ok: true, message: "Saved." };
+}
+const strings = (input: Record<string, unknown>) => Object.fromEntries(Object.entries(input).map(([k, v]) => [k, v == null ? "" : v]));
+
+export async function updateTrip(id: string, input: Record<string, unknown>): Promise<ActionResult> {
+  const parsed = tripSchema.safeParse(strings(input));
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  return householdUpdate("travel", "trips", id, parsed.data, "/travel");
+}
+
+export async function updateTripItem(id: string, input: Record<string, unknown>): Promise<ActionResult> {
+  const parsed = itemSchema.omit({ tripId: true }).safeParse(strings(input));
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  return householdUpdate("travel", "trip_items", id, parsed.data, "/travel");
+}
+
+export async function updatePacking(id: string, input: Record<string, unknown>): Promise<ActionResult> {
+  const parsed = packSchema.omit({ tripId: true }).safeParse(strings(input));
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  return householdUpdate("travel", "trip_packing", id, parsed.data, "/travel");
+}

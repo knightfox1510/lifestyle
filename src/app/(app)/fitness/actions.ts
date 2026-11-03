@@ -110,3 +110,18 @@ export async function deleteWorkout(id: string) {
   await session.supabase.from("workout_logs").delete().eq("id", id).eq("owner_id", session.userId);
   refreshModule("/fitness");
 }
+
+/** Fix a logged workout: date, type, name, minutes, effort and notes. */
+export async function updateWorkout(id: string, ownerId: string, input: Record<string, unknown>): Promise<ActionResult> {
+  const parsed = workoutSchema.omit({ ownerId: true }).safeParse(Object.fromEntries(Object.entries(input).map(([k, v]) => [k, v == null ? "" : String(v)])));
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  try {
+    const session = await requireWrite(MODULE, ownerId);
+    const { data, error } = await session.supabase.from("workout_logs").update(parsed.data).eq("id", id).eq("owner_id", ownerId).select("id");
+    if (error || !data?.length) return { error: "Couldn't save the changes." };
+  } catch (e) {
+    return { error: errorMessage(e) };
+  }
+  refreshModule("/fitness");
+  return { ok: true, message: "Saved." };
+}

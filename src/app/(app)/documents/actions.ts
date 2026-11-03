@@ -42,3 +42,11 @@ export async function deleteDocument(id: string) {
   await session.supabase.from("documents").delete().eq("id", id);
   refreshModule("/documents");
 }
+
+/** Edit a saved document's details (same rules as adding one). */
+export async function updateDocument(id: string, input: Record<string, unknown>): Promise<ActionResult> {
+  const fd = new FormData();
+  fd.set("id", id);
+  for (const [k, v] of Object.entries(input)) fd.set(k, v == null ? "" : String(v));
+  return saveDocument(null, fd);
+}

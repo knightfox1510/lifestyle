@@ -7,7 +7,8 @@ import { ActionMessage, SubmitButton } from "@/components/form-status";
 import type { TripPlan } from "@/lib/ai/phase2-schemas";
 import { TRIP_ITEM_KINDS, type PackingItem } from "@/lib/types";
 import { ITEM_META } from "@/modules/travel/templates";
-import { addPacking, addTrip, addTripItem, applyTemplate, importPlan, togglePacked } from "./actions";
+import { addPacking, addTrip, addTripItem, applyTemplate, importPlan, togglePacked, updatePacking } from "./actions";
+import { EditRecord } from "@/components/edit-record";
 
 export function AddTripForm() {
   const router = useRouter();
@@ -118,17 +119,27 @@ export function PackingList({ tripId, items, members, templates }: { tripId: str
           <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-fg-muted">{c}</p>
           <ul className="grid gap-1 sm:grid-cols-2">
             {list.filter((i) => i.category === c).map((i) => (
-              <li key={i.id}>
+              <li key={i.id} className="flex flex-wrap items-center gap-1">
                 <button
                   type="button"
                   aria-pressed={i.packed}
                   onClick={() => start(async () => { setPacked({ id: i.id, packed: !i.packed }); await togglePacked(i.id, !i.packed); })}
-                  className={cx("flex w-full items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left text-sm", i.packed ? "border-accent/40 bg-accent-soft text-fg-muted line-through" : "border-border hover:bg-surface-2")}
+                  className={cx("flex min-w-0 flex-1 items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left text-sm", i.packed ? "border-accent/40 bg-accent-soft text-fg-muted line-through" : "border-border hover:bg-surface-2")}
                 >
                   <span aria-hidden>{i.packed ? "✓" : "○"}</span>
                   <span className="flex-1">{i.name}{i.qty > 1 ? ` ×${i.qty}` : ""}</span>
                   {i.for_user ? <span className="text-xs text-fg-muted">{nameOf(i.for_user)}</span> : null}
                 </button>
+                <EditRecord
+                  fields={[
+                    { name: "name", label: "Item", type: "text", maxLength: 120 },
+                    { name: "category", label: "Category", type: "text", maxLength: 40 },
+                    { name: "qty", label: "How many", type: "number", min: 1, max: 99, step: 1 },
+                    { name: "for_user", label: "For", type: "select", allowEmpty: true, options: members.map((m) => ({ value: m.id, label: m.name })) },
+                  ]}
+                  values={{ name: i.name, category: i.category, qty: i.qty, for_user: i.for_user }}
+                  onSave={updatePacking.bind(null, i.id)}
+                />
               </li>
             ))}
           </ul>

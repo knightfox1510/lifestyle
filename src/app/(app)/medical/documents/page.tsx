@@ -4,7 +4,9 @@ import { DOC_TYPE_LABEL, formatDate } from "@/modules/medical/meta";
 import type { MedicalDocument } from "@/lib/types";
 import { UploadDocument } from "./upload-document";
 import { AnalyzeDocument } from "./analyze-document";
-import { deleteMedicalDocument, setDocumentIncludeInAi } from "../actions";
+import { deleteMedicalDocument, setDocumentIncludeInAi, updateMedicalDocument } from "../actions";
+import { EditRecord } from "@/components/edit-record";
+import { DOC_TYPES } from "@/lib/types";
 
 export const metadata = { title: "Papers & reports" };
 
@@ -63,6 +65,21 @@ export default async function DocumentsPage() {
                     <form action={setDocumentIncludeInAi.bind(null, d.id, ownerId, !d.include_in_ai)}>
                       <button className={buttonClass("ghost", "sm")}>{d.include_in_ai ? "Hide from AI" : "Use in AI"}</button>
                     </form>
+                  ) : null}
+                  {canWrite ? (
+                    <EditRecord
+                      iconOnly={false}
+                      label="Edit details"
+                      fields={[
+                        { name: "title", label: "Title", type: "text", maxLength: 200 },
+                        { name: "doc_type", label: "Type", type: "select", options: DOC_TYPES.map((t) => ({ value: t, label: DOC_TYPE_LABEL[t] })) },
+                        { name: "document_date", label: "Date", type: "date" },
+                        { name: "provider", label: "Hospital / doctor / lab", type: "text", maxLength: 200 },
+                        { name: "notes", label: "Notes", type: "textarea", maxLength: 4000 },
+                      ]}
+                      values={{ title: d.title, doc_type: d.doc_type, document_date: d.document_date, provider: d.provider, notes: d.notes }}
+                      onSave={updateMedicalDocument.bind(null, d.id, ownerId)}
+                    />
                   ) : null}
                   {isOwner ? (
                     <form action={deleteMedicalDocument.bind(null, d.id)}>

@@ -220,3 +220,22 @@ export async function undoDose(doseId: string, ownerId: string) {
   await session.supabase.from("medicine_doses").delete().eq("id", doseId);
   refreshModule("/medicines");
 }
+
+/** Fix a logged dose: taken or skipped, and the time it was taken. */
+export async function updateDose(doseId: string, ownerId: string, input: Record<string, unknown>): Promise<ActionResult> {
+  const parsed = z.object({ status: z.enum(["taken", "skipped"]), time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Pick a time") }).safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  try {
+    const session = await requireWrite(MODULE, ownerId);
+    const { data: dose } = await session.supabase.from("medicine_doses").select("scheduled_date").eq("id", doseId).eq("owner_id", ownerId).maybeSingle();
+    if (!dose) return { error: "Dose not found." };
+    const takenAt = zonedIso(dose.scheduled_date, parsed.data.time, session.profile.timezone);
+    if (Date.parse(takenAt) > Date.now() + 5 * 60_000) return { error: "That time is in the future." };
+    const { error } = await session.supabase.from("medicine_doses").update({ status: parsed.data.status, taken_at: takenAt }).eq("id", doseId).eq("owner_id", ownerId);
+    if (error) return { error: dbErrorMessage(error, "Couldn't save the dose.") };
+  } catch (e) {
+    return { error: errorMessage(e) };
+  }
+  refreshModule("/medicines");
+  return { ok: true, message: "Dose updated." };
+}

@@ -4,7 +4,8 @@ import type { DiningDish, DiningOrder, DiningPlace } from "@/lib/types";
 import { formatDate } from "@/modules/medical/meta";
 import { AddDishForm, AddPlaceForm, LogOrderForm, WhatToOrder } from "./client";
 import { PlaceMenu } from "./place-menu";
-import { deletePlace, toggleFavoritePlace } from "./actions";
+import { deletePlace, toggleFavoritePlace, updateOrder, updatePlace } from "./actions";
+import { EditRecord } from "@/components/edit-record";
 
 export const metadata = { title: "Takeout & dining" };
 
@@ -44,7 +45,19 @@ export default async function DiningPage() {
                       <p className="text-xs text-fg-muted">{[pl.cuisine, pl.area, pl.mode.replace("_", "-"), pl.order_via].filter(Boolean).join(" · ")}</p>
                       {pl.notes ? <p className="text-xs text-fg-muted">{pl.notes}</p> : null}
                     </div>
-                    <div className="flex gap-1">
+                    <div className="flex flex-wrap justify-end gap-1">
+                      <EditRecord
+                        fields={[
+                          { name: "name", label: "Place", type: "text", maxLength: 120 },
+                          { name: "cuisine", label: "Cuisine", type: "text", maxLength: 60 },
+                          { name: "area", label: "Area", type: "text", maxLength: 80 },
+                          { name: "mode", label: "How", type: "select", options: [{ value: "delivery", label: "Delivery" }, { value: "dine_in", label: "Dine-in" }, { value: "both", label: "Both" }] },
+                          { name: "order_via", label: "Order via", type: "text", maxLength: 40 },
+                          { name: "notes", label: "Notes", type: "textarea", maxLength: 500 },
+                        ]}
+                        values={{ name: pl.name, cuisine: pl.cuisine, area: pl.area, mode: pl.mode, order_via: pl.order_via, notes: pl.notes }}
+                        onSave={updatePlace.bind(null, pl.id)}
+                      />
                       <form action={toggleFavoritePlace.bind(null, pl.id, !pl.favorite)}>
                         <button className={buttonClass("ghost", "sm")} aria-label={pl.favorite ? "Unfavourite" : "Favourite"}>{pl.favorite ? "★" : "☆"}</button>
                       </form>
@@ -78,9 +91,23 @@ export default async function DiningPage() {
           {orders.length ? (
             <ul className="divide-y divide-border text-sm">
               {orders.map((x) => (
-                <li key={x.id} className="flex justify-between gap-2 py-1.5">
+                <li key={x.id} className="flex flex-wrap items-center justify-between gap-2 py-1.5">
                   <span>{x.items} <span className="text-fg-muted">· {places.find((pl) => pl.id === x.place_id)?.name ?? "elsewhere"}</span>{x.rating ? ` · ${"★".repeat(x.rating)}` : ""}</span>
-                  <span className="shrink-0 text-fg-muted">{formatDate(x.ordered_on)}{x.total != null ? ` · ₹${x.total}` : ""}</span>
+                  <span className="flex shrink-0 items-center gap-1 text-fg-muted">
+                    {formatDate(x.ordered_on)}{x.total != null ? ` · ₹${x.total}` : ""}
+                    <EditRecord
+                      fields={[
+                        { name: "items", label: "What was ordered", type: "textarea", maxLength: 500 },
+                        { name: "place_id", label: "From", type: "select", allowEmpty: true, options: places.map((pl) => ({ value: pl.id, label: pl.name })) },
+                        { name: "ordered_on", label: "Date", type: "date" },
+                        { name: "total", label: "Total (₹)", type: "number", min: 0 },
+                        { name: "rating", label: "Rating (1–5)", type: "number", min: 1, max: 5, step: 1 },
+                        { name: "notes", label: "Notes", type: "textarea", maxLength: 300 },
+                      ]}
+                      values={{ items: x.items, place_id: x.place_id, ordered_on: x.ordered_on, total: x.total, rating: x.rating, notes: x.notes }}
+                      onSave={updateOrder.bind(null, x.id)}
+                    />
+                  </span>
                 </li>
               ))}
             </ul>

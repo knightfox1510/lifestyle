@@ -1,5 +1,6 @@
 "use client";
 
+import { PhotoButtons } from "@/components/photo-buttons";
 import { useState, useTransition } from "react";
 import { Button, Card, Input, Notice, Textarea, cx } from "@/components/ui";
 import { MAX_UPLOAD_BYTES, compressImage } from "@/lib/compress-image";
@@ -72,17 +73,11 @@ export function MenuImport({ placeId, placeName, initialFiles, onDone }: { place
           Screenshot the restaurant&apos;s page in Zomato or Swiggy (scroll and take a few), or photograph a paper menu. AI reads the dishes and prices and estimates calories. You review before saving.
         </p>
       </div>
-      <label className="flex cursor-pointer flex-col items-center gap-1 rounded-xl border-2 border-dashed border-border p-4 text-center text-sm hover:bg-surface">
+      <div className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-border p-4 text-center text-sm">
         <span className="text-2xl" aria-hidden>📸</span>
-        {files.length ? `${files.length} image${files.length === 1 ? "" : "s"} selected (max 6)` : "Choose screenshots or take photos"}
-        <input
-          type="file"
-          accept="image/*"
-          multiple
-          className="sr-only"
-          onChange={(e) => setFiles([...files, ...Array.from(e.target.files ?? [])].slice(0, 6))}
-        />
-      </label>
+        {files.length ? `${files.length} image${files.length === 1 ? "" : "s"} selected (max 6)` : "Screenshots or photos of the menu"}
+        <PhotoButtons multiple onFiles={(f) => setFiles([...files, ...f].slice(0, 6))} cameraLabel="Photograph menu" uploadLabel="Upload screenshots" />
+      </div>
       {files.length ? (
         <div className="flex flex-wrap gap-1.5">
           {files.map((f, i) => (

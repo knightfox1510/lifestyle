@@ -5,7 +5,10 @@ import { Badge, Card, buttonClass, cx } from "@/components/ui";
 import type { ChildLog, Dependent, Vaccination } from "@/lib/types";
 import { LOG_META, ageLabel, durationLabel } from "@/modules/child/vaccines";
 import { AddDependentForm, ChildQuickLog } from "./client";
-import { deleteChildLog, endSleep, startSleep } from "./actions";
+import { deleteChildLog, endSleep, startSleep, updateChildLog } from "./actions";
+import { EditRecord } from "@/components/edit-record";
+import { CHILD_LOG_KINDS } from "@/lib/types";
+import { isoToLocalInput } from "@/lib/dates";
 
 export const metadata = { title: "Child routine" };
 
@@ -104,7 +107,7 @@ export default async function ChildPage({ searchParams }: PageProps<"/child">) {
         ) : (
           <ul className="divide-y divide-border text-sm">
             {todayLogs.map((x) => (
-              <li key={x.id} className="flex items-center justify-between gap-2 py-2">
+              <li key={x.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
                 <span>
                   <span className="mr-2 font-mono text-fg-muted">{localTime(x.started_at, tz)}</span>
                   {LOG_META[x.kind].icon} {LOG_META[x.kind].label}
@@ -115,9 +118,23 @@ export default async function ChildPage({ searchParams }: PageProps<"/child">) {
                   <span className="text-xs text-fg-muted"> · {names[x.logged_by ?? ""] ?? ""}</span>
                   {x.kind === "temperature" && x.value && Number(x.value) >= 38 ? <> <Badge tone="danger">fever</Badge></> : null}
                 </span>
-                <form action={deleteChildLog.bind(null, x.id)}>
-                  <button className="text-xs text-fg-muted hover:text-danger" aria-label="Delete entry">✕</button>
-                </form>
+                <span className="flex items-center gap-1">
+                  <EditRecord
+                    fields={[
+                      { name: "kind", label: "What", type: "select", options: CHILD_LOG_KINDS.map((k) => ({ value: k, label: `${LOG_META[k].icon} ${LOG_META[k].label}` })) },
+                      { name: "started", label: x.kind === "sleep" ? "Fell asleep" : "Time", type: "datetime-local" },
+                      ...(x.kind === "sleep" ? [{ name: "ended", label: "Woke up", type: "datetime-local" as const }] : []),
+                      { name: "amount_ml", label: "Amount (ml)", type: "number", min: 0, max: 2000, step: 5 },
+                      { name: "value", label: "Temperature (°C)", type: "number", min: 25, max: 45, step: 0.1 },
+                      { name: "detail", label: "Details", type: "textarea", maxLength: 300 },
+                    ]}
+                    values={{ kind: x.kind, started: isoToLocalInput(x.started_at, tz), ended: x.ended_at ? isoToLocalInput(x.ended_at, tz) : null, amount_ml: x.amount_ml, value: x.value, detail: x.detail }}
+                    onSave={updateChildLog.bind(null, x.id)}
+                  />
+                  <form action={deleteChildLog.bind(null, x.id)}>
+                    <button className="text-xs text-fg-muted hover:text-danger" aria-label="Delete entry">✕</button>
+                  </form>
+                </span>
               </li>
             ))}
           </ul>

@@ -7,7 +7,8 @@ import { MEAL_META, MEAL_ORDER, mealForHour } from "@/modules/food/meta";
 import { portionOptions } from "@/modules/dining/menu";
 import { normalizeName } from "@/modules/pantry/match";
 import { MenuImport } from "./menu-import";
-import { deleteDish, logDish, updateDishNutrition } from "./actions";
+import { deleteDish, logDish, updateDish, updateDishNutrition } from "./actions";
+import { EditRecord } from "@/components/edit-record";
 
 /** A restaurant's saved menu: search, sections, log a dish, import more. */
 export function PlaceMenu({
@@ -105,6 +106,20 @@ export function PlaceMenu({
                               ))}
                               <button className="col-span-2 rounded-md bg-accent py-1 text-accent-fg">Save numbers</button>
                             </form>
+                            <EditRecord
+                              iconOnly={false}
+                              label="Rename / veg / notes"
+                              fields={[
+                                { name: "name", label: "Dish", type: "text", maxLength: 120 },
+                                { name: "veg", label: "Veg?", type: "select", allowEmpty: true, options: [{ value: "veg", label: "Veg" }, { value: "nonveg", label: "Non-veg" }] },
+                                { name: "price", label: "₹", type: "number", min: 0 },
+                                { name: "calories", label: "kcal", type: "number", min: 0, step: 1 },
+                                { name: "protein_g", label: "Protein g", type: "number", min: 0 },
+                                { name: "notes", label: "Notes", type: "textarea", maxLength: 300 },
+                              ]}
+                              values={{ name: d.name, veg: d.veg === true ? "veg" : d.veg === false ? "nonveg" : null, price: d.price, calories: d.calories, protein_g: d.protein_g, notes: d.notes ?? null }}
+                              onSave={updateDish.bind(null, d.id)}
+                            />
                             <form action={deleteDish.bind(null, d.id)}>
                               <button className="text-xs text-danger">Remove from menu</button>
                             </form>

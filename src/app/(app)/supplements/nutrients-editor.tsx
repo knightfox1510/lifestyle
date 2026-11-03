@@ -1,7 +1,7 @@
 "use client";
 
+import { PhotoButtons } from "@/components/photo-buttons";
 import { useMemo, useState, useTransition } from "react";
-import { Camera } from "lucide-react";
 import { Button, Field, Input, Notice } from "@/components/ui";
 import { useToast } from "@/components/toaster";
 import { useT } from "@/lib/i18n/client";
@@ -67,10 +67,10 @@ export function SupplementNutrientsEditor({
         <Field label={t("Pick a common product")} className="min-w-48 flex-1">
           <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Shelcal, D3 60K, B12…" />
         </Field>
-        <label className="pressable inline-flex h-11 cursor-pointer items-center gap-2 rounded-full bg-surface px-4 text-[14px] font-medium shadow-[0_0_0_1px_var(--border)]">
-          <Camera className="size-4" aria-hidden /> {scanning ? t("Reading…") : t("Scan label")}
-          <input type="file" accept="image/*" className="sr-only" disabled={scanning} onChange={(e) => e.target.files?.[0] && scan(e.target.files[0])} />
-        </label>
+        <span className="flex flex-col gap-1">
+          <span className="text-xs text-fg-muted">{scanning ? t("Reading…") : t("Scan label")}</span>
+          <PhotoButtons disabled={scanning} onFiles={(f) => void scan(f[0])} />
+        </span>
       </div>
       {hits.length ? (
         <div className="flex flex-wrap gap-1.5">

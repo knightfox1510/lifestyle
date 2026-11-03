@@ -5,7 +5,8 @@ import type { MaintenanceLog, MaintenanceTask } from "@/lib/types";
 import { formatDate } from "@/modules/medical/meta";
 import { daysUntil } from "@/modules/pantry/match";
 import { TaskForm } from "./task-form";
-import { addTemplate, deleteTask, markDone } from "./actions";
+import { addTemplate, deleteTask, markDone, updateTask } from "./actions";
+import { EditRecord } from "@/components/edit-record";
 
 export const metadata = { title: "Home maintenance" };
 
@@ -81,6 +82,20 @@ export default async function MaintenancePage() {
                         <input name="cost" type="number" min={0} placeholder="₹ cost" aria-label="Cost" className="h-8 w-20 rounded-lg border border-border bg-surface px-2 text-sm" />
                         <button className={buttonClass("primary", "sm")}>Done</button>
                       </form>
+                      <EditRecord
+                        fields={[
+                          { name: "title", label: "Task", type: "text", maxLength: 120 },
+                          { name: "category", label: "Kind", type: "select", options: ["appliance", "vehicle", "home", "insurance", "health", "other"].map((c) => ({ value: c, label: c[0].toUpperCase() + c.slice(1) })) },
+                          { name: "interval_days", label: "Repeat every (days)", type: "number", min: 1, max: 3650, step: 1 },
+                          { name: "last_done_on", label: "Last done", type: "date" },
+                          { name: "next_due_on", label: "Next due", type: "date" },
+                          { name: "remind_days_before", label: "Remind days before", type: "number", min: 0, max: 120, step: 1 },
+                          { name: "vendor", label: "Vendor / contact", type: "text", maxLength: 120 },
+                          { name: "notes", label: "Notes", type: "textarea", maxLength: 500 },
+                        ]}
+                        values={{ title: x.title, category: x.category, interval_days: x.interval_days, last_done_on: x.last_done_on, next_due_on: x.next_due_on, remind_days_before: x.remind_days_before, vendor: x.vendor, notes: x.notes }}
+                        onSave={updateTask.bind(null, x.id)}
+                      />
                       <form action={deleteTask.bind(null, x.id)}>
                         <button className="px-1 text-xs text-fg-muted hover:text-danger" aria-label={`Delete ${x.title}`}>✕</button>
                       </form>

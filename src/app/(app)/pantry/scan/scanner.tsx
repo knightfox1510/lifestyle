@@ -1,5 +1,6 @@
 "use client";
 
+import { PhotoButtons } from "@/components/photo-buttons";
 import { useState, useTransition } from "react";
 import { Button, Card, Input, Notice, Select, cx } from "@/components/ui";
 import type { ScanItem } from "@/lib/ai/phase2-schemas";
@@ -85,18 +86,15 @@ export function Scanner({ pantryOn, groceriesOn }: { pantryOn: boolean; grocerie
           ))}
         </div>
         <p className="text-sm text-fg-muted">{MODES.find((m) => m.mode === mode)!.hint}</p>
-        <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border p-6 text-center hover:bg-surface-2">
+        <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border p-6 text-center">
           {preview ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={preview} alt="Selected photo" className="max-h-64 rounded-lg object-contain" />
           ) : (
-            <>
-              <span className="text-4xl" aria-hidden>📷</span>
-              <span className="text-sm font-medium">Take a photo or choose one</span>
-            </>
+            <span className="text-4xl" aria-hidden>📷</span>
           )}
-          <input type="file" accept="image/*" className="sr-only" onChange={(e) => pick(e.target.files?.[0] ?? null)} />
-        </label>
+          <PhotoButtons onFiles={(f) => pick(f[0])} cameraLabel={preview ? "Retake" : "Take photo"} uploadLabel={preview ? "Choose another" : "Upload"} />
+        </div>
         <Button onClick={scan} disabled={!file || loading} className="w-full sm:w-auto">
           {loading ? "Reading the photo…" : "✨ Read items"}
         </Button>

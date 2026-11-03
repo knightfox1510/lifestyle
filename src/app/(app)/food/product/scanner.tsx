@@ -1,7 +1,8 @@
 "use client";
 
+import { PhotoButtons } from "@/components/photo-buttons";
 import { useEffect, useRef, useState, useTransition } from "react";
-import { Button, Card, Input, Notice, buttonClass, cx } from "@/components/ui";
+import { Button, Card, Input, Notice, cx } from "@/components/ui";
 import type { PersonPortion } from "@/components/nutrition-ui";
 import { compressImage } from "@/lib/compress-image";
 import { MICRO_KEYS, NUTRIENT_META, formatNutrient, type Nutrients } from "@/modules/nutrition/nutrients";
@@ -180,10 +181,7 @@ export function ProductScanner({ me, people }: { me: string; people: PersonPorti
               ) : (
                 <div className="flex flex-wrap gap-2">
                   <Button onClick={startCamera}>📷 Scan with camera</Button>
-                  <label className={cx(buttonClass("secondary"), "cursor-pointer")}>
-                    🖼️ From a photo
-                    <input type="file" accept="image/*" className="sr-only" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void barcodeFromPhoto(f); }} />
-                  </label>
+                  <PhotoButtons onFiles={(f) => void barcodeFromPhoto(f[0])} cameraLabel="Photo of barcode" uploadLabel="Barcode from gallery" />
                 </div>
               )
             ) : supported === false ? (
@@ -196,11 +194,11 @@ export function ProductScanner({ me, people }: { me: string; people: PersonPorti
             <p className="text-xs text-fg-muted">Looks in your saved foods first, then Open Food Facts (a free public database; Indian coverage is good but not complete).</p>
           </div>
         ) : (
-          <label className="flex cursor-pointer flex-col items-center gap-1 rounded-xl border-2 border-dashed border-border p-5 text-center text-sm hover:bg-surface-2">
+          <div className="flex flex-col items-center gap-3 rounded-xl border-2 border-dashed border-border p-5 text-center text-sm">
             <span className="text-2xl" aria-hidden>📄</span>
-            {loading ? "Reading the label…" : "Take or choose a clear photo of the nutrition table (and ingredients, if they fit)"}
-            <input type="file" accept="image/*" className="sr-only" onChange={(e) => e.target.files?.[0] && readLabel(e.target.files[0])} />
-          </label>
+            {loading ? "Reading the label…" : "A clear photo of the nutrition table (and ingredients, if they fit)"}
+            <PhotoButtons disabled={loading} onFiles={(f) => void readLabel(f[0])} />
+          </div>
         )}
         {msg ? <Notice tone={msg.tone}>{msg.text}</Notice> : null}
       </Card>
@@ -218,7 +216,7 @@ export function ProductScanner({ me, people }: { me: string; people: PersonPorti
           </div>
           {product.savedId ? <p className="text-xs text-accent">✓ In your foods</p> : <Button size="sm" variant="secondary" onClick={save} disabled={saving}>Save to my foods</Button>}
           {product.per100.calories !== undefined ? (
-            <FoodAmountLogger name={product.name} per100={product.per100} servingG={product.serving_g} servingLabel={product.serving_label} irritants={product.irritants} accuracy="label" me={me} people={people} />
+            <FoodAmountLogger name={product.name} per100={product.per100} servingG={product.serving_g} servingLabel={product.serving_label} liquid={/\bml\b/i.test(product.serving_label ?? "")} irritants={product.irritants} accuracy="label" me={me} people={people} />
           ) : null}
         </Card>
       ) : null}

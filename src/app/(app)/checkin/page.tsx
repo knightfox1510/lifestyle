@@ -1,6 +1,8 @@
 import { getSession } from "@/lib/session";
 import { addDays, lastNDays, shortDate, todayIn } from "@/lib/dates";
-import { Card } from "@/components/ui";
+import Link from "next/link";
+import { Card, buttonClass } from "@/components/ui";
+import { DateJump } from "@/components/date-jump";
 import { ColumnChart } from "@/components/charts";
 import type { DailyCheckin } from "@/lib/types";
 import { CheckinForm } from "./checkin-form";
@@ -8,16 +10,19 @@ import { SCALES } from "@/modules/checkin/meta";
 
 export const metadata = { title: "Daily check-in" };
 
-export default async function CheckinPage() {
+export default async function CheckinPage({ searchParams }: PageProps<"/checkin">) {
   const session = await getSession();
   const ownerId = session.subject.user_id;
   const today = todayIn(session.profile.timezone);
+  const { date: dParam } = await searchParams;
+  // Any earlier day can be filled in or corrected.
+  const date = typeof dParam === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dParam) && dParam <= today ? dParam : today;
   const canWrite = session.accessTo("checkin", ownerId) === "write";
   const { data } = await session.supabase
     .from("daily_checkins")
     .select("*")
     .eq("owner_id", ownerId)
-    .gte("checkin_date", addDays(today, -29))
+    .gte("checkin_date", date < addDays(today, -29) ? date : addDays(today, -29))
     .order("checkin_date");
   const rows = (data ?? []) as DailyCheckin[];
   const byDate = new Map(rows.map((r) => [r.checkin_date, r]));
@@ -31,8 +36,16 @@ export default async function CheckinPage() {
   return (
     <div className="space-y-4">
       <Card>
-        <h2 className="mb-3 font-semibold">Today</h2>
-        <CheckinForm key={today} ownerId={ownerId} date={today} checkin={byDate.get(today) ?? null} canWrite={canWrite} />
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <Link href={`/checkin?date=${addDays(date, -1)}`} className={buttonClass("ghost", "sm")}>← {shortDate(addDays(date, -1))}</Link>
+          <DateJump date={date} today={today} basePath="/checkin" label={date === today ? "Today" : shortDate(date)} />
+          {date < today ? (
+            <Link href={date === addDays(today, -1) ? "/checkin" : `/checkin?date=${addDays(date, 1)}`} className={buttonClass("ghost", "sm")}>{shortDate(addDays(date, 1))} →</Link>
+          ) : (
+            <span className="w-20" />
+          )}
+        </div>
+        <CheckinForm key={date} ownerId={ownerId} date={date} checkin={byDate.get(date) ?? null} canWrite={canWrite} />
       </Card>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

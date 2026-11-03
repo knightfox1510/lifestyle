@@ -1,5 +1,5 @@
 import { getSession } from "@/lib/session";
-import { addDays, dayOfWeek, lastNDays, localDate, shortDate, startOfLocalDayIso, todayIn } from "@/lib/dates";
+import { addDays, dayOfWeek, lastNDays, localDate, localTime, shortDate, startOfLocalDayIso, todayIn } from "@/lib/dates";
 import { Card, EmptyState, cx } from "@/components/ui";
 import { LineChart } from "@/components/charts";
 import type { BodyGoals, BodyMetric, FoodEntry, MedicalProfile, NutritionGoals } from "@/lib/types";
@@ -7,7 +7,25 @@ import { BMI_LABEL, ageOn, bmi, bmiBand, bmr, healthyWeightRange, proteinRange, 
 import { maintenanceCalories } from "@/modules/food/meta";
 import { totals } from "@/modules/food/meta";
 import { BodyBasicsForm, BodyGoalsForm, WeightForm } from "./forms";
-import { deleteBodyMetric } from "./actions";
+import { deleteBodyMetric, updateBodyMetric } from "./actions";
+import { EditRecord, type EditField } from "@/components/edit-record";
+
+const BODY_FIELDS: EditField[] = [
+  { name: "when", label: "Date & time", type: "datetime-local" },
+  { name: "weight_kg", label: "Weight (kg)", type: "number", min: 20, max: 350 },
+  { name: "body_fat_pct", label: "Body fat %", type: "number", min: 2, max: 75 },
+  { name: "waist_cm", label: "Waist (cm)", type: "number" },
+  { name: "hip_cm", label: "Hip (cm)", type: "number" },
+  { name: "chest_cm", label: "Chest (cm)", type: "number" },
+  { name: "arm_cm", label: "Arm (cm)", type: "number" },
+  { name: "thigh_cm", label: "Thigh (cm)", type: "number" },
+  { name: "resting_hr", label: "Resting heart rate", type: "number", step: 1 },
+  { name: "bp_systolic", label: "BP systolic", type: "number", step: 1 },
+  { name: "bp_diastolic", label: "BP diastolic", type: "number", step: 1 },
+  { name: "blood_glucose_mgdl", label: "Blood sugar (mg/dL)", type: "number", step: 1 },
+  { name: "glucose_context", label: "Sugar taken", type: "select", allowEmpty: true, options: [{ value: "fasting", label: "Fasting" }, { value: "post_meal", label: "After a meal" }, { value: "random", label: "Random" }] },
+  { name: "notes", label: "Notes", type: "textarea", maxLength: 500 },
+];
 
 export const metadata = { title: "Body recomposition" };
 
@@ -251,20 +269,44 @@ export default async function BodyPage() {
         </Card>
       ) : null}
 
-      {weights.length ? (
+      {metrics.length ? (
         <details className="text-sm">
-          <summary className="cursor-pointer text-fg-muted">All weigh-ins</summary>
+          <summary className="cursor-pointer text-fg-muted">All entries (tap ✎ to fix one)</summary>
           <ul className="mt-2 divide-y divide-border">
-            {[...metrics].reverse().filter((x) => x.weight_kg !== null).map((x) => (
-              <li key={x.id} className="flex justify-between py-1.5">
-                <span>{shortDate(localDate(x.measured_at, tz))} · {x.weight_kg} kg</span>
-                {isOwner ? (
-                  <form action={deleteBodyMetric.bind(null, x.id)}>
-                    <button className="text-xs text-fg-muted hover:text-danger" aria-label="Delete weigh-in">✕</button>
-                  </form>
-                ) : null}
-              </li>
-            ))}
+            {[...metrics].reverse().map((x) => {
+              const parts = [
+                x.weight_kg != null ? `${x.weight_kg} kg` : null,
+                x.body_fat_pct != null ? `${x.body_fat_pct}% fat` : null,
+                x.waist_cm != null ? `waist ${x.waist_cm}` : null,
+                x.hip_cm != null ? `hip ${x.hip_cm}` : null,
+                x.bp_systolic != null ? `BP ${x.bp_systolic}/${x.bp_diastolic}` : null,
+                x.resting_hr != null ? `HR ${x.resting_hr}` : null,
+                x.blood_glucose_mgdl != null ? `sugar ${x.blood_glucose_mgdl}${x.glucose_context ? ` (${x.glucose_context.replace("_", " ")})` : ""}` : null,
+              ].filter(Boolean);
+              return (
+                <li key={x.id} className="flex flex-wrap items-center justify-between gap-2 py-1.5">
+                  <span>{shortDate(localDate(x.measured_at, tz))} {localTime(x.measured_at, tz)} · {parts.join(" · ")}</span>
+                  <span className="flex items-center gap-1">
+                    {canWrite ? (
+                      <EditRecord
+                        fields={BODY_FIELDS}
+                        values={{
+                          when: `${localDate(x.measured_at, tz)}T${localTime(x.measured_at, tz)}`,
+                          weight_kg: x.weight_kg, body_fat_pct: x.body_fat_pct, waist_cm: x.waist_cm, hip_cm: x.hip_cm, chest_cm: x.chest_cm, arm_cm: x.arm_cm, thigh_cm: x.thigh_cm,
+                          resting_hr: x.resting_hr, bp_systolic: x.bp_systolic, bp_diastolic: x.bp_diastolic, blood_glucose_mgdl: x.blood_glucose_mgdl, glucose_context: x.glucose_context, notes: x.notes,
+                        }}
+                        onSave={updateBodyMetric.bind(null, x.id, ownerId)}
+                      />
+                    ) : null}
+                    {isOwner ? (
+                      <form action={deleteBodyMetric.bind(null, x.id)}>
+                        <button className="text-xs text-fg-muted hover:text-danger" aria-label="Delete entry">✕</button>
+                      </form>
+                    ) : null}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         </details>
       ) : null}

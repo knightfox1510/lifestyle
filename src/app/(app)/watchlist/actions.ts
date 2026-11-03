@@ -78,3 +78,23 @@ export async function deleteWatchItem(id: string) {
   await session.supabase.from("watchlist_items").delete().eq("id", id).eq("household_id", session.household.id);
   refreshModule("/watchlist");
 }
+
+/** Shared: run a household-scoped update with a schema, for the inline editors. */
+async function householdUpdate(module: string, table: string, id: string, values: Record<string, unknown>, path: string): Promise<ActionResult> {
+  try {
+    const session = await requireModule(module);
+    const { data, error } = await session.supabase.from(table).update(values).eq("id", id).eq("household_id", session.household.id).select("id");
+    if (error || !data?.length) return { error: "Couldn't save the changes." };
+  } catch (e) {
+    return { error: errorMessage(e) };
+  }
+  refreshModule(path);
+  return { ok: true, message: "Saved." };
+}
+const strings = (input: Record<string, unknown>) => Object.fromEntries(Object.entries(input).map(([k, v]) => [k, v == null ? "" : v]));
+
+export async function updateWatchItem(id: string, input: Record<string, unknown>): Promise<ActionResult> {
+  const parsed = itemSchema.safeParse({ ...strings(input), together: Boolean(input.together) });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  return householdUpdate("watchlist", "watchlist_items", id, parsed.data, "/watchlist");
+}

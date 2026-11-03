@@ -62,3 +62,15 @@ export function zonedIso(date: string, time: string, tz: string): string {
   const asUtc = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day), Number(parts.hour), Number(parts.minute));
   return new Date(guess - (asUtc - guess)).toISOString();
 }
+
+/** "YYYY-MM-DDTHH:MM" (a datetime-local input, in `tz`) → ISO timestamp; null if malformed or in the future. */
+export function localInputToIso(value: unknown, tz: string): string | null {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value)) return null;
+  const iso = zonedIso(value.slice(0, 10), value.slice(11, 16), tz);
+  return Date.parse(iso) > Date.now() + 5 * 60_000 ? null : iso;
+}
+
+/** ISO timestamp → "YYYY-MM-DDTHH:MM" in `tz`, for a datetime-local input. */
+export function isoToLocalInput(iso: string, tz: string): string {
+  return `${localDate(iso, tz)}T${localTime(iso, tz)}`;
+}

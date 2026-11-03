@@ -4,6 +4,7 @@ import { z } from "zod";
 import { errorMessage, refreshModule, requireWrite } from "@/lib/guards";
 import { getSession } from "@/lib/session";
 import type { ActionResult } from "@/lib/types";
+import { zonedIso } from "@/lib/dates";
 
 const MODULE = "body_recomp";
 const blank = (v: unknown) => (v === "" || v == null ? null : v);
@@ -120,5 +121,31 @@ export async function saveBodyBasics(_: ActionResult | null, form: FormData): Pr
   }
   refreshModule("/body");
   refreshModule("/medical");
+  return { ok: true, message: "Saved." };
+}
+
+/** Fix a weigh-in or measurement: its date/time and any of the numbers. */
+export async function updateBodyMetric(id: string, ownerId: string, input: Record<string, unknown>): Promise<ActionResult> {
+  const { when, ...rest } = input;
+  const parsed = metricSchema.omit({ ownerId: true, measured_at: true }).safeParse(Object.fromEntries(Object.entries(rest).map(([k, v]) => [k, v == null ? "" : String(v)])));
+  if (!parsed.success) return { error: `${parsed.error.issues[0].path.join(".")}: ${parsed.error.issues[0].message}` };
+  const values = parsed.data;
+  if (Object.entries(values).every(([k, v]) => v === null || k === "notes" || k === "glucose_context")) return { error: "Enter at least one measurement." };
+  if ((values.bp_systolic === null) !== (values.bp_diastolic === null)) return { error: "Enter both blood pressure numbers." };
+  try {
+    const session = await requireWrite(MODULE, ownerId);
+    const w = typeof when === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(when) ? zonedIso(when.slice(0, 10), when.slice(11, 16), session.profile.timezone) : null;
+    if (w && Date.parse(w) > Date.now() + 5 * 60_000) return { error: "That time is in the future." };
+    const { data, error } = await session.supabase
+      .from("body_metrics")
+      .update({ ...values, glucose_context: values.blood_glucose_mgdl === null ? null : values.glucose_context, ...(w ? { measured_at: w } : {}) })
+      .eq("id", id)
+      .eq("owner_id", ownerId)
+      .select("id");
+    if (error || !data?.length) return { error: "Couldn't save the changes." };
+  } catch (e) {
+    return { error: errorMessage(e) };
+  }
+  refreshModule("/body");
   return { ok: true, message: "Saved." };
 }

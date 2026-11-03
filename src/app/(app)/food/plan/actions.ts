@@ -206,3 +206,16 @@ export async function linkPlanRecipe(title: string, recipeId: string, weekStart:
   refreshModule("/recipes");
   return { ok: true, message: "Recipe saved and linked to the plan." };
 }
+
+/** Rename a planned dish, or move it to another day or meal. */
+export async function updatePlanEntry(id: string, input: Record<string, unknown>): Promise<ActionResult> {
+  const parsed = z
+    .object({ title: z.string().trim().min(1, "Name the dish").max(150).optional(), plan_date: isoDate, meal: z.enum(MEALS) })
+    .safeParse({ ...input, title: input.title == null || input.title === "" ? undefined : input.title });
+  if (!parsed.success || !z.uuid().safeParse(id).success) return { error: parsed.error?.issues[0]?.message ?? "Not found." };
+  const session = await getSession();
+  const { data, error } = await session.supabase.from("meal_plan").update(parsed.data).eq("id", id).eq("household_id", session.household.id).select("id");
+  if (error || !data?.length) return { error: "Couldn't save the changes." };
+  refresh();
+  return { ok: true, message: "Saved." };
+}

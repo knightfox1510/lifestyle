@@ -1,5 +1,6 @@
 "use client";
 
+import { PhotoButtons } from "@/components/photo-buttons";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -73,14 +74,11 @@ export function UploadDocument({ ownerId }: { ownerId: string }) {
   return (
     <Card>
       <form onSubmit={onSubmit} className="space-y-3">
-        <Field label="File" hint="PDF or photo, up to 20 MB. On a phone you can use the camera.">
-          <Input
-            type="file"
-            accept={ACCEPT}
-            className="h-auto py-2"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            required
-          />
+        <Field label="File" hint="PDF or photo, up to 20 MB.">
+          <div className="flex flex-wrap items-center gap-2">
+            <PhotoButtons accept={ACCEPT} onFiles={(f) => setFile(f[0])} cameraLabel="Photograph paper" uploadLabel="Upload PDF or photo" />
+            {file ? <span className="text-sm text-fg-muted">{file.name} <button type="button" className="underline" onClick={() => setFile(null)}>remove</button></span> : null}
+          </div>
         </Field>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Title">

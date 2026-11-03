@@ -1,7 +1,8 @@
 "use client";
 
+import { PhotoButtons } from "@/components/photo-buttons";
 import { useState } from "react";
-import { Camera, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { Field, Input, Notice, cx } from "@/components/ui";
 import { compressImage } from "@/lib/compress-image";
 import { NUTRIENT_META, type NutrientKey } from "@/modules/nutrition/nutrients";
@@ -53,10 +54,10 @@ export function MedicineLookupButtons({ name, strength, onResult }: { name: stri
         >
           <Sparkles className="size-4" aria-hidden /> {busy === "name" ? "Looking up…" : "Look up composition with AI"}
         </button>
-        <label className={cx("pressable inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-full bg-surface-2 px-3 text-sm font-medium", busy && "opacity-60")}>
-          <Camera className="size-4" aria-hidden /> {busy === "photo" ? "Reading…" : "Photo of strip / box"}
-          <input type="file" accept="image/*" className="sr-only" disabled={Boolean(busy)} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void run("photo", f); }} />
-        </label>
+        <span className="inline-flex items-center gap-1.5 text-sm">
+          <span className="text-fg-muted">{busy === "photo" ? "Reading…" : "Strip / box:"}</span>
+          <PhotoButtons compact disabled={Boolean(busy)} onFiles={(f) => void run("photo", f[0])} cameraLabel="Photograph the strip or box" uploadLabel="Upload a photo of the strip or box" />
+        </span>
       </div>
       {msg ? <Notice tone={msg.tone}>{msg.text}</Notice> : null}
     </div>

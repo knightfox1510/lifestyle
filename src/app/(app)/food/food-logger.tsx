@@ -6,6 +6,17 @@ import { PeoplePortions, type PersonPortion } from "@/components/nutrition-ui";
 import type { Meal } from "@/lib/types";
 import { MEAL_META, MEAL_ORDER, eatenAtFor, mealForHour, type LogDay } from "@/modules/food/meta";
 import { forGrams, type Nutrients } from "@/modules/nutrition/nutrients";
+import { toGrams, unitsFor, type Unit } from "@/modules/nutrition/measures";
+
+/** "2 katori", "150 g (weighed whole)", "1 medium banana". */
+function quantityText(amount: number, unit: Unit) {
+  if (unit.key === "g") return `${amount} g`;
+  if (unit.key === "ml") return `${amount} ml`;
+  if (unit.key === "whole_g") return `${amount} g whole`;
+  if (unit.key === "serving") return `${amount} serving${amount === 1 ? "" : "s"}`;
+  if (unit.key === "piece") return `${amount} × ${unit.label.replace(/\s*\(.*\)$/, "")}`;
+  return `${amount} ${unit.key}`;
+}
 import { logFoodForPeople } from "./actions";
 import { useT } from "@/lib/i18n/client";
 
@@ -22,6 +33,8 @@ export function FoodAmountLogger({
   meal: presetMeal,
   day,
   onLogged,
+  stapleKey,
+  liquid,
 }: {
   name: string;
   per100: Nutrients;
@@ -35,16 +48,22 @@ export function FoodAmountLogger({
   meal?: Meal;
   day?: LogDay;
   onLogged?: () => void;
+  /** Built-in food key, for its piece weight, peel/seed share and density. */
+  stapleKey?: string | null;
+  /** Poured by ml (drinks); assumed 1 g/ml unless the food's density is known. */
+  liquid?: boolean;
 }) {
   const [label, setLabel] = useState(name);
-  const [unit, setUnit] = useState<"g" | "serving">(servingG ? "serving" : "g");
-  const [amount, setAmount] = useState(servingG ? 1 : 100);
+  const units = unitsFor({ stapleKey, servingG, servingLabel, liquid });
+  const [unitKey, setUnitKey] = useState<string>(servingG ? "serving" : units.some((u) => u.key === "piece") ? "piece" : "g");
+  const unit = units.find((u) => u.key === unitKey) ?? units[0];
+  const [amount, setAmount] = useState(unitKey === "g" ? 100 : 1);
   const [meal, setMeal] = useState<Meal>(() => presetMeal ?? mealForHour(new Date().getHours()));
   const [who, setWho] = useState<Record<string, number>>({ [me]: 1 });
   const [msg, setMsg] = useState<{ tone: "accent" | "danger"; text: string } | null>(null);
   const [pending, start] = useTransition();
   const t = useT();
-  const grams = unit === "g" ? amount : amount * (servingG ?? 0);
+  const grams = toGrams(amount, unit);
   const n = forGrams(per100, grams);
 
   return (
@@ -54,12 +73,23 @@ export function FoodAmountLogger({
       </Field>
       <div className="flex flex-wrap items-end gap-2">
         <Field label={t("Amount")} className="w-24">
-          <Input type="number" min={0} step={unit === "g" ? 5 : 0.5} value={amount} onChange={(e) => setAmount(Math.max(0, Number(e.target.value) || 0))} />
+          <Input type="number" min={0} step={unit.grams === 1 || unit.key === "whole_g" ? 5 : 0.5} value={amount} onChange={(e) => setAmount(Math.max(0, Number(e.target.value) || 0))} />
         </Field>
-        <Field label={t("Unit")} className="w-36">
-          <Select value={unit} onChange={(e) => { const u = e.target.value as "g" | "serving"; setUnit(u); setAmount(u === "g" ? 100 : 1); }}>
-            <option value="g">{t("grams / ml")}</option>
-            {servingG ? <option value="serving">{t("servings")} ({servingLabel || `${servingG} g`})</option> : null}
+        <Field label={t("Unit")} className="min-w-40 flex-1">
+          <Select
+            value={unit.key}
+            onChange={(e) => {
+              const next = units.find((u) => u.key === e.target.value) ?? units[0];
+              // Keep the same amount of food when switching units.
+              const gramLike = next.key === "g" || next.key === "ml" || next.key === "whole_g";
+              const raw = grams / next.grams;
+              setAmount((gramLike ? Math.round(raw) : Math.round(raw * 4) / 4) || (gramLike ? 100 : 1));
+              setUnitKey(next.key);
+            }}
+          >
+            {units.map((u) => (
+              <option key={u.key} value={u.key}>{t(u.label)}</option>
+            ))}
           </Select>
         </Field>
         <Field label={t("Meal")} className="w-32">
@@ -70,8 +100,9 @@ export function FoodAmountLogger({
           </Select>
         </Field>
       </div>
+      {unit.note ? <p className="text-xs text-fg-muted">{t(unit.note)}</p> : null}
       <p className="text-xs text-fg-muted">
-        {Math.round(grams)} g → <strong className="text-fg">{Math.round(n.calories ?? 0)} kcal</strong> · P {n.protein_g ?? "–"} · C {n.carbs_g ?? "–"} · F {n.fat_g ?? "–"}
+        {Math.round(grams)} g {unit.key === "whole_g" || unit.key === "piece" ? t("edible") : ""} → <strong className="text-fg">{Math.round(n.calories ?? 0)} kcal</strong> · P {n.protein_g ?? "–"} · C {n.carbs_g ?? "–"} · F {n.fat_g ?? "–"}
         {n.sodium_mg != null ? ` · sodium ${Math.round(n.sodium_mg)} mg` : ""}
       </p>
       <PeoplePortions people={people} value={who} onChange={setWho} />
@@ -84,7 +115,7 @@ export function FoodAmountLogger({
             const r = await logFoodForPeople(
               Object.entries(who).filter(([, f]) => f > 0).map(([ownerId, factor]) => ({ ownerId, factor })),
               meal,
-              [{ description: label.trim(), quantity: unit === "g" ? `${amount} g` : `${amount} serving${amount === 1 ? "" : "s"}`, grams, nutrients: n as Record<string, number>, accuracy, irritants, source: "manual" }],
+              [{ description: label.trim(), quantity: quantityText(amount, unit), grams, nutrients: n as Record<string, number>, accuracy, irritants, source: "manual" }],
               eatenAtFor(day, meal),
             );
             setMsg(r.error ? { tone: "danger", text: r.error } : { tone: "accent", text: r.message ?? "Logged." });

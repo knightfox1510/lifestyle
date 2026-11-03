@@ -119,7 +119,7 @@ export default async function WeekPlanPage({ searchParams }: PageProps<"/food/pl
                             return (
                               <PlannedDish
                                 key={e.id}
-                                entry={{ id: e.id, for_user: e.for_user ?? null, portions: e.portions ?? {}, recipe_id: e.recipe_id, logged: Boolean(e.logged_at), servings: e.servings }}
+                                entry={{ id: e.id, for_user: e.for_user ?? null, portions: e.portions ?? {}, recipe_id: e.recipe_id, logged: Boolean(e.logged_at), servings: e.servings, plan_date: e.plan_date, meal: e.meal }}
                                 title={title}
                                 recipeHref={r ? `/recipes/${r.id}` : null}
                                 people={people}

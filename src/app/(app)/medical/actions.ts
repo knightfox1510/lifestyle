@@ -368,3 +368,18 @@ export async function deleteLabResult(id: string, ownerId: string): Promise<Acti
   refresh();
   return { ok: true, message: "Deleted." };
 }
+
+/** Fix a paper's title, type, date, provider or notes. */
+export async function updateMedicalDocument(documentId: string, ownerId: string, input: Record<string, unknown>): Promise<ActionResult> {
+  const parsed = documentSchema.pick({ title: true, doc_type: true, document_date: true, provider: true, notes: true }).safeParse(Object.fromEntries(Object.entries(input).map(([k, v]) => [k, v == null ? "" : String(v)])));
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  try {
+    const session = await requireWrite(ownerId);
+    const { data, error } = await session.supabase.from("medical_documents").update(parsed.data).eq("id", documentId).eq("owner_id", ownerId).select("id");
+    if (error || !data?.length) return { error: "Couldn't save the changes." };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+  refresh();
+  return { ok: true, message: "Saved." };
+}

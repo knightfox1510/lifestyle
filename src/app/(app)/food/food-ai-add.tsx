@@ -1,5 +1,6 @@
 "use client";
 
+import { PhotoButtons } from "@/components/photo-buttons";
 import { useState, useTransition } from "react";
 import { Button, Card, Input, Notice, Select, Textarea } from "@/components/ui";
 import { VoiceButton } from "@/components/voice-input";
@@ -10,6 +11,7 @@ import { MEAL_DEFAULT_TIME, MEAL_META, MEAL_ORDER, eatenAtFor, mealForHour, type
 import { computeItem, disagreement, type CalcItem } from "@/modules/nutrition/compute";
 import { IRRITANT_META, type Irritant } from "@/modules/nutrition/irritants";
 import { logFoodForPeople, rememberFoods } from "./actions";
+import { MeasureInput } from "./measure-input";
 import { PantryUsePrompt } from "@/components/pantry-use-prompt";
 import { useT } from "@/lib/i18n/client";
 
@@ -112,11 +114,11 @@ export function FoodAiAdd({ ownerId, people, day, meal: preset }: { ownerId: str
         />
         <div className="flex flex-col gap-2">
           <VoiceButton onText={(t) => setText((prev) => (prev ? `${prev} ${t}` : t))} />
-          <label className="flex size-10 cursor-pointer items-center justify-center rounded-xl border border-border text-lg hover:bg-surface-2" title="Take or choose a photo">
-            📷
-            <input type="file" accept="image/*" className="sr-only" onChange={(e) => setPhoto(e.target.files?.[0] ?? null)} />
-          </label>
         </div>
+      </div>
+      <div className="-mt-1 flex flex-wrap items-center gap-2">
+        <PhotoButtons compact onFiles={(f) => setPhoto(f[0])} cameraLabel={t("Take a photo of the meal")} uploadLabel={t("Upload a photo")} />
+        <span className="text-xs text-fg-muted">{t("or add a photo of the meal")}</span>
       </div>
       {photo ? (
         <p className="text-xs text-fg-muted">
@@ -205,8 +207,13 @@ export function FoodAiAdd({ ownerId, people, day, meal: preset }: { ownerId: str
                         <div className="mt-1 space-y-1">
                           {it.components.map((comp, k) => (
                             <div key={k} className="flex flex-wrap items-center gap-1.5 text-xs">
-                              <Input type="number" min={0} value={comp.grams} onChange={(e) => updateComp(i, k, { grams: Math.max(0, Number(e.target.value) || 0) })} className="!h-7 w-20" aria-label={`${comp.name} grams`} />
-                              g <span className="font-medium">{comp.name}</span>
+                              <MeasureInput
+                                grams={comp.grams}
+                                onGrams={(g) => updateComp(i, k, { grams: g })}
+                                stapleKey={(comp.ref as { kind?: string; key?: string } | null)?.kind === "staple" ? (comp.ref as { key: string }).key : null}
+                                label={comp.name}
+                              />
+                              <span className="font-medium">{comp.name}</span>
                               <span className={comp.per100 ? "text-fg-muted" : "text-danger"}>
                                 → {comp.matchName ? `${comp.matchName} (${comp.source})` : "not matched"}
                                 {comp.per100?.calories != null ? ` · ${Math.round(comp.per100.calories)} kcal/100 g` : ""}

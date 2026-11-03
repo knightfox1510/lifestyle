@@ -5,7 +5,8 @@ import type { GiftIdea, Occasion } from "@/lib/types";
 import { formatDate } from "@/modules/medical/meta";
 import { occasionInfo } from "@/modules/occasions/logic";
 import { GiftForm, OccasionForm } from "./client";
-import { deleteGift, deleteOccasion, setGiftStatus } from "./actions";
+import { deleteGift, deleteOccasion, setGiftStatus, updateGift, updateOccasion } from "./actions";
+import { EditRecord } from "@/components/edit-record";
 
 export const metadata = { title: "Occasions & gifts" };
 
@@ -38,8 +39,22 @@ export default async function OccasionsPage() {
                     <p className="font-medium">{ICON[x.kind]} {x.title}{info.label ? <span className="font-normal text-fg-muted"> · {info.label}</span> : null}</p>
                     <p className="text-xs text-fg-muted">{info.next ? formatDate(info.next) : "past"}{x.person ? ` · ${x.person}` : ""}{x.notes ? ` · ${x.notes}` : ""}</p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center justify-end gap-2">
                     {info.inDays !== null ? <Badge tone={info.inDays <= x.remind_days_before ? "warn" : "neutral"}>{info.inDays === 0 ? "today 🎉" : `in ${info.inDays} days`}</Badge> : null}
+                    <EditRecord
+                      fields={[
+                        { name: "title", label: "What", type: "text", maxLength: 120 },
+                        { name: "kind", label: "Kind", type: "select", options: [{ value: "birthday", label: "Birthday" }, { value: "anniversary", label: "Anniversary" }, { value: "festival", label: "Festival" }, { value: "other", label: "Other" }] },
+                        { name: "date", label: "Date", type: "date" },
+                        { name: "person", label: "Person", type: "text", maxLength: 80 },
+                        { name: "remind_days_before", label: "Remind days before", type: "number", min: 0, max: 60, step: 1 },
+                        { name: "year_known", label: "Year is known (shows age / years)", type: "checkbox" },
+                        { name: "recurring", label: "Every year", type: "checkbox" },
+                        { name: "notes", label: "Notes", type: "textarea", maxLength: 500 },
+                      ]}
+                      values={{ title: x.title, kind: x.kind, date: `${x.year ?? new Date().getFullYear()}-${String(x.month).padStart(2, "0")}-${String(x.day).padStart(2, "0")}`, person: x.person, remind_days_before: x.remind_days_before, year_known: x.year != null, recurring: x.recurring, notes: x.notes }}
+                      onSave={updateOccasion.bind(null, x.id)}
+                    />
                     <form action={deleteOccasion.bind(null, x.id)}><button className="px-1 text-xs text-fg-muted hover:text-danger" aria-label={`Delete ${x.title}`}>✕</button></form>
                   </div>
                 </div>
@@ -70,6 +85,18 @@ export default async function OccasionsPage() {
                       <button className={`rounded-full px-2 py-0.5 text-xs ${gi.status === s ? "bg-accent text-accent-fg" : "bg-surface-2 text-fg-muted"}`}>{s}</button>
                     </form>
                   ))}
+                  <EditRecord
+                    fields={[
+                      { name: "for_person", label: "For", type: "text", maxLength: 80 },
+                      { name: "idea", label: "Idea", type: "text", maxLength: 200 },
+                      { name: "occasion_id", label: "Occasion", type: "select", allowEmpty: true, options: occasions.map(({ x }) => ({ value: x.id, label: x.title })) },
+                      { name: "price", label: "Price (₹)", type: "number", min: 0 },
+                      { name: "url", label: "Link", type: "text", maxLength: 500 },
+                      { name: "notes", label: "Notes", type: "textarea", maxLength: 300 },
+                    ]}
+                    values={{ for_person: gi.for_person, idea: gi.idea, occasion_id: gi.occasion_id, price: gi.price, url: gi.url, notes: gi.notes }}
+                    onSave={updateGift.bind(null, gi.id)}
+                  />
                   <form action={deleteGift.bind(null, gi.id)}><button className={buttonClass("ghost", "sm")} aria-label="Delete idea">✕</button></form>
                 </span>
               </li>

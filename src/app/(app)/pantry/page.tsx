@@ -7,7 +7,9 @@ import { CATEGORY_META } from "@/modules/groceries/meta";
 import { daysUntil } from "@/modules/pantry/match";
 import { AddPantryForm } from "./add-form";
 import { LeftoverEat } from "./leftover-eat";
-import { deletePantryItem, setExpiry, setOpened } from "./actions";
+import { deletePantryItem, setExpiry, setOpened, updatePantryItem } from "./actions";
+import { EditRecord } from "@/components/edit-record";
+import { GROCERY_CATEGORIES } from "@/lib/types";
 import { PantryItemActions } from "./item-actions";
 
 export const metadata = { title: "Pantry" };
@@ -89,6 +91,18 @@ export default async function PantryPage() {
                         <div className="flex flex-wrap items-center gap-1">
                           {canLogFood && i.recipe_id && (i.portions ?? 0) > 0 ? <LeftoverEat pantryId={i.id} people={eaters} me={session.userId} /> : null}
                           <PantryItemActions id={i.id} staple={Boolean(i.staple)} runningLow={Boolean(i.running_low)} groceriesOn={groceriesOn} />
+                          <EditRecord
+                            fields={[
+                              { name: "name", label: "Item", type: "text", maxLength: 120 },
+                              { name: "quantity", label: "Quantity", type: "text", maxLength: 40 },
+                              { name: "location", label: "Kept in", type: "select", options: [{ value: "fridge", label: "Fridge" }, { value: "freezer", label: "Freezer" }, { value: "pantry", label: "Pantry / shelf" }] },
+                              { name: "category", label: "Category", type: "select", allowEmpty: true, options: GROCERY_CATEGORIES.map((c) => ({ value: c, label: `${CATEGORY_META[c].icon} ${CATEGORY_META[c].label}` })) },
+                              { name: "expires_on", label: "Expires", type: "date" },
+                              ...(i.recipe_id ? [{ name: "portions", label: "Portions left", type: "number" as const, min: 0, max: 100, step: 0.5 }] : []),
+                            ]}
+                            values={{ name: i.name, quantity: i.quantity, location: i.location, category: i.category, expires_on: i.expires_on, portions: i.portions ?? null }}
+                            onSave={updatePantryItem.bind(null, i.id)}
+                          />
                           <details className="relative">
                             <summary className={cx(buttonClass("ghost", "sm"), "list-none")}>⋯</summary>
                             <div className="absolute right-0 z-10 mt-1 w-56 space-y-2 rounded-xl border border-border bg-surface p-3 shadow-lg">

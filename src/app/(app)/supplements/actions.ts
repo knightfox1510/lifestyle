@@ -120,3 +120,18 @@ export async function saveSupplementNutrients(id: string, ownerId: string, input
   refreshModule("/food");
   return { ok: true, message: "Saved." };
 }
+
+/** Fix a supplement's name, dose, when it's taken and stock. */
+export async function updateSupplement(id: string, ownerId: string, input: Record<string, unknown>): Promise<ActionResult> {
+  const parsed = supplementSchema.omit({ ownerId: true }).safeParse(Object.fromEntries(Object.entries(input).map(([k, v]) => [k, v == null ? "" : String(v)])));
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  try {
+    const session = await requireWrite(MODULE, ownerId);
+    const { data, error } = await session.supabase.from("supplements").update(parsed.data).eq("id", id).eq("owner_id", ownerId).select("id");
+    if (error || !data?.length) return { error: "Couldn't save the changes." };
+  } catch (e) {
+    return { error: errorMessage(e) };
+  }
+  refreshModule("/supplements");
+  return { ok: true, message: "Saved." };
+}

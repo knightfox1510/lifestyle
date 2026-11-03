@@ -6,6 +6,8 @@ import { DateJump } from "@/components/date-jump";
 import type { Medicine, MedicineDose } from "@/lib/types";
 import { doseLabel, isCurrentOn, isUpcomingOn, refillInfo, slotsForDay } from "@/modules/medicines/logic";
 import { DoseButtons, AsNeededButton } from "./dose-buttons";
+import { updateDose } from "./actions";
+import { EditRecord } from "@/components/edit-record";
 import { getT } from "@/lib/i18n/server";
 import { medicineChecksFor } from "@/lib/medicine-checks";
 
@@ -110,13 +112,24 @@ export default async function MedicinesTodayPage({ searchParams }: PageProps<"/m
                       {startedLater.has(s.medicine.id) ? ` · ${t("added later; logging moves its start date back")}` : ""}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center justify-end gap-2">
                     {s.dose ? (
                       <Badge tone={s.dose.status === "taken" ? "accent" : "warn"}>
                         {s.dose.status === "taken" ? `✓ ${t("taken")} ${localTime(s.dose.taken_at, tz)}` : t("skipped")}
                       </Badge>
                     ) : overdue ? (
                       <Badge tone="danger">{t("due")}</Badge>
+                    ) : null}
+                    {canWrite && s.dose ? (
+                      <EditRecord
+                        label="Fix this dose"
+                        fields={[
+                          { name: "status", label: "Dose", type: "select", options: [{ value: "taken", label: "Taken" }, { value: "skipped", label: "Skipped" }] },
+                          { name: "time", label: "Time taken", type: "time" },
+                        ]}
+                        values={{ status: s.dose.status, time: localTime(s.dose.taken_at, tz) }}
+                        onSave={updateDose.bind(null, s.dose.id, ownerId)}
+                      />
                     ) : null}
                     {canWrite ? (
                       <DoseButtons medicineId={s.medicine.id} ownerId={ownerId} date={date} time={s.time} doseId={s.dose?.id ?? null} />
