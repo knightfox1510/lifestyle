@@ -5,6 +5,7 @@ import { formatDate } from "@/modules/medical/meta";
 import { AddDishForm, AddPlaceForm, LogOrderForm, WhatToOrder } from "./client";
 import { PlaceMenu } from "./place-menu";
 import { BulkImport } from "./bulk-import";
+import { MenuGrabber } from "./menu-grabber";
 import { deletePlace, toggleFavoritePlace, updateOrder, updatePlace } from "./actions";
 import { EditRecord } from "@/components/edit-record";
 
@@ -31,6 +32,7 @@ export default async function DiningPage() {
         <WhatToOrder members={members} me={session.userId} defaultUseHealth={session.profile.ai_use_medical_history} canLog={canLog} places={placeRefs} dishes={dishRefs} />
       ) : null}
       <BulkImport savedNames={places.map((x) => x.name)} defaultOpen={places.length === 0} />
+      <MenuGrabber />
       <AddPlaceForm />
       {places.length === 0 ? (
         <EmptyState title="No places yet">The quickest start: screenshots of your Swiggy or Zomato order history above. Then open any place → Import menu → Find menu online.</EmptyState>

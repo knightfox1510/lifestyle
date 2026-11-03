@@ -16,6 +16,7 @@ const PROMPT = `Extract the restaurant menu from these screenshots/photos and/or
 - section = the menu heading the dish sits under.
 - Skip offers, coupons, ratings, delivery info, "customisable" labels, add-ons/extras, and app UI text. Don't repeat dishes that appear in several screenshots.
 - Estimate nutrition per ONE person's share: realistic Indian restaurant portions, which are richer than home cooking (more oil, butter, cream, sugar). If a dish says "serves 2", set serves=2 and give per-person numbers.
+- Pasted text may be a whole restaurant web page (or one part of it) copied with the "Copy menu to Hearth" button: labels in [brackets] such as [Veg Item] or [Non-veg item] belong to the dish right after them. Ignore ratings, reviews, "Bestseller", "ADD", "Customisable", offers and page navigation. The part may start or end mid-dish: skip a dish if its name is cut off.
 - Don't invent dishes that aren't visible.`;
 
 export async function POST(request: Request) {

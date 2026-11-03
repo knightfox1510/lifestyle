@@ -112,7 +112,7 @@ export async function deleteDish(id: string) {
  * notes; new ones are added.
  */
 export async function importMenu(placeId: string, items: unknown): Promise<ActionResult> {
-  const parsed = z.array(menuItemSchema).min(1).max(250).safeParse(items);
+  const parsed = z.array(menuItemSchema).min(1).max(800).safeParse(items);
   if (!z.uuid().safeParse(placeId).success || !parsed.success) return { error: "Some dishes are invalid." };
   try {
     const session = await requireModule("dining");
@@ -146,8 +146,10 @@ export async function importMenu(placeId: string, items: unknown): Promise<Actio
         source: "menu_import",
       }));
     const updated = rows.filter((r) => idByName.has(r.name.toLowerCase())).length;
-    const { error } = await session.supabase.from("dining_dishes").upsert(rows, { onConflict: "id" });
-    if (error) return { error: "Couldn't save the menu." };
+    for (let i = 0; i < rows.length; i += 300) {
+      const { error } = await session.supabase.from("dining_dishes").upsert(rows.slice(i, i + 300), { onConflict: "id" });
+      if (error) return { error: i ? `Saved ${i} dishes, but couldn't save the rest.` : "Couldn't save the menu." };
+    }
     refreshModule("/dining");
     return { ok: true, message: `Saved ${rows.length - updated} new dish${rows.length - updated === 1 ? "" : "es"}${updated ? ` and updated ${updated}` : ""}.` };
   } catch (e) {
