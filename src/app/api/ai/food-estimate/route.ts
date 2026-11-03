@@ -64,7 +64,7 @@ ${context}`;
           ? []
           : await Promise.all(
               it.components.map(async (c) => {
-                const m = await matchIngredient(session, { staple_key: c.staple_key, custom_food: c.custom_food, search: c.search, name: c.name }, hh);
+                const m = await matchIngredient(session, { staple_key: c.staple_key, custom_food: c.custom_food, search: c.search, name: c.name, kcal_per_100g: c.kcal_per_100g }, hh);
                 return { name: c.name, grams: c.grams, per100: m?.per100 ?? null, matchName: m?.name ?? null, source: m?.source ?? null, ref: m?.ref ?? null, irritants: m?.irritants ?? [] };
               }),
             );

@@ -5,6 +5,7 @@ import type { CustomFood, FoodRef, Recipe } from "@/lib/types";
 import { STAPLE_BY_KEY, searchStaples } from "@/modules/nutrition/staples";
 import { DISH_BY_KEY, dishNutrition, dishPer100, searchDishes, type Dish } from "@/modules/nutrition/dishes";
 import { parseFdcFood, type FdcSearchFood } from "@/modules/nutrition/sources";
+import { plausibleKcal, rankUsda } from "@/modules/nutrition/usda-rank";
 import { NUTRIENT_KEYS, type Nutrients } from "@/modules/nutrition/nutrients";
 import { cleanIrritants, type Irritant } from "@/modules/nutrition/irritants";
 
@@ -65,13 +66,15 @@ async function fdcFetch(path: string, timeoutMs = 5000): Promise<unknown | null>
 export async function usdaSearch(query: string, limit = 6): Promise<ResolvedFood[]> {
   const q = query.trim().slice(0, 80);
   if (q.length < 2) return [];
-  const body = (await fdcFetch(`/foods/search?query=${encodeURIComponent(q)}&pageSize=${limit}&dataType=${encodeURIComponent("Foundation,SR Legacy")}`)) as { foods?: FdcSearchFood[] } | null;
-  return (body?.foods ?? []).map((f) => {
+  // Ask for more than needed, then put the plain food ahead of products made from it.
+  const body = (await fdcFetch(`/foods/search?query=${encodeURIComponent(q)}&pageSize=${Math.max(15, limit * 3)}&dataType=${encodeURIComponent("Foundation,SR Legacy")}`)) as { foods?: FdcSearchFood[] } | null;
+  const all = (body?.foods ?? []).map((f) => {
     const p = parseFdcFood(f);
     const r: ResolvedFood = { ref: { kind: "usda", id: p.id }, name: p.name, source: "USDA", per100: p.per100, irritants: [] };
     usdaCache.set(p.id, r);
     return r;
   });
+  return rankUsda(q, all).slice(0, limit);
 }
 
 async function usdaById(id: string): Promise<ResolvedFood | null> {
@@ -135,18 +138,33 @@ export async function searchFoods(session: AppSession, query: string, opts: { us
  */
 export async function matchIngredient(
   session: AppSession,
-  hint: { staple_key?: string | null; custom_food?: string | null; search?: string | null; name: string },
+  hint: { staple_key?: string | null; custom_food?: string | null; search?: string | null; name: string; kcal_per_100g?: number | null },
   hh: Awaited<ReturnType<typeof householdFoods>>,
 ): Promise<ResolvedFood | null> {
+  const expected = hint.kcal_per_100g ?? null;
+  // Every candidate must be believable next to the AI's own estimate, so a
+  // wrong database hit (guava → guava pastry) can't slip through.
+  const ok = (f: ResolvedFood | null, tolerance = 2) => Boolean(f && f.per100?.calories !== undefined && plausibleKcal(f.per100.calories, expected, tolerance));
   if (hint.custom_food) {
     const n = hint.custom_food.toLowerCase().trim();
     const f = hh.foods.find((x) => x.name.toLowerCase() === n) ?? hh.foods.find((x) => x.name.toLowerCase().includes(n));
+    // Your own foods are trusted (they come from your labels).
     if (f) return fromCustom(f);
   }
-  if (hint.staple_key && STAPLE_BY_KEY[hint.staple_key]) return resolveRef(session, { kind: "staple", key: hint.staple_key });
-  const staple = searchStaples(hint.name, 1)[0];
-  const usda = await usdaSearch(hint.search || hint.name, 3);
-  const best = usda.find((u) => u.per100?.calories !== undefined);
+  if (hint.staple_key && STAPLE_BY_KEY[hint.staple_key]) {
+    const s = await resolveRef(session, { kind: "staple", key: hint.staple_key });
+    if (ok(s, 3)) return s;
+  }
+  const stapleFor = (s: ReturnType<typeof searchStaples>[number] | undefined): ResolvedFood | null =>
+    s ? { ref: { kind: "staple", key: s.key }, name: s.name, source: "Built-in", per100: s.per100, irritants: s.irritants } : null;
+  // A built-in staple whose name covers every word of the ingredient beats a database guess.
+  const strong = searchStaples(hint.name, 3).find((s) => hint.name.toLowerCase().split(/\s+/).filter((w) => w.length > 2 && !["pink", "fresh", "raw", "ripe"].includes(w)).every((w) => `${s.name} ${s.aliases}`.toLowerCase().includes(w)));
+  if (strong && ok(stapleFor(strong))) return stapleFor(strong);
+  const usda = await usdaSearch(hint.search || hint.name, 8);
+  const best = usda.find((u) => ok(u));
   if (best) return best;
-  return staple ? { ref: { kind: "staple", key: staple.key }, name: staple.name, source: "Built-in", per100: staple.per100, irritants: staple.irritants } : null;
+  const loose = stapleFor(searchStaples(hint.name, 1)[0]);
+  if (ok(loose)) return loose;
+  // Nothing believable: leave it unmatched so the AI's estimate is used and marked as such.
+  return null;
 }

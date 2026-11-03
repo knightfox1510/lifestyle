@@ -156,7 +156,8 @@ export const componentSchema = z.object({
   grams: z.number().min(0).max(3000).describe("Grams of this ingredient in the amount eaten (raw/dry weight for grains and pulses)"),
   staple_key: z.string().max(40).nullable().describe("Key from the built-in staples list if one matches, else null"),
   custom_food: z.string().max(120).nullable().describe("Exact name from the household's own foods if one matches, else null"),
-  search: z.string().max(80).nullable().describe("English search term for the USDA database if neither matches, e.g. 'paneer', 'basmati rice cooked'"),
+  search: z.string().max(80).nullable().describe("English search term for the USDA database if neither matches: the plain food as USDA names it, e.g. 'guava raw', 'paneer', 'almond milk unsweetened', 'basmati rice cooked'"),
+  kcal_per_100g: z.number().min(0).max(900).describe("Your own best estimate of kcal per 100 g of this ingredient as weighed (raw fruit/veg, dry grains), used to catch wrong database matches"),
 });
 
 export const mealCalcSchema = z.object({

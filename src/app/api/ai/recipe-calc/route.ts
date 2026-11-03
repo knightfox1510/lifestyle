@@ -43,7 +43,7 @@ ${MEASURE_HINTS}`,
 
     const rows = await Promise.all(
       result.ingredients.map(async (c) => {
-        const m = c.grams > 0 ? await matchIngredient(session, { staple_key: c.staple_key, custom_food: c.custom_food, search: c.search, name: c.name }, hh) : null;
+        const m = c.grams > 0 ? await matchIngredient(session, { staple_key: c.staple_key, custom_food: c.custom_food, search: c.search, name: c.name, kcal_per_100g: c.kcal_per_100g }, hh) : null;
         return { index: c.index, grams: c.grams, ref: m?.ref ?? null, match_name: m?.name ?? null, source: m?.source ?? null, per100: m?.per100 ?? null };
       }),
     );
