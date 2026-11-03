@@ -11,12 +11,12 @@ import { buttonClass, cx } from "@/components/ui";
 import { useT } from "@/lib/i18n/client";
 
 /** "Next up": the few things worth doing now, each with its action right there. */
-export function NextUp({ items, ownerId, date }: { items: NextUpItem[]; ownerId: string; date: string }) {
+export function NextUp({ items, ownerId, date, past = false }: { items: NextUpItem[]; ownerId: string; date: string; /** An earlier day: everything missed, logged for that date. */ past?: boolean }) {
   const t = useT();
   if (!items.length) return null;
   return (
     <section className="space-y-2">
-      <h2 className="px-1 text-[13px] font-medium uppercase tracking-[0.08em] text-fg-muted">{t("Next up")}</h2>
+      <h2 className="px-1 text-[13px] font-medium uppercase tracking-[0.08em] text-fg-muted">{past ? t("Missed that day") : t("Next up")}</h2>
       <ul className="divide-y divide-border rounded-[20px] bg-surface px-4 shadow-[0_0_0_1px_var(--border)]">
         {items.map((i, k) => (
           <li key={k} className="flex items-center gap-3 py-3.5">
@@ -32,12 +32,12 @@ export function NextUp({ items, ownerId, date }: { items: NextUpItem[]; ownerId:
               ) : i.kind === "supplement" ? (
                 <>
                   <p className="truncate text-[15px] font-medium">{i.name} <span className="font-normal text-fg-muted">{i.dose}</span></p>
-                  <p className={cx("text-[13px]", i.overdue ? "text-danger" : "text-fg-muted")}>{t("Supplement · around {time}", { time: i.time })}</p>
+                  <p className={cx("text-[13px]", i.overdue ? "text-danger" : "text-fg-muted")}>{i.time ? t("Supplement · around {time}", { time: i.time }) : t("Supplement")}</p>
                 </>
               ) : i.kind === "water" ? (
                 <>
                   <p className="text-[15px] font-medium">{t("Glass of water")}</p>
-                  <p className="text-[13px] text-fg-muted tabular">{t("{ml} of {target} ml · a little behind", { ml: i.ml.toLocaleString("en-IN"), target: i.target.toLocaleString("en-IN") })}</p>
+                  <p className="text-[13px] text-fg-muted tabular">{t(past ? "{ml} of {target} ml" : "{ml} of {target} ml · a little behind", { ml: i.ml.toLocaleString("en-IN"), target: i.target.toLocaleString("en-IN") })}</p>
                 </>
               ) : i.kind === "meal" ? (
                 <>
@@ -46,7 +46,7 @@ export function NextUp({ items, ownerId, date }: { items: NextUpItem[]; ownerId:
                 </>
               ) : (
                 <>
-                  <p className="text-[15px] font-medium">{t("How was today?")}</p>
+                  <p className="text-[15px] font-medium">{past ? t("Check in for that day") : t("How was today?")}</p>
                   <p className="text-[13px] text-fg-muted">{t("Ten seconds: mood, energy, sleep")}</p>
                 </>
               )}
@@ -56,11 +56,11 @@ export function NextUp({ items, ownerId, date }: { items: NextUpItem[]; ownerId:
             ) : i.kind === "supplement" ? (
               <SupplementTakeButton supplementId={i.supplementId} ownerId={ownerId} date={date} name={i.name} />
             ) : i.kind === "water" ? (
-              <WaterButtons amounts={[250]} />
+              <WaterButtons amounts={past ? [250, 500] : [250]} date={past ? date : undefined} />
             ) : i.kind === "meal" ? (
-              <Link href="/food" className={buttonClass("soft", "sm")}>{t("Log")}</Link>
+              <Link href={past ? `/food?date=${date}&meal=${i.meal}` : "/food"} className={buttonClass("soft", "sm")}>{t("Log")}</Link>
             ) : (
-              <Link href="/close" className={buttonClass("soft", "sm")}>{t("Check in")}</Link>
+              <Link href={past ? `/checkin?date=${date}` : "/close"} className={buttonClass("soft", "sm")}>{t("Check in")}</Link>
             )}
           </li>
         ))}

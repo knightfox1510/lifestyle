@@ -95,3 +95,20 @@ describe("supplements in next up", () => {
     expect(nextUp({ ...base, now: "21:30", dueSupplements: supps }).map((x) => x.kind === "supplement" && x.supplementId)).toEqual(["d3", "mg"]);
   });
 });
+
+describe("missed on an earlier day", () => {
+  it("lists everything not done, with no time windows", async () => {
+    const { missedOn } = await import("@/modules/engagement/rings");
+    const items = missedOn({
+      dueDoses: [{ medicineId: "b", name: "Night", strength: null, time: "21:00" }, { medicineId: "a", name: "Thyronorm", strength: null, time: "07:00" }],
+      dueSupplements: [{ supplementId: "s", name: "Omega 3", dose: null, time: null }],
+      water: { ml: 1200, target: 2500, start: "08:00", end: "19:30" },
+      mealsLogged: ["lunch"],
+      checkinDone: false,
+    });
+    expect(items.map((i) => i.kind)).toEqual(["dose", "dose", "supplement", "water", "meal", "meal", "check"]);
+    expect(items[0]).toMatchObject({ name: "Thyronorm", overdue: true });
+    expect(items[3]).toMatchObject({ behind: 1300 });
+    expect(items.filter((i) => i.kind === "meal").map((i) => (i as { meal: string }).meal)).toEqual(["breakfast", "dinner"]);
+  });
+});

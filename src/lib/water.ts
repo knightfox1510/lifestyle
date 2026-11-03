@@ -1,17 +1,18 @@
 import "server-only";
 
 import type { AppSession } from "@/lib/session";
-import { localDate, startOfLocalDayIso } from "@/lib/dates";
+import { addDays, localDate, startOfLocalDayIso } from "@/lib/dates";
 
 /** Water drunk today (local day) by this person, from the fluid log. */
-export async function waterToday(session: AppSession, ownerId = session.userId) {
+export async function waterToday(session: AppSession, ownerId = session.userId, day?: string) {
   const tz = session.profile.timezone;
-  const today = localDate(new Date(), tz);
+  const today = day ?? localDate(new Date(), tz);
   const { data } = await session.supabase
     .from("fluid_intake")
     .select("volume_ml, occurred_at, drink")
     .eq("owner_id", ownerId)
-    .gte("occurred_at", startOfLocalDayIso(today));
+    .gte("occurred_at", startOfLocalDayIso(today))
+    .lt("occurred_at", startOfLocalDayIso(addDays(today, 3)));
   const rows = ((data ?? []) as { volume_ml: number; occurred_at: string; drink: string }[]).filter((r) => localDate(r.occurred_at, tz) === today);
   // All drinks count towards hydration except alcohol.
   return { ml: rows.filter((r) => r.drink !== "alcohol").reduce((a, r) => a + r.volume_ml, 0), water: rows.filter((r) => r.drink === "water").reduce((a, r) => a + r.volume_ml, 0) };
@@ -27,8 +28,9 @@ export async function waterTarget(session: AppSession, ownerId = session.userId)
 }
 
 /** Logs water for yourself (your own rows are always writable, whatever modules are on). */
-export async function insertWater(session: AppSession, ml: number) {
+export async function insertWater(session: AppSession, ml: number, occurredAt?: string) {
   const { data, error } = await session.supabase.from("fluid_intake").insert({
+    ...(occurredAt ? { occurred_at: occurredAt } : {}),
     owner_id: session.userId,
     created_by: session.userId,
     household_id: session.household.id,

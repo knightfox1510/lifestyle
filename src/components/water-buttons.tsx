@@ -9,7 +9,7 @@ import { undoQuickLog } from "@/lib/quick-actions";
 import { useToast } from "@/components/toaster";
 
 /** One-tap water logging for yourself, confirmed by a toast with Undo. */
-export function WaterButtons({ amounts = [250, 500] }: { amounts?: number[] }) {
+export function WaterButtons({ amounts = [250, 500], date }: { amounts?: number[]; /** An earlier day to log for (default today). */ date?: string }) {
   const [pending, start] = useTransition();
   const { toast } = useToast();
   const router = useRouter();
@@ -23,7 +23,7 @@ export function WaterButtons({ amounts = [250, 500] }: { amounts?: number[] }) {
           disabled={pending}
           onClick={() =>
             start(async () => {
-              const r = await logWater(ml);
+              const r = await logWater(ml, date);
               if (r.error) return toast(r.error, { tone: "error" });
               toast(r.message ?? `+${ml} ml`, { undo: r.id ? () => undoQuickLog("water", r.id!).then(() => router.refresh()) : undefined });
             })

@@ -70,6 +70,18 @@ export type NextUpItem =
 
 const MEAL_WINDOWS: Record<(typeof MAIN_MEALS)[number], [string, string]> = { breakfast: ["06:30", "11:00"], lunch: ["12:00", "15:30"], dinner: ["19:00", "22:30"] };
 
+/** Everything left undone on an earlier day: every dose and supplement not ticked, water short of the target, meals not logged, no check-in. */
+export function missedOn(i: Omit<NextUpInput, "now">): NextUpItem[] {
+  const out: NextUpItem[] = [
+    ...[...i.dueDoses].sort((a, b) => a.time.localeCompare(b.time)).map((d) => ({ kind: "dose" as const, ...d, overdue: true })),
+    ...(i.dueSupplements ?? []).map((x) => ({ kind: "supplement" as const, ...x, time: x.time ?? "", overdue: true })),
+  ];
+  if (i.water && i.water.ml < i.water.target) out.push({ kind: "water", ml: i.water.ml, target: i.water.target, behind: i.water.target - i.water.ml });
+  if (i.mealsLogged) for (const meal of MAIN_MEALS) if (!i.mealsLogged.includes(meal)) out.push({ kind: "meal", meal });
+  if (i.checkinDone === false) out.push({ kind: "check" });
+  return out;
+}
+
 /** The few things worth doing now: overdue/soon doses and supplements first, then water if behind, the current meal, the evening check-in. */
 export function nextUp(i: NextUpInput, limit = 5): NextUpItem[] {
   const n = toMin(i.now);
