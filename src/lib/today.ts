@@ -11,7 +11,8 @@ import { MAIN_MEALS, dayClosed, rings, type Ring, type RingInput } from "@/modul
 export type ArcEvent = { time: string; kind: "water" | "food" | "meds" | "check" };
 export type DayStatus = { date: string; rings: Ring[]; closed: boolean; any: boolean };
 
-type Enabled = { medicines: boolean; food: boolean; checkin: boolean; supplements?: boolean };
+/** `water: false` when the person viewing can't see this person's water (not shared). */
+type Enabled = { medicines: boolean; food: boolean; checkin: boolean; supplements?: boolean; water?: boolean };
 
 /**
  * Everything the day view needs for one person over the last `days` days:
@@ -29,7 +30,7 @@ export async function loadDays(
   const from = startOfLocalDayIso(dayList[0]);
   const none = Promise.resolve({ data: [] as unknown[] });
   const [fl, fd, md, ds, ci, sp, sl] = await Promise.all([
-    db.from("fluid_intake").select("volume_ml, occurred_at, drink").eq("owner_id", ownerId).gte("occurred_at", from).limit(3000),
+    enabled.water === false ? none : db.from("fluid_intake").select("volume_ml, occurred_at, drink").eq("owner_id", ownerId).gte("occurred_at", from).limit(3000),
     enabled.food ? db.from("food_entries").select("eaten_at, meal").eq("owner_id", ownerId).gte("eaten_at", from).limit(3000) : none,
     enabled.medicines ? db.from("medicines").select("*").eq("owner_id", ownerId).eq("active", true) : none,
     enabled.medicines ? db.from("medicine_doses").select("*").eq("owner_id", ownerId).gte("scheduled_date", dayList[0]) : none,
@@ -54,7 +55,7 @@ export async function loadDays(
     const slots = enabled.medicines ? slotsForDay(meds.filter((m) => m.start_date <= date), doses, date) : [];
     const checked = checkins.some((c) => c.checkin_date === date);
     const inputs: RingInput[] = [
-      { key: "water", value: water, target: opts.waterTarget },
+      ...(enabled.water === false ? [] : [{ key: "water" as const, value: water, target: opts.waterTarget }]),
       ...(enabled.food ? [{ key: "food" as const, value: meals.size, target: 3 }] : []),
       // Medicines and supplements share one ring: every scheduled dose and every daily supplement counts.
       ...(enabled.medicines || enabled.supplements

@@ -11,7 +11,7 @@ import { AskAiWidget } from "@/components/ask-ai-widget";
 import { BladderQuickButtons, GroceryQuickAdd, QuickWeighIn } from "@/components/phase1-widgets";
 import { QuickLogBox } from "@/components/quick-log-box";
 import { WaterButtons } from "@/components/water-buttons";
-import { waterTarget, waterToday } from "@/lib/water";
+import { waterTarget, waterToday, waterAccess } from "@/lib/water";
 import { ClassButtons } from "@/app/(app)/fitness/client";
 import { KIND_META as WORKOUT_META, classesOn } from "@/modules/fitness/meta";
 import { LOG_META } from "@/modules/child/vaccines";
@@ -344,11 +344,13 @@ export async function Widget({ widgetKey, size, session }: { widgetKey: string; 
     }
 
     case "core.water": {
-      // Always your own water (logging is per person); the target comes from reminders or food goals.
-      const [{ ml }, target] = await Promise.all([waterToday(session), waterTarget(session)]);
+      // The person you're viewing, if they share their water with you; otherwise your own.
+      const acc = isSelf ? "write" : waterAccess(session, subject.user_id);
+      const owner = acc === "none" ? session.userId : subject.user_id;
+      const [{ ml }, target] = await Promise.all([waterToday(session, owner), waterTarget(session, owner)]);
       const pct = Math.min(100, (ml / target) * 100);
       return (
-        <WidgetFrame size={size} title={isSelf ? "Water" : "Your water"} href="/settings/notifications">
+        <WidgetFrame size={size} title={isSelf ? "Water" : acc === "none" ? "Your water" : `${t("Water")}: ${subject.display_name}`} href="/settings/notifications">
           <p className="text-2xl font-semibold tabular-nums">
             {ml.toLocaleString("en-IN")}
             <span className="text-sm font-normal text-fg-muted"> / {target.toLocaleString("en-IN")} ml</span>
@@ -356,7 +358,7 @@ export async function Widget({ widgetKey, size, session }: { widgetKey: string; 
           <div className="h-2 overflow-hidden rounded-full bg-surface-2" role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100} aria-label="Water today">
             <div className="h-full rounded-full bg-series-2" style={{ width: `${pct}%` }} />
           </div>
-          <WaterButtons />
+          {acc === "write" ? <WaterButtons ownerId={owner === session.userId ? undefined : owner} /> : null}
         </WidgetFrame>
       );
     }

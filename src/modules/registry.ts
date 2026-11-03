@@ -71,3 +71,13 @@ export function isModuleKey(key: string): boolean {
 
 /** Modules whose data can be shared person-to-person. */
 export const SHAREABLE_MODULES = MODULES.filter((m) => m.scope !== "household");
+
+/**
+ * Things that can be shared that aren't features of their own. Water lives
+ * in the bladder diary's drinks log but is shared on its own, so a partner can
+ * see and log your water without seeing your bladder diary.
+ */
+export const SHARE_ONLY: Pick<ModuleDef, "key" | "name" | "description" | "icon">[] = [
+  { key: "water", name: "Water intake", description: "Water and other non-alcoholic drinks (the water ring on Today). Doesn't include the bladder diary.", icon: "💧" },
+];
+export const SHARE_NAME: Record<string, string> = { ...Object.fromEntries(MODULES.map((m) => [m.key, m.name])), ...Object.fromEntries(SHARE_ONLY.map((m) => [m.key, m.name])) };

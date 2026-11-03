@@ -90,5 +90,37 @@ end $$;
 update public.profiles set supplement_times = '{"morning": "07:15"}' where id = :j;
 
 reset role;
+-- Water intake has its own share: K sees and logs J's water (not alcohol, not the bladder diary) with a "water" share.
+reset role;
+delete from public.module_shares where owner_id = '12121212-0000-0000-0000-000000000071' and module_key = 'bladder_diary';
+insert into public.fluid_intake (owner_id, created_by, household_id, drink, volume_ml, caffeinated) values
+  ('12121212-0000-0000-0000-000000000071', '12121212-0000-0000-0000-000000000071', :'hid', 'water', 500, false),
+  ('12121212-0000-0000-0000-000000000071', '12121212-0000-0000-0000-000000000071', :'hid', 'alcohol', 330, false);
+insert into public.bladder_events (owner_id, created_by, household_id, kind) values ('12121212-0000-0000-0000-000000000071', '12121212-0000-0000-0000-000000000071', :'hid', 'leak');
+set role authenticated;
+select set_config('test.hid', :'hid', false);
+select set_config('request.jwt.claim.sub', :k, false);
+do $$ begin
+  assert (select count(*) from public.fluid_intake where owner_id = '12121212-0000-0000-0000-000000000071') = 0, 'no water share: no water';
+  insert into public.fluid_intake (owner_id, created_by, household_id, drink, volume_ml, caffeinated) values ('12121212-0000-0000-0000-000000000071', '34343434-0000-0000-0000-000000000072', current_setting('test.hid')::uuid, 'water', 250, false);
+  raise exception 'SHOULD_FAIL: logging water without a share';
+exception when insufficient_privilege then null;
+end $$;
+select set_config('request.jwt.claim.sub', :j, false);
+insert into public.module_shares (owner_id, grantee_id, module_key, level) values (:j, :k, 'water', 'write');
+select set_config('request.jwt.claim.sub', :k, false);
+insert into public.fluid_intake (id, owner_id, created_by, household_id, drink, volume_ml, caffeinated) values ('e7e7e7e7-0000-0000-0000-000000000079', :j, :k, :'hid', 'water', 250, false);
+do $$ begin
+  assert (select coalesce(sum(volume_ml), 0) from public.fluid_intake where owner_id = '12121212-0000-0000-0000-000000000071') = 750, 'water share: sees water (500 + 250), not alcohol';
+  assert (select count(*) from public.bladder_events) = 0, 'water share does not open the bladder diary';
+  insert into public.fluid_intake (owner_id, created_by, household_id, drink, volume_ml, caffeinated) values ('12121212-0000-0000-0000-000000000071', '34343434-0000-0000-0000-000000000072', current_setting('test.hid')::uuid, 'alcohol', 330, false);
+  raise exception 'SHOULD_FAIL: logging alcohol with only a water share';
+exception when insufficient_privilege then null;
+end $$;
+delete from public.fluid_intake where id = 'e7e7e7e7-0000-0000-0000-000000000079';
+do $$ begin
+  assert (select coalesce(sum(volume_ml), 0) from public.fluid_intake where owner_id = '12121212-0000-0000-0000-000000000071') = 500, 'whoever logged water can delete it';
+end $$;
+reset role;
 \o
 \echo 'ALL RECORDS EDIT TESTS PASSED'

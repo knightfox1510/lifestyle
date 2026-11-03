@@ -31,7 +31,17 @@ export async function saveQuickLog(ownerId: string, payload: unknown): Promise<A
       if (!error) done.push(`${food.length} food`);
     } else skipped.push("food");
   }
-  if (drinks.length || bladder.length) {
+  // Water can be logged with just a "Water intake" share; other drinks and bladder events need the bladder diary.
+  const waterOnly = !can("bladder_diary") && (ownerId === session.userId || session.accessTo("water", ownerId) === "write");
+  if (waterOnly && drinks.length) {
+    const water = drinks.filter((d) => d.drink === "water");
+    if (water.length) {
+      const { error } = await session.supabase.from("fluid_intake").insert(water.map(({ at: occurred_at, ...d }) => ({ ...base, ...d, occurred_at })));
+      if (!error) done.push(`${water.length} water`);
+    }
+    if (water.length < drinks.length) skipped.push("other drinks");
+  }
+  if (bladder.length || (drinks.length && !waterOnly)) {
     if (can("bladder_diary")) {
       if (drinks.length) {
         const { error } = await session.supabase.from("fluid_intake").insert(drinks.map(({ at: occurred_at, ...d }) => ({ ...base, ...d, occurred_at })));

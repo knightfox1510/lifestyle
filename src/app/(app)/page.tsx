@@ -10,6 +10,8 @@ import { addDays, localTime, todayIn } from "@/lib/dates";
 import { DateJump } from "@/components/date-jump";
 import { buttonClass, cx } from "@/components/ui";
 import { loadDays, waterSettings } from "@/lib/today";
+import { waterAccess } from "@/lib/water";
+import { WaterButtons } from "@/components/water-buttons";
 import { activityFor, checkMilestones, recentCheers } from "@/lib/engagement";
 import { dayScore, missedOn, nextUp } from "@/modules/engagement/rings";
 import { DayArc, DayBars, DayTiles, WeekStrip } from "@/components/today/day-views";
@@ -34,12 +36,13 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
   const can = (m: string) => session.isShown(m) && session.accessTo(m, subject.user_id) !== "none";
 
   const water = await waterSettings(session.supabase, subject.user_id);
+  const waterAcc = isSelf ? "write" : waterAccess(session, subject.user_id);
   const [day, me, partner, widgetsRes] = await Promise.all([
     loadDays(session.supabase, subject.user_id, {
       tz,
       today: viewDate,
       days: 30,
-      enabled: { medicines: can("medicines"), food: can("food_diary"), checkin: can("checkin"), supplements: can("supplements") },
+      enabled: { medicines: can("medicines"), food: can("food_diary"), checkin: can("checkin"), supplements: can("supplements"), water: waterAcc !== "none" },
       waterTarget: water.target,
       supplementTimes: session.profile.supplement_times,
     }),
@@ -122,6 +125,15 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
         ) : (
           <DayArc events={day.events} now={now} score={score} rings={rs} t={t} past={past} />
         )}
+        {!isSelf && waterAcc === "write" ? (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-surface-2/60 px-3 py-2">
+            <span className="text-[13px] text-fg-muted">{t("Water for {name}", { name: subject.display_name })}</span>
+            <WaterButtons ownerId={subject.user_id} date={past ? viewDate : undefined} />
+          </div>
+        ) : null}
+        {!isSelf && waterAcc === "none" ? (
+          <p className="text-[12px] text-fg-muted">{t("{name} hasn't shared water with you, so it isn't shown. They can turn it on in Settings → Sharing → Water intake.", { name: subject.display_name })}</p>
+        ) : null}
         <WeekStrip week={day.week} today={today} selected={viewDate} t={t} locale={locale} />
       </section>
 

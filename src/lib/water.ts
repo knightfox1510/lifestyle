@@ -27,11 +27,20 @@ export async function waterTarget(session: AppSession, ownerId = session.userId)
   return (prefs as { water_target_ml: number | null } | null)?.water_target_ml ?? (goal as { water_ml: number | null } | null)?.water_ml ?? 2000;
 }
 
-/** Logs water for yourself (your own rows are always writable, whatever modules are on). */
-export async function insertWater(session: AppSession, ml: number, occurredAt?: string) {
+/**
+ * What you can do with someone's water: your own always; a partner's through
+ * their "Water intake" share (or their bladder diary share, which includes drinks).
+ */
+export function waterAccess(session: AppSession, ownerId: string): "none" | "read" | "write" {
+  const levels = [session.accessTo("water", ownerId), session.accessTo("bladder_diary", ownerId)];
+  return levels.includes("write") ? "write" : levels.includes("read") ? "read" : "none";
+}
+
+/** Logs water for yourself, or for a partner who lets you (the database checks the share too). */
+export async function insertWater(session: AppSession, ml: number, occurredAt?: string, ownerId = session.userId) {
   const { data, error } = await session.supabase.from("fluid_intake").insert({
     ...(occurredAt ? { occurred_at: occurredAt } : {}),
-    owner_id: session.userId,
+    owner_id: ownerId,
     created_by: session.userId,
     household_id: session.household.id,
     drink: "water",

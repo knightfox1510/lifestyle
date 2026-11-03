@@ -9,7 +9,7 @@ import { encryptSecret } from "@/lib/crypto";
 import { generate } from "@/lib/ai/gemini";
 import { GoogleGenAI } from "@google/genai";
 import { MODELS, classifyAiError, cleanGeminiKey, isPlausibleGeminiKey } from "@/lib/ai/retry";
-import { MODULE_BY_KEY } from "@/modules/registry";
+import { MODULE_BY_KEY, SHARE_ONLY } from "@/modules/registry";
 import { cookies } from "next/headers";
 import { LANGS, LANG_COOKIE } from "@/lib/i18n/core";
 import type { ActionResult } from "@/lib/types";
@@ -208,8 +208,8 @@ export async function removeGeminiKey() {
 // ---------------------------------------------------------------- sharing ----
 
 export async function setShare(granteeId: string, moduleKey: string, level: "none" | "read" | "write") {
-  const def = MODULE_BY_KEY[moduleKey];
-  if (!def || def.scope === "household") return;
+  const def = MODULE_BY_KEY[moduleKey] ?? SHARE_ONLY.find((m) => m.key === moduleKey);
+  if (!def || ("scope" in def && def.scope === "household")) return;
   const session = await getSession();
   if (!session.members.some((m) => m.user_id === granteeId) || granteeId === session.userId) return;
 

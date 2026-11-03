@@ -1,6 +1,6 @@
 import { getSession } from "@/lib/session";
 import { Badge, Card, EmptyState, PageHeader } from "@/components/ui";
-import { MODULE_BY_KEY, SHAREABLE_MODULES } from "@/modules/registry";
+import { SHARE_NAME, SHARE_ONLY, SHAREABLE_MODULES } from "@/modules/registry";
 import { ShareSelect } from "./share-select";
 
 export const metadata = { title: "Sharing" };
@@ -49,6 +49,15 @@ export default async function SharingPage() {
                     <ShareSelect granteeId={p.user_id} moduleKey={m.key} value={given(p.user_id, m.key)} />
                   </li>
                 ))}
+                {SHARE_ONLY.map((m) => (
+                  <li key={m.key} className="flex items-center justify-between gap-3 py-2.5">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium"><span aria-hidden>{m.icon}</span> {m.name}</p>
+                      <p className="text-xs text-fg-muted">{m.description}</p>
+                    </div>
+                    <ShareSelect granteeId={p.user_id} moduleKey={m.key} value={given(p.user_id, m.key)} />
+                  </li>
+                ))}
               </ul>
             </Card>
           ))}
@@ -59,7 +68,7 @@ export default async function SharingPage() {
               <ul className="space-y-1 text-sm">
                 {received.map((s) => (
                   <li key={`${s.owner_id}-${s.module_key}`}>
-                    {nameOf(s.owner_id)}: {MODULE_BY_KEY[s.module_key]?.name ?? s.module_key}{" "}
+                    {nameOf(s.owner_id)}: {SHARE_NAME[s.module_key] ?? s.module_key}{" "}
                     <Badge tone="accent">{s.level === "write" ? "can edit" : "view"}</Badge>
                   </li>
                 ))}
@@ -76,7 +85,7 @@ export default async function SharingPage() {
                 {log.map((l: { viewer_id: string; module_key: string; viewed_at: string }, i: number) => (
                   <li key={i} className="flex justify-between gap-2">
                     <span>
-                      {nameOf(l.viewer_id)} viewed {MODULE_BY_KEY[l.module_key]?.name ?? l.module_key}
+                      {nameOf(l.viewer_id)} viewed {SHARE_NAME[l.module_key] ?? l.module_key}
                     </span>
                     <span className="text-fg-muted">{new Date(l.viewed_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</span>
                   </li>
