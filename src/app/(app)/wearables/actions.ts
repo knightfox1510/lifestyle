@@ -1,5 +1,7 @@
 "use server";
 
+import { createAdminClient } from "@/lib/supabase/admin";
+import { readHealthConnectExport, saveHealthConnect } from "@/lib/health-connect-import";
 import { createHash, randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -85,4 +87,43 @@ export async function revokeIngestToken(id: string) {
   const session = await getSession();
   await session.supabase.from("ingest_tokens").delete().eq("id", id).eq("user_id", session.userId);
   revalidatePath("/wearables");
+}
+
+const UPLOAD_PATH = /^[0-9a-f-]{36}\/[0-9a-f-]{36}\.zip$/;
+
+/** A one-time upload link for a Health Connect export picked on this device. */
+export async function prepareHealthConnectUpload(): Promise<ActionResult & { path?: string; token?: string }> {
+  const session = await getSession();
+  if (!session.isModuleEnabled("wearables")) return { error: "Wearables are turned off." };
+  const path = `${session.userId}/${crypto.randomUUID()}.zip`;
+  const { data, error } = await createAdminClient().storage.from("health-imports").createSignedUploadUrl(path);
+  if (error || !data) return { error: "Couldn't prepare the upload. Run the latest database update in Supabase." };
+  return { ok: true, path, token: data.token };
+}
+
+/** Reads an uploaded Health Connect export and saves it (same as the daily sync). */
+export async function importHealthConnectUpload(path: string, name: string): Promise<ActionResult> {
+  const session = await getSession();
+  if (!UPLOAD_PATH.test(path) || !path.startsWith(`${session.userId}/`)) return { error: "Invalid upload." };
+  const admin = createAdminClient();
+  try {
+    const file = await admin.storage.from("health-imports").download(path);
+    if (file.error || !file.data) return { error: "The upload didn't arrive. Try again." };
+    const summary = await readHealthConnectExport(new Uint8Array(await file.data.arrayBuffer()), session.profile.timezone);
+    const res = await saveHealthConnect(session.supabase, session.userId, session.household.id, summary, { bodyOn: session.isModuleEnabled("body_recomp") });
+    const message = res.days
+      ? `Imported ${res.days} days (${res.firstDay} to ${res.lastDay}): ${res.found.join(", ")}${res.weights ? `, plus ${res.weights} weigh-ins` : ""}.`
+      : `Nothing to import. Tables in the file: ${summary.tables.slice(0, 15).join(", ") || "none"}.`;
+    await admin.from("health_connect_syncs").upsert(
+      { user_id: session.userId, last_run_at: new Date().toISOString(), last_status: res.days ? "ok" : "error", last_message: `Manual upload: ${message}`.slice(0, 500), last_file: name.slice(0, 300), last_day: res.lastDay, updated_at: new Date().toISOString() },
+      { onConflict: "user_id" },
+    );
+    refreshModule("/wearables");
+    refreshModule("/body");
+    return res.days ? { ok: true, message } : { error: message };
+  } catch (e) {
+    return { error: errorMessage(e) };
+  } finally {
+    await admin.storage.from("health-imports").remove([path]);
+  }
 }

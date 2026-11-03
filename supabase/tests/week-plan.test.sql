@@ -58,6 +58,22 @@ do $$ begin
 exception when insufficient_privilege then null;
 end $$;
 
+-- Health Connect sync status: written by the server only; you read only your own.
+reset role;
+insert into public.health_connect_syncs (user_id, last_status, last_message) values ('4d4d4d4d-0000-0000-0000-000000000051', 'ok', 'Imported 3 days');
+set role authenticated;
+select set_config('request.jwt.claim.sub', :q, false);
+do $$ begin
+  assert (select count(*) from public.health_connect_syncs) = 0, 'partner cannot read someone else''s sync status';
+  insert into public.health_connect_syncs (user_id) values ('5e5e5e5e-0000-0000-0000-000000000052');
+  raise exception 'SHOULD_FAIL: users cannot write sync status';
+exception when insufficient_privilege then null;
+end $$;
+select set_config('request.jwt.claim.sub', :p, false);
+do $$ begin
+  assert (select count(*) from public.health_connect_syncs) = 1, 'you read your own';
+end $$;
+
 -- Per-person dishes: only for members of the same household.
 select set_config('request.jwt.claim.sub', :p, false);
 insert into public.meal_plan (household_id, plan_date, meal, title, for_user, portions, kcal_per_serving, ingredients)

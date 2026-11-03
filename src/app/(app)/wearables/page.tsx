@@ -5,6 +5,7 @@ import { Card, EmptyState, buttonClass } from "@/components/ui";
 import { ColumnChart, LineChart } from "@/components/charts";
 import type { WearableDay } from "@/lib/types";
 import { CsvImport, ManualDayForm, TokenCreator } from "./client";
+import { HealthConnectSync, type SyncStatus } from "./health-connect";
 import { revokeIngestToken } from "./actions";
 
 export const metadata = { title: "Wearable data" };
@@ -14,10 +15,11 @@ export default async function WearablesPage() {
   const ownerId = session.subject.user_id;
   const isSelf = ownerId === session.userId;
   const today = todayIn(session.profile.timezone);
-  const [{ data }, tokens, h] = await Promise.all([
+  const [{ data }, tokens, h, hc] = await Promise.all([
     session.supabase.from("wearable_daily").select("*").eq("owner_id", ownerId).gte("day", addDays(today, -89)).order("day"),
     isSelf ? session.supabase.from("ingest_tokens").select("id, label, created_at, last_used_at").eq("user_id", session.userId) : Promise.resolve({ data: [] }),
     headers(),
+    isSelf ? session.supabase.from("health_connect_syncs").select("last_run_at, last_status, last_message, last_day, days_imported").eq("user_id", session.userId).maybeSingle() : Promise.resolve({ data: null }),
   ]);
   const rows = (data ?? []) as WearableDay[];
   const byDay = new Map(rows.map((r) => [r.day, r]));
@@ -58,13 +60,17 @@ export default async function WearablesPage() {
 
       {isSelf ? (
         <>
+          <Card className="space-y-3">
+            <h2 className="font-semibold">Health Connect (Android)</h2>
+            <HealthConnectSync origin={origin} status={(hc.data ?? null) as SyncStatus} />
+          </Card>
           <Card className="space-y-2">
             <h2 className="font-semibold">Add a day by hand</h2>
             <ManualDayForm today={today} />
           </Card>
           <CsvImport />
           <Card className="space-y-3">
-            <h2 className="font-semibold">Automatic sync</h2>
+            <h2 className="font-semibold">Other automatic sync (webhook)</h2>
             <p className="text-sm text-fg-muted">
               The Amazfit Helio Strap syncs to the Zepp app, which can write to <strong>Health Connect</strong> on Android (Zepp → Profile → Add accounts → Health Connect). A web app can&apos;t read Health Connect directly, so use any automation app that can read Health Connect and send an HTTP request (for example Tasker, or a &quot;Health Connect to webhook&quot; exporter) to post daily totals to the address below once a day. iPhone users can do the same from Apple Health with a Shortcuts automation.
             </p>

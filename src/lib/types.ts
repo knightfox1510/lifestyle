@@ -753,7 +753,7 @@ export type WearableDay = {
   id: string;
   owner_id: string;
   day: string;
-  source: "manual" | "csv" | "webhook";
+  source: "manual" | "csv" | "webhook" | "health_connect";
   steps: number | null;
   resting_hr: number | null;
   avg_hr: number | null;
