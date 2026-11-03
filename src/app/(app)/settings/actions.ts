@@ -239,3 +239,20 @@ export async function switchHousehold(hid: string) {
     redirect("/");
   }
 }
+
+/** My clock times for supplement timings (morning, with a meal…); blank = the default. */
+export async function saveSupplementTimes(_: ActionResult | null, form: FormData): Promise<ActionResult> {
+  const keys = ["morning", "with_meal", "afternoon", "post_workout", "evening", "bedtime"];
+  const times: Record<string, string> = {};
+  for (const k of keys) {
+    const v = String(form.get(k) ?? "").trim();
+    if (!v) continue;
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(v)) return { error: "Use times like 07:30." };
+    times[k] = v;
+  }
+  const session = await getSession();
+  const { error } = await session.supabase.from("profiles").update({ supplement_times: times }).eq("id", session.userId);
+  if (error) return { error: "Couldn't save. If you've just updated the app, run the latest database update in Supabase." };
+  refreshAll();
+  return { ok: true, message: "Times saved." };
+}

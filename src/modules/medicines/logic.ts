@@ -1,11 +1,10 @@
-import { dayOfWeek } from "@/lib/dates";
+import { isDueOn } from "@/modules/schedule";
 import type { Medicine, MedicineDose } from "@/lib/types";
 
 export function isScheduledOn(med: Medicine, date: string): boolean {
   if (!med.active || med.times.length === 0) return false;
-  if (date < med.start_date) return false;
   if (med.end_date && date > med.end_date) return false;
-  return !med.days_of_week || med.days_of_week.includes(dayOfWeek(date));
+  return isDueOn({ days_of_week: med.days_of_week, repeat_every_days: med.repeat_every_days ?? null, start: med.start_date }, date);
 }
 
 /** Active and within its start/end dates on `date` (as-needed medicines included). */

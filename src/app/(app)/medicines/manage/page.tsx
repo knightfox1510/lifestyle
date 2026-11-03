@@ -1,7 +1,8 @@
 import { getSession } from "@/lib/session";
 import { Badge, Card, buttonClass } from "@/components/ui";
 import type { Medicine } from "@/lib/types";
-import { DAY_LETTERS, doseLabel, refillInfo } from "@/modules/medicines/logic";
+import { doseLabel, refillInfo } from "@/modules/medicines/logic";
+import { describeRepeat, nextDueOn } from "@/modules/schedule";
 import { formatDate } from "@/modules/medical/meta";
 import { MedicineForm } from "./medicine-form";
 import { restockMedicine, setMedicineActive } from "../actions";
@@ -52,7 +53,7 @@ export default async function ManageMedicinesPage({ searchParams }: PageProps<"/
                     </p>
                     <p className="text-xs text-fg-muted">
                       {doseLabel(m)} · {m.times.length ? m.times.join(", ") : "as needed"}
-                      {m.days_of_week ? ` · ${m.days_of_week.map((d) => DAY_LETTERS[d]).join(" ")}` : ""}
+                      {m.times.length && (m.days_of_week || m.repeat_every_days) ? ` · ${describeRepeat({ days_of_week: m.days_of_week, repeat_every_days: m.repeat_every_days })}${m.repeat_every_days ? `, next ${shortDate(nextDueOn({ days_of_week: null, repeat_every_days: m.repeat_every_days, start: m.start_date }, today) ?? today)}` : ""}` : ""}
                       {m.end_date ? ` · until ${formatDate(m.end_date)}` : ""}
                     </p>
                     {m.ingredients ? <p className="text-xs text-fg-muted">Contains: {m.ingredients}</p> : null}

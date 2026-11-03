@@ -29,6 +29,7 @@ const PAGES: PageEntry[] = [
   { href: "/assistant", title: "Ask AI", hint: "Questions about your health, food and plans", module: null, words: "chat assistant gemini" },
   { href: "/customize", title: "Home widgets", hint: "Extra cards under your day", module: null, words: "customise dashboard" },
   { href: "/settings", title: "Settings", hint: "Language, Home view, profile", module: null, words: "language hindi marathi" },
+  { href: "/settings/times", title: "Supplement times", hint: "When morning, with a meal, bedtime… mean for you", module: "supplements", words: "timing schedule reminder time" },
   { href: "/settings/features", title: "My features", hint: "Hide what you don't use", module: null, words: "turn off hide disable" },
   { href: "/settings/sharing", title: "Sharing", hint: "What your partner can see or edit", module: null, words: "privacy partner access" },
   { href: "/settings/notifications", title: "Notifications & reminders", hint: "Push, water and dose reminders", module: null, words: "remind alerts push" },

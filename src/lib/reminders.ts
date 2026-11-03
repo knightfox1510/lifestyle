@@ -5,13 +5,15 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { notifyUser } from "@/lib/push";
 import { addDays, dayOfWeek, localDate, localTime, startOfLocalDayIso } from "@/lib/dates";
 import { isScheduledOn } from "@/modules/medicines/logic";
+import { TIMING_LABEL, supplementRepeat, timingTimes } from "@/modules/supplements/meta";
+import { isDueOn } from "@/modules/schedule";
 import { nextOccurrence } from "@/modules/occasions/logic";
 import type { Occasion } from "@/lib/types";
 import { daysUntil } from "@/modules/pantry/match";
 import { generateDigest, weekStart } from "@/lib/digest";
 import { loadDays, waterSettings } from "@/lib/today";
 import { serviceSession } from "@/lib/service-session";
-import type { FitnessClass, Medicine, NotificationPrefs, Profile } from "@/lib/types";
+import type { FitnessClass, Medicine, NotificationPrefs, Profile, Supplement } from "@/lib/types";
 import { makeT, isLang } from "@/lib/i18n/core";
 import { WINDOW_MINUTES, dueWaterSlot, inQuietHours, inWindow, shouldRemind, toMinutes } from "@/modules/notifications/timing";
 
@@ -108,6 +110,23 @@ async function remindUser(
 
   if (quiet) return result;
 
+  // Supplements: one nudge per time of day ("Morning supplements: D3, B12"), at the person's own times.
+  if (prefs.medicines && on("supplements")) {
+    const [{ data: sups }, { data: logs }] = await Promise.all([
+      admin.from("supplements").select("*").eq("owner_id", profile.id).eq("active", true),
+      admin.from("supplement_logs").select("supplement_id").eq("owner_id", profile.id).eq("log_date", today),
+    ]);
+    const times = timingTimes((profile as { supplement_times?: Record<string, string> | null }).supplement_times);
+    const taken = new Set(((logs ?? []) as { supplement_id: string }[]).map((l) => l.supplement_id));
+    const due = ((sups ?? []) as (Supplement & { created_at: string })[]).filter(
+      (x) => !taken.has(x.id) && times[x.timing] && inWindow(time, toMinutes(times[x.timing]!)) && isDueOn(supplementRepeat(x, (iso) => localDate(iso, tz)), today),
+    );
+    for (const timing of [...new Set(due.map((x) => x.timing))]) {
+      const names = due.filter((x) => x.timing === timing).map((x) => x.name);
+      await send("supplement", `supp:${timing}:${today}`, `🌿 ${tr("{when} supplements", { when: tr(TIMING_LABEL[timing]) })}`, names.join(", "), "/medicines");
+    }
+  }
+
   // Fitness classes, N minutes before.
   if (prefs.fitness && on("fitness")) {
     const { data: classes } = await admin.from("fitness_classes").select("*").eq("owner_id", profile.id).eq("active", true).not("remind_minutes_before", "is", null);
@@ -164,6 +183,7 @@ async function remindUser(
       days: 1,
       enabled: { medicines: on("medicines"), food: on("food_diary"), checkin: on("checkin"), supplements: on("supplements") },
       waterTarget: water.target,
+      supplementTimes: (profile as { supplement_times?: Record<string, string> | null }).supplement_times,
     });
     const left = day.today.rings.filter((r) => r.pct < 1).length;
     if (day.today.rings.length && left > 0) {

@@ -22,7 +22,7 @@ export default async function WeeklyWrapPage() {
   const prevFrom = startOfLocalDayIso(addDays(today, -13));
   const water = await waterSettings(session.supabase, me);
   const [day, act, meds, doses, cheers, leaks] = await Promise.all([
-    loadDays(session.supabase, me, { tz, today, days: 7, enabled: { medicines: on("medicines"), food: on("food_diary"), checkin: on("checkin"), supplements: on("supplements") }, waterTarget: water.target }),
+    loadDays(session.supabase, me, { tz, today, days: 7, enabled: { medicines: on("medicines"), food: on("food_diary"), checkin: on("checkin"), supplements: on("supplements") }, waterTarget: water.target, supplementTimes: session.profile.supplement_times }),
     activityFor(session, me, today),
     on("medicines") ? session.supabase.from("medicines").select("*").eq("owner_id", me) : Promise.resolve({ data: [] }),
     on("medicines") ? session.supabase.from("medicine_doses").select("*").eq("owner_id", me).gte("scheduled_date", week[0]) : Promise.resolve({ data: [] }),

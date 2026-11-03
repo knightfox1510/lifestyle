@@ -24,7 +24,7 @@ export default async function CloseDayPage() {
   const on = (m: string) => session.isModuleEnabled(m);
   const water = await waterSettings(session.supabase, me);
   const [day, act, ci] = await Promise.all([
-    loadDays(session.supabase, me, { tz, today, days: 1, enabled: { medicines: on("medicines"), food: on("food_diary"), checkin: on("checkin"), supplements: on("supplements") }, waterTarget: water.target }),
+    loadDays(session.supabase, me, { tz, today, days: 1, enabled: { medicines: on("medicines"), food: on("food_diary"), checkin: on("checkin"), supplements: on("supplements") }, waterTarget: water.target, supplementTimes: session.profile.supplement_times }),
     activityFor(session, me, today),
     on("checkin") ? session.supabase.from("daily_checkins").select("*").eq("owner_id", me).eq("checkin_date", today).maybeSingle() : Promise.resolve({ data: null }),
   ]);

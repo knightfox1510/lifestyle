@@ -74,6 +74,21 @@ do $$ begin
 exception when check_violation then null;
 end $$;
 
+-- How often: every N days and weekdays are checked.
+insert into public.supplements (household_id, name, repeat_every_days, schedule_start) values (:'hid', 'D3 60K', 7, '2026-11-02');
+insert into public.supplements (household_id, name, days_of_week) values (:'hid', 'Iron', array[1, 3, 5]::smallint[]);
+do $$ begin
+  insert into public.supplements (household_id, name, days_of_week) values ((select id from public.households where name = 'Records home'), 'Bad', array[9]::smallint[]);
+  raise exception 'SHOULD_FAIL: weekday 9';
+exception when check_violation then null;
+end $$;
+do $$ begin
+  insert into public.medicines (household_id, name, times, dose_amount, repeat_every_days) values ((select id from public.households where name = 'Records home'), 'Bad', array['09:00'], 1, 1);
+  raise exception 'SHOULD_FAIL: every 1 day';
+exception when check_violation then null;
+end $$;
+update public.profiles set supplement_times = '{"morning": "07:15"}' where id = :j;
+
 reset role;
 \o
 \echo 'ALL RECORDS EDIT TESTS PASSED'

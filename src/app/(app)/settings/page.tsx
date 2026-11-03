@@ -22,6 +22,7 @@ export default async function SettingsPage() {
         <HubList
           items={[
             { href: "/settings/household", name: t("Household"), hint: t("Members, invites, features on/off, AI key and limits.") },
+            { href: "/settings/times", name: t("Supplement times"), hint: t("What morning, with a meal, bedtime… mean for you") },
             { href: "/settings/features", name: t("My features"), hint: t("Hide what you don't use from your own menus and Today.") },
             { href: "/settings/sharing", name: t("Sharing"), hint: t("Choose what your partner can see or edit, and who viewed it.") },
             { href: "/settings/notifications", name: t("Notifications"), hint: t("Turn on push for this device; choose reminders and quiet hours.") },

@@ -7,8 +7,9 @@ import type { Medicine, MedicineDose } from "@/lib/types";
 import { doseLabel, isCurrentOn, isUpcomingOn, refillInfo, slotsForDay } from "@/modules/medicines/logic";
 import { DoseButtons, AsNeededButton } from "./dose-buttons";
 import { SupplementTakeButton } from "@/app/(app)/supplements/take-button";
-import { TIMING_LABEL, TIMING_TIME } from "@/modules/supplements/meta";
-import type { SupplementTiming } from "@/lib/types";
+import { TIMING_LABEL, supplementRepeat, timingTimes } from "@/modules/supplements/meta";
+import type { Supplement } from "@/lib/types";
+import { isDueOn } from "@/modules/schedule";
 import { updateDose } from "./actions";
 import { EditRecord } from "@/components/edit-record";
 import { getT } from "@/lib/i18n/server";
@@ -33,13 +34,14 @@ export default async function MedicinesTodayPage({ searchParams }: PageProps<"/m
   const [{ data: medData }, { data: doseData }, suppRes, suppLogRes] = await Promise.all([
     session.supabase.from("medicines").select("*").eq("owner_id", ownerId).eq("active", true).order("name"),
     session.supabase.from("medicine_doses").select("*").eq("owner_id", ownerId).eq("scheduled_date", date),
-    suppsOn ? session.supabase.from("supplements").select("id, name, dose, timing, created_at").eq("owner_id", ownerId).eq("active", true).order("sort") : Promise.resolve({ data: [] }),
+    suppsOn ? session.supabase.from("supplements").select("*").eq("owner_id", ownerId).eq("active", true).order("sort") : Promise.resolve({ data: [] }),
     suppsOn ? session.supabase.from("supplement_logs").select("supplement_id, taken_at").eq("owner_id", ownerId).eq("log_date", date) : Promise.resolve({ data: [] }),
   ]);
   // Supplements for this day, in schedule order (by their usual time; "any time" ones last).
-  const supps = ((suppRes.data ?? []) as { id: string; name: string; dose: string | null; timing: SupplementTiming; created_at: string }[])
-    .filter((x) => localDate(x.created_at, tz) <= date)
-    .sort((a, b) => (TIMING_TIME[a.timing] ?? "99").localeCompare(TIMING_TIME[b.timing] ?? "99"));
+  const sTimes = timingTimes(session.profile.supplement_times);
+  const supps = ((suppRes.data ?? []) as (Supplement & { created_at: string })[])
+    .filter((x) => isDueOn(supplementRepeat(x, (iso) => localDate(iso, tz)), date))
+    .sort((a, b) => (sTimes[a.timing] ?? "99").localeCompare(sTimes[b.timing] ?? "99"));
   const suppTaken = new Map(((suppLogRes.data ?? []) as { supplement_id: string; taken_at: string }[]).map((l) => [l.supplement_id, l.taken_at]));
   const meds = (medData ?? []) as Medicine[];
   const doses = (doseData ?? []) as MedicineDose[];
@@ -162,7 +164,7 @@ export default async function MedicinesTodayPage({ searchParams }: PageProps<"/m
           </div>
           <ul className="divide-y divide-border">
             {supps.map((x) => {
-              const time = TIMING_TIME[x.timing];
+              const time = sTimes[x.timing];
               const takenAt = suppTaken.get(x.id);
               const late = isToday && !takenAt && time !== null && time < now;
               return (
@@ -183,7 +185,7 @@ export default async function MedicinesTodayPage({ searchParams }: PageProps<"/m
             })}
           </ul>
           <p className="mt-2 text-xs text-fg-muted">
-            {t("Times are a guide from each supplement's timing.")} <Link href="/supplements" className="text-accent underline">{t("Manage supplements")}</Link>
+            {t("Times come from each supplement's timing.")} <Link href="/settings/times" className="text-accent underline">{t("Change times")}</Link> · <Link href="/supplements" className="text-accent underline">{t("Manage supplements")}</Link>
           </p>
         </Card>
       ) : null}

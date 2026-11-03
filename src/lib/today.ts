@@ -3,7 +3,8 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { lastNDays, localDate, localTime, startOfLocalDayIso } from "@/lib/dates";
 import type { Medicine, MedicineDose, NotificationPrefs, Supplement, SupplementLog } from "@/lib/types";
-import { TIMING_TIME } from "@/modules/supplements/meta";
+import { supplementRepeat, timingTimes } from "@/modules/supplements/meta";
+import { isDueOn } from "@/modules/schedule";
 import { slotsForDay } from "@/modules/medicines/logic";
 import { MAIN_MEALS, dayClosed, rings, type Ring, type RingInput } from "@/modules/engagement/rings";
 
@@ -21,7 +22,7 @@ type Enabled = { medicines: boolean; food: boolean; checkin: boolean; supplement
 export async function loadDays(
   db: SupabaseClient,
   ownerId: string,
-  opts: { tz: string; today: string; days: number; enabled: Enabled; waterTarget: number },
+  opts: { tz: string; today: string; days: number; enabled: Enabled; waterTarget: number; supplementTimes?: Record<string, string> | null },
 ) {
   const { tz, today, enabled } = opts;
   const dayList = lastNDays(today, opts.days);
@@ -33,13 +34,14 @@ export async function loadDays(
     enabled.medicines ? db.from("medicines").select("*").eq("owner_id", ownerId).eq("active", true) : none,
     enabled.medicines ? db.from("medicine_doses").select("*").eq("owner_id", ownerId).gte("scheduled_date", dayList[0]) : none,
     enabled.checkin ? db.from("daily_checkins").select("checkin_date, updated_at").eq("owner_id", ownerId).gte("checkin_date", dayList[0]) : none,
-    enabled.supplements ? db.from("supplements").select("id, name, dose, timing, active, created_at").eq("owner_id", ownerId).eq("active", true) : none,
+    enabled.supplements ? db.from("supplements").select("*").eq("owner_id", ownerId).eq("active", true) : none,
     enabled.supplements ? db.from("supplement_logs").select("supplement_id, log_date, taken_at").eq("owner_id", ownerId).gte("log_date", dayList[0]) : none,
   ]);
-  const supps = (sp.data ?? []) as (Pick<Supplement, "id" | "name" | "dose" | "timing" | "active"> & { created_at: string })[];
+  const supps = (sp.data ?? []) as (Supplement & { created_at: string })[];
+  const times = timingTimes(opts.supplementTimes);
   const suppLogs = (sl.data ?? []) as Pick<SupplementLog, "supplement_id" | "log_date" | "taken_at">[];
-  // A supplement counts from the day it was added.
-  const suppsOn = (date: string) => supps.filter((x) => localDate(x.created_at, tz) <= date);
+  // A supplement counts on the days it's due (every day, chosen weekdays or every N days), from when it started.
+  const suppsOn = (date: string) => supps.filter((x) => isDueOn(supplementRepeat(x, (iso) => localDate(iso, tz)), date));
   const fluids = (fl.data ?? []) as { volume_ml: number; occurred_at: string; drink: string }[];
   const foods = (fd.data ?? []) as { eaten_at: string; meal: string }[];
   const meds = (md.data ?? []) as Medicine[];
@@ -91,7 +93,7 @@ export async function loadDays(
     /** Supplements not ticked yet today, with the clock time of their timing (null = any time). */
     dueSupplements: suppsOn(today)
       .filter((x) => !suppLogs.some((l) => l.supplement_id === x.id && l.log_date === today))
-      .map((x) => ({ supplementId: x.id, name: x.name, dose: x.dose, timing: x.timing, time: TIMING_TIME[x.timing] })),
+      .map((x) => ({ supplementId: x.id, name: x.name, dose: x.dose, timing: x.timing, time: times[x.timing] })),
     week: lastNDays(today, 7).map((d) => statuses.find((s) => s.date === d) ?? { date: d, rings: [], closed: false, any: false }),
   };
 }

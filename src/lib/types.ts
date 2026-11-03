@@ -8,6 +8,8 @@ export type Profile = {
   language: "en" | "hi" | "mr";
   /** Home hero: day arc (default), quiet bars or tiles. */
   home_view?: "arc" | "bars" | "tiles";
+  /** Clock time per supplement timing (e.g. { morning: "07:30" }); defaults fill the rest. */
+  supplement_times?: Record<string, string> | null;
 };
 
 export type Household = {
@@ -175,6 +177,8 @@ export type Medicine = {
   ingredients?: string | null;
   /** Vitamins/minerals in ONE unit (tablet, capsule, ml); counted per dose taken. */
   nutrients?: Record<string, number> | null;
+  /** Every N days from start_date (weekly = 7, monthly ≈ 30); null = by days_of_week. */
+  repeat_every_days?: number | null;
 };
 
 export type MedicineDose = {
@@ -205,6 +209,10 @@ export type Supplement = {
   nutrients?: Record<string, number> | null;
   serving_label?: string | null;
   nutrients_source?: "manual" | "label" | "catalog" | null;
+  /** How often (missing on databases not yet updated = every day). */
+  days_of_week?: number[] | null;
+  repeat_every_days?: number | null;
+  schedule_start?: string | null;
 };
 
 export type SupplementLog = { supplement_id: string; owner_id: string; log_date: string; taken_at: string };

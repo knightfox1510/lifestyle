@@ -22,6 +22,8 @@ import { DoseButtons } from "@/app/(app)/medicines/dose-buttons";
 import { SupplementChecklist } from "@/app/(app)/supplements/checklist";
 import { CheckinForm } from "@/app/(app)/checkin/checkin-form";
 import { HabitGrid } from "@/app/(app)/habits/habit-grid";
+import { isDueOn } from "@/modules/schedule";
+import { supplementRepeat } from "@/modules/supplements/meta";
 import { addDays, lastNDays, localDate, localTime, startOfLocalDayIso, todayIn } from "@/lib/dates";
 import { streak } from "@/lib/streak";
 import { slotsForDay, doseLabel } from "@/modules/medicines/logic";
@@ -201,7 +203,9 @@ export async function Widget({ widgetKey, size, session }: { widgetKey: string; 
         session.supabase.from("supplements").select("*").eq("owner_id", subject.user_id).eq("active", true).order("sort"),
         session.supabase.from("supplement_logs").select("supplement_id").eq("owner_id", subject.user_id).eq("log_date", today),
       ]);
-      const sups = (s ?? []) as Supplement[];
+      const tzw = session.profile.timezone;
+      // Only what's due today (weekly / every-few-days ones show on their days).
+      const sups = ((s ?? []) as (Supplement & { created_at: string })[]).filter((x) => isDueOn(supplementRepeat(x, (iso) => localDate(iso, tzw)), today));
       return (
         <WidgetFrame size={size} title="Supplements" href="/supplements">
           {sups.length ? (

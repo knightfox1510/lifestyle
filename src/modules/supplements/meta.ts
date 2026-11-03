@@ -18,3 +18,21 @@ export const TIMING_TIME: Record<SupplementTiming, string | null> = {
   evening: "19:00",
   bedtime: "22:00",
 };
+
+/** The person's own clock times (Settings → Supplement times) over the defaults. */
+export function timingTimes(overrides?: Record<string, string> | null): Record<SupplementTiming, string | null> {
+  const out = { ...TIMING_TIME };
+  for (const [k, v] of Object.entries(overrides ?? {})) {
+    if (k in out && typeof v === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(v)) out[k as SupplementTiming] = v;
+  }
+  return out;
+}
+
+/** A supplement's schedule, starting on schedule_start (or the day it was added). */
+export function supplementRepeat(x: { days_of_week?: number[] | null; repeat_every_days?: number | null; schedule_start?: string | null; created_at?: string }, tzDate?: (iso: string) => string) {
+  return {
+    days_of_week: x.days_of_week ?? null,
+    repeat_every_days: x.repeat_every_days ?? null,
+    start: x.schedule_start ?? (x.created_at ? (tzDate ? tzDate(x.created_at) : x.created_at.slice(0, 10)) : null),
+  };
+}

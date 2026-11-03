@@ -5,7 +5,8 @@ import Link from "next/link";
 import { Button, Card, Checkbox, Field, Input, Select, Textarea, cx } from "@/components/ui";
 import { ActionMessage, SubmitButton } from "@/components/form-status";
 import { MEDICINE_FORMS, type Medicine } from "@/lib/types";
-import { DAY_LETTERS } from "@/modules/medicines/logic";
+import { FrequencyPicker, repeatColumns, type FrequencyValue } from "@/components/frequency-picker";
+import { frequencyOf } from "@/modules/schedule";
 import { saveMedicine } from "../actions";
 import { MedicineLookupButtons, MedicineNutrientFields } from "./medicine-lookup";
 
@@ -30,7 +31,12 @@ export function MedicineForm({
 }) {
   const [open, setOpen] = useState(Boolean(medicine));
   const [times, setTimes] = useState<string[]>(medicine?.times ?? ["08:00"]);
-  const [days, setDays] = useState<number[]>(medicine?.days_of_week ?? [0, 1, 2, 3, 4, 5, 6]);
+  const [freq, setFreq] = useState<FrequencyValue>(() => {
+    const r = { days_of_week: medicine?.days_of_week ?? null, repeat_every_days: medicine?.repeat_every_days ?? null };
+    return { frequency: frequencyOf(r), days: r.days_of_week ?? [0, 1, 2, 3, 4, 5, 6], every: r.repeat_every_days ?? 14 };
+  });
+  const cols = repeatColumns(freq);
+  const days = cols.days_of_week ?? [];
   const [name, setName] = useState(medicine?.name ?? "");
   const [strength, setStrength] = useState(medicine?.strength ?? "");
   const [form, setForm] = useState<string>(medicine?.form ?? "tablet");
@@ -42,7 +48,7 @@ export function MedicineForm({
     const res = await saveMedicine(prev, form);
     if (res.ok && !medicine) {
       setTimes(["08:00"]);
-      setDays([0, 1, 2, 3, 4, 5, 6]);
+      setFreq({ frequency: "daily", days: [0, 1, 2, 3, 4, 5, 6], every: 14 });
       setName("");
       setStrength("");
       setForm("tablet");
@@ -69,6 +75,7 @@ export function MedicineForm({
         {times.map((t, i) => (
           <input key={i} type="hidden" name="times" value={t} />
         ))}
+        <input type="hidden" name="repeat_every_days" value={cols.repeat_every_days ?? ""} />
         {days.map((d) => (
           <input key={d} type="hidden" name="days_of_week" value={d} />
         ))}
@@ -152,21 +159,7 @@ export function MedicineForm({
             ) : null}
             {times.length === 0 ? <span className="text-xs text-fg-muted">Taken as needed (no schedule)</span> : null}
           </div>
-          {times.length ? (
-            <div className="flex gap-1" role="group" aria-label="Days">
-              {DAY_LETTERS.map((l, d) => (
-                <button
-                  key={d}
-                  type="button"
-                  aria-pressed={days.includes(d)}
-                  onClick={() => setDays(days.includes(d) ? days.filter((x) => x !== d) : [...days, d])}
-                  className={cx("size-8 rounded-full text-xs", days.includes(d) ? "bg-accent text-accent-fg" : "bg-surface-2 text-fg-muted")}
-                >
-                  {l}
-                </button>
-              ))}
-            </div>
-          ) : null}
+          {times.length ? <FrequencyPicker value={freq} onChange={setFreq} startLabel="the start date below" /> : null}
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">

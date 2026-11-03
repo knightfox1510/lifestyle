@@ -1,5 +1,8 @@
 import { getSession } from "@/lib/session";
-import { lastNDays, addDays, shortDate, todayIn } from "@/lib/dates";
+import { lastNDays, addDays, localDate, shortDate, todayIn } from "@/lib/dates";
+import { describeRepeat, isDueOn, nextDueOn } from "@/modules/schedule";
+import { supplementRepeat } from "@/modules/supplements/meta";
+import { SupplementScheduleEdit } from "./schedule-edit";
 import { Badge, Card, EmptyState, buttonClass } from "@/components/ui";
 import type { Supplement, SupplementLog } from "@/lib/types";
 import { TIMING_LABEL } from "@/modules/supplements/meta";
@@ -28,19 +31,27 @@ export default async function SupplementsPage() {
     session.supabase.from("supplements").select("*").eq("owner_id", ownerId).order("sort"),
     session.supabase.from("supplement_logs").select("*").eq("owner_id", ownerId).gte("log_date", addDays(today, -29)),
   ]);
-  const all = (supData ?? []) as Supplement[];
-  const active = all.filter((s) => s.active);
+  const all = (supData ?? []) as (Supplement & { created_at: string })[];
+  const tz = session.profile.timezone;
+  const repeatOf = (x: Supplement & { created_at: string }) => supplementRepeat(x, (iso) => localDate(iso, tz));
+  const dueOn = (x: Supplement & { created_at: string }, d: string) => isDueOn(repeatOf(x), d);
+  const activeAll = all.filter((s) => s.active);
+  // Today's checklist is only what's due today; the rest say when they're next due.
+  const active = activeAll.filter((s) => dueOn(s, today));
+  const notToday = activeAll.filter((s) => !dueOn(s, today));
   const logs = (logData ?? []) as SupplementLog[];
   const takenToday = logs.filter((l) => l.log_date === today).map((l) => l.supplement_id);
   const has = (id: string, d: string) => logs.some((l) => l.supplement_id === id && l.log_date === d);
+  // Taken on how many of the days it was due (last 30 days, not counting today).
   const pct30 = (id: string) => {
-    const n = lastNDays(addDays(today, -1), 30).filter((d) => has(id, d)).length;
-    return Math.round((n / 30) * 100);
+    const x = all.find((s) => s.id === id)!;
+    const due = lastNDays(addDays(today, -1), 30).filter((d) => dueOn(x, d));
+    return due.length ? Math.round((due.filter((d) => has(id, d)).length / due.length) * 100) : 0;
   };
 
   return (
     <div className="space-y-4">
-      {active.length === 0 ? (
+      {activeAll.length === 0 ? (
         <EmptyState title="Your stack is empty">Add supplements like Whey, Creatine, Magnesium Glycinate, D3+K2 or Melatonin.</EmptyState>
       ) : (
         <Card>
@@ -50,11 +61,20 @@ export default async function SupplementsPage() {
               {takenToday.filter((id) => active.some((s) => s.id === id)).length}/{active.length}
             </span>
           </div>
-          <SupplementChecklist supplements={active} takenIds={takenToday} ownerId={ownerId} date={today} canWrite={canWrite} />
+          {active.length ? (
+            <SupplementChecklist supplements={active} takenIds={takenToday} ownerId={ownerId} date={today} canWrite={canWrite} />
+          ) : (
+            <p className="text-sm text-fg-muted">Nothing due today.</p>
+          )}
+          {notToday.length ? (
+            <p className="mt-3 text-xs text-fg-muted">
+              Not today: {notToday.map((x) => `${x.name} (next ${shortDate(nextDueOn(repeatOf(x), today) ?? today)})`).join(", ")}
+            </p>
+          ) : null}
         </Card>
       )}
 
-      {canWrite ? <AddSupplementForm ownerId={ownerId} /> : null}
+      {canWrite ? <AddSupplementForm ownerId={ownerId} today={today} /> : null}
 
       {all.length ? (
         <Card className="overflow-x-auto">
@@ -76,9 +96,12 @@ export default async function SupplementsPage() {
                   <td className="py-2 pr-2">
                     <span className="font-medium">{s.name}</span>
                     <span className="block text-xs text-fg-muted">
-                      {[s.dose, TIMING_LABEL[s.timing], s.stock_count !== null ? `${s.stock_count} left` : null].filter(Boolean).join(" · ")}
+                      {[s.dose, TIMING_LABEL[s.timing], describeRepeat(repeatOf(s)), s.stock_count !== null ? `${s.stock_count} left` : null].filter(Boolean).join(" · ")}
                     </span>
                     {!s.include_in_ai ? <Badge>hidden from AI</Badge> : null}
+                    {canWrite ? (
+                      <SupplementScheduleEdit id={s.id} ownerId={ownerId} daysOfWeek={s.days_of_week ?? null} every={s.repeat_every_days ?? null} start={repeatOf(s).start} today={today} />
+                    ) : null}
                     {canWrite ? (
                       <EditRecord
                         fields={[
@@ -94,7 +117,9 @@ export default async function SupplementsPage() {
                   </td>
                   {days.map((d) => (
                     <td key={d} className="px-0.5 text-center" title={`${shortDate(d)}: ${has(s.id, d) ? "taken" : "not taken"}`}>
-                      {canWrite ? (
+                      {!has(s.id, d) && !dueOn(s, d) ? (
+                        <span className="inline-block size-5 text-center text-xs leading-5 text-fg-muted" title={`${shortDate(d)}: not due`}>·</span>
+                      ) : canWrite ? (
                         <SupplementDayCell supplementId={s.id} ownerId={ownerId} date={d} taken={has(s.id, d)} label={`${s.name}, ${shortDate(d)}`} />
                       ) : (
                         <span className={`inline-block size-4 rounded ${has(s.id, d) ? "bg-accent" : "bg-surface-2 ring-1 ring-border"}`} />

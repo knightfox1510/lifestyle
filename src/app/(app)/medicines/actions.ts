@@ -26,6 +26,7 @@ const medicineSchema = z
     instructions: optText(300),
     times: z.array(z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Times must be HH:MM")).max(8),
     days_of_week: z.array(z.coerce.number().int().min(0).max(6)).max(7),
+    repeat_every_days: z.preprocess(blankToNull, z.coerce.number().int().min(2).max(365).nullable()),
     start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a start date"),
     end_date: optDate,
     stock_count: optNum,
@@ -66,7 +67,7 @@ export async function saveMedicine(_: ActionResult | null, form: FormData): Prom
   };
 
   // Databases without the composition/nutrients columns yet still save the rest.
-  const { ingredients, nutrients, ...basic } = row;
+  const { ingredients, nutrients, repeat_every_days, ...basic } = row;
   let note = "";
   try {
     const session = await requireWrite(MODULE, ownerId);
@@ -74,7 +75,7 @@ export async function saveMedicine(_: ActionResult | null, form: FormData): Prom
       let { error } = await session.supabase.from("medicines").update(row).eq("id", id).eq("owner_id", ownerId);
       if (isMissingColumn(error)) {
         ({ error } = await session.supabase.from("medicines").update(basic).eq("id", id).eq("owner_id", ownerId));
-        if (!error && (ingredients || Object.keys(nutrients).length)) note = " Composition and nutrients weren't saved: run the latest database update in Supabase.";
+        if (!error && (ingredients || Object.keys(nutrients).length || repeat_every_days)) note = " Some details (composition, nutrients, every-N-days) weren't saved: run the latest database update in Supabase.";
       }
       if (error) {
         console.error("save medicine failed", error.code, error.message);
@@ -85,7 +86,7 @@ export async function saveMedicine(_: ActionResult | null, form: FormData): Prom
       let { error } = await session.supabase.from("medicines").insert({ ...row, ...meta });
       if (isMissingColumn(error)) {
         ({ error } = await session.supabase.from("medicines").insert({ ...basic, ...meta }));
-        if (!error && (ingredients || Object.keys(nutrients).length)) note = " Composition and nutrients weren't saved: run the latest database update in Supabase.";
+        if (!error && (ingredients || Object.keys(nutrients).length || repeat_every_days)) note = " Some details (composition, nutrients, every-N-days) weren't saved: run the latest database update in Supabase.";
       }
       if (error) {
         console.error("add medicine failed", error.code, error.message);

@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { errorMessage, refreshModule, requireWrite } from "@/lib/guards";
+import { dbErrorMessage, errorMessage, isMissingColumn, refreshModule, requireWrite } from "@/lib/guards";
 import { getSession } from "@/lib/session";
 import { SUPPLEMENT_TIMINGS, type ActionResult } from "@/lib/types";
 import { NUTRIENT_KEYS } from "@/modules/nutrition/nutrients";
@@ -20,24 +20,51 @@ const supplementSchema = z.object({
     .refine((v) => v === null || (Number.isInteger(v) && v >= 0 && v <= 100000), "Stock must be a whole number"),
 });
 
+const repeatSchema = z.object({
+  days_of_week: z.array(z.coerce.number().int().min(0).max(6)).max(7),
+  repeat_every_days: z.preprocess((v) => (v === "" || v == null ? null : v), z.coerce.number().int().min(2).max(365).nullable()),
+  schedule_start: z.preprocess((v) => (v === "" || v == null ? null : v), z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable()),
+});
+
+/** Columns for how often: every N days wins; 0 or 7 weekdays = every day. */
+function repeatRow(r: z.infer<typeof repeatSchema>) {
+  const days = [...new Set(r.days_of_week)].sort();
+  return {
+    days_of_week: r.repeat_every_days || days.length === 0 || days.length === 7 ? null : days,
+    repeat_every_days: r.repeat_every_days,
+    ...(r.schedule_start ? { schedule_start: r.schedule_start } : {}),
+  };
+}
+
 export async function addSupplement(_: ActionResult | null, form: FormData): Promise<ActionResult> {
   const parsed = supplementSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const rep = repeatSchema.safeParse({ days_of_week: form.getAll("days_of_week").map(String), repeat_every_days: form.get("repeat_every_days"), schedule_start: form.get("schedule_start") });
   const { ownerId, ...values } = parsed.data;
+  const schedule = rep.success ? repeatRow(rep.data) : {};
+  const hasSchedule = Boolean((schedule as { days_of_week?: unknown }).days_of_week || (schedule as { repeat_every_days?: unknown }).repeat_every_days);
   try {
     const session = await requireWrite(MODULE, ownerId);
     const { count } = await session.supabase.from("supplements").select("id", { count: "exact", head: true }).eq("owner_id", ownerId);
     // A clear match with a common product fills in its nutrients (editable later).
     const match = confidentCatalogMatch(values.name);
-    const { error } = await session.supabase.from("supplements").insert({
+    const row = {
       ...values,
       owner_id: ownerId,
       created_by: session.userId,
       household_id: session.household.id,
       sort: count ?? 0,
       ...(match ? { nutrients: match.nutrients, serving_label: match.serving, nutrients_source: "catalog" } : {}),
-    });
-    if (error) return { error: "Couldn't add it." };
+      // A weekly product from the catalog (e.g. D3 60K) defaults to once a week.
+      ...(hasSchedule ? schedule : match?.weekly ? { repeat_every_days: 7 } : {}),
+    };
+    let { error } = await session.supabase.from("supplements").insert(row);
+    if (isMissingColumn(error)) {
+      const { days_of_week, repeat_every_days, schedule_start, ...basic } = row as typeof row & { days_of_week?: unknown; repeat_every_days?: unknown; schedule_start?: unknown };
+      void days_of_week; void repeat_every_days; void schedule_start;
+      ({ error } = await session.supabase.from("supplements").insert(basic));
+    }
+    if (error) return { error: dbErrorMessage(error, "Couldn't add it.") };
   } catch (e) {
     return { error: errorMessage(e) };
   }
@@ -134,4 +161,21 @@ export async function updateSupplement(id: string, ownerId: string, input: Recor
   }
   refreshModule("/supplements");
   return { ok: true, message: "Saved." };
+}
+
+
+/** How often a supplement is taken: every day, chosen weekdays, once a week, or every N days (from a start date). */
+export async function setSupplementSchedule(id: string, ownerId: string, input: unknown): Promise<ActionResult> {
+  const parsed = repeatSchema.safeParse(input);
+  if (!parsed.success) return { error: "Check the schedule." };
+  try {
+    const session = await requireWrite(MODULE, ownerId);
+    const { data, error } = await session.supabase.from("supplements").update(repeatRow(parsed.data)).eq("id", id).eq("owner_id", ownerId).select("id");
+    if (error || !data?.length) return { error: dbErrorMessage(error, "Couldn't save the schedule.") };
+  } catch (e) {
+    return { error: errorMessage(e) };
+  }
+  refreshModule("/supplements");
+  refreshModule("/medicines");
+  return { ok: true, message: "Schedule saved." };
 }

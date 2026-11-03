@@ -34,6 +34,7 @@ export default async function HomePage() {
       days: 30,
       enabled: { medicines: can("medicines"), food: can("food_diary"), checkin: can("checkin"), supplements: can("supplements") },
       waterTarget: water.target,
+      supplementTimes: session.profile.supplement_times,
     }),
     activityFor(session, subject.user_id, today),
     isSelf && session.partner ? activityFor(session, session.partner.user_id, today) : Promise.resolve(null),
