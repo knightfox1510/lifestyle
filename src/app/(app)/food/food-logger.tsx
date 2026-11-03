@@ -1,5 +1,7 @@
 "use client";
 
+import { useToast } from "@/components/toaster";
+
 import { useState, useTransition } from "react";
 import { Button, Field, Input, Notice, Select } from "@/components/ui";
 import { PeoplePortions, type PersonPortion } from "@/components/nutrition-ui";
@@ -61,6 +63,7 @@ export function FoodAmountLogger({
   const [meal, setMeal] = useState<Meal>(() => presetMeal ?? mealForHour(new Date().getHours()));
   const [who, setWho] = useState<Record<string, number>>({ [me]: 1 });
   const [msg, setMsg] = useState<{ tone: "accent" | "danger"; text: string } | null>(null);
+  const { toast } = useToast();
   const [pending, start] = useTransition();
   const t = useT();
   const grams = toGrams(amount, unit);
@@ -119,7 +122,10 @@ export function FoodAmountLogger({
               eatenAtFor(day, meal),
             );
             setMsg(r.error ? { tone: "danger", text: r.error } : { tone: "accent", text: r.message ?? "Logged." });
-            if (!r.error) onLogged?.();
+            if (!r.error) {
+              toast(r.message ?? "Logged.", { kind: "food" });
+              onLogged?.();
+            }
           })
         }
       >

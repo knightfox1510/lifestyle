@@ -15,6 +15,7 @@ import { getQuickLogData, undoQuickLog, type DueDose, type DueSupplement } from 
 import { toggleSupplement } from "@/app/(app)/supplements/actions";
 import { useT } from "@/lib/i18n/client";
 import { haptic, useToast } from "@/components/toaster";
+import { inferDetail, inferKind } from "@/lib/feedback-kind";
 
 export type QuickLogConfig = { ownerId: string; medicines: boolean; supplements?: boolean; bladder: boolean; body: boolean; checkin: boolean; food: boolean };
 type Step = null | "dose" | "water" | "food" | "bladder" | "weight" | "check";
@@ -24,7 +25,7 @@ type Data = Awaited<ReturnType<typeof getQuickLogData>>;
 export function QuickLogSheet({ open, onClose, config }: { open: boolean; onClose: () => void; config: QuickLogConfig }) {
   const t = useT();
   const router = useRouter();
-  const { toast } = useToast();
+  const { toast, stamp } = useToast();
   const [step, setStep] = useState<Step>(null);
   const [data, setData] = useState<Data | null>(null);
   const [pending, start] = useTransition();
@@ -56,7 +57,9 @@ export function QuickLogSheet({ open, onClose, config }: { open: boolean; onClos
 
   /** Logged: stay open for the next entry, list it under "Added" with Undo. */
   function done(message: string, undo?: { kind: "water" | "bladder" | "dose" | "supplement"; id?: string }, doseKey?: string) {
-    haptic();
+    haptic([12, 40, 18]);
+    const kind = undo?.kind === "supplement" ? "dose" : undo?.kind ?? inferKind(message);
+    stamp(kind, message, inferDetail(message));
     const id = ++seq.current;
     setAdded((xs) => [...xs, { id, label: message, undo: undo?.id ? () => undoQuickLog(undo.kind, undo.id!) : undefined }]);
     if (doseKey && data) setData({ ...data, due: data.due.filter((d) => `${d.medicineId}-${d.time}` !== doseKey) });

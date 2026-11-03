@@ -1,5 +1,7 @@
 "use client";
 
+import { useToast } from "@/components/toaster";
+
 import { PhotoButtons } from "@/components/photo-buttons";
 import { useState, useTransition } from "react";
 import { Button, Card, Input, Notice, Select, Textarea } from "@/components/ui";
@@ -31,6 +33,7 @@ export function FoodAiAdd({ ownerId, people, day, meal: preset }: { ownerId: str
   const [note, setNote] = useState<string | null>(null);
   const [who, setWho] = useState<Record<string, number>>({ [ownerId]: 1 });
   const [msg, setMsg] = useState<{ tone: "danger" | "accent"; text: string } | null>(null);
+  const { toast } = useToast();
   const [saving, start] = useTransition();
   const [usedNames, setUsedNames] = useState<string[] | null>(null);
   const t = useT();
@@ -84,6 +87,7 @@ export function FoodAiAdd({ ownerId, people, day, meal: preset }: { ownerId: str
       if (res.error) setMsg({ tone: "danger", text: res.error });
       else {
         setMsg({ tone: "accent", text: res.message ?? "Added." });
+        toast(res.message ?? "Added.", { kind: "food" });
         // Remember each ingredient's food so the same name gets the same numbers next time.
         void rememberFoods(
           items

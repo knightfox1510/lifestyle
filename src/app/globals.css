@@ -152,6 +152,27 @@ h1, h2, h3 {
   100% { transform: scale(1); }
 }
 
+/* ---- Action feedback: an animation that fits what was just done ---- */
+@keyframes fx-bite { 0% { transform: scale(.4) rotate(-25deg); opacity: 0; } 55% { transform: scale(1.18) rotate(10deg); opacity: 1; } 75% { transform: scale(.94) rotate(-4deg); } 100% { transform: none; } }
+@keyframes fx-drop { 0% { transform: translateY(-18px) scale(.7); opacity: 0; } 60% { transform: translateY(2px) scale(1.12, .84); opacity: 1; } 80% { transform: scale(.96, 1.06); } 100% { transform: none; } }
+@keyframes fx-spin-in { 0% { transform: rotate(-200deg) scale(.4); opacity: 0; } 70% { transform: rotate(15deg) scale(1.1); opacity: 1; } 100% { transform: none; } }
+@keyframes fx-squish { 0% { transform: scaleY(.3); opacity: 0; } 50% { transform: scaleY(1.2); opacity: 1; } 70% { transform: scaleY(.9); } 100% { transform: none; } }
+@keyframes fx-lift { 0% { transform: translateY(8px); opacity: 0; } 30% { transform: translateY(-6px); opacity: 1; } 50% { transform: translateY(2px); } 70% { transform: translateY(-4px); } 100% { transform: none; } }
+@keyframes fx-rise { 0% { transform: translateY(10px) rotate(-90deg); opacity: 0; } 100% { transform: none; opacity: 1; } }
+@keyframes fx-slide { 0% { transform: translateX(-18px); opacity: 0; } 70% { transform: translateX(3px); opacity: 1; } 100% { transform: none; } }
+@keyframes fx-shake { 0%, 100% { transform: none; } 20% { transform: rotate(-14deg); } 40% { transform: rotate(12deg); } 60% { transform: rotate(-8deg); } 80% { transform: rotate(5deg); } }
+@keyframes fx-twinkle { 0% { transform: scale(.3) rotate(-45deg); opacity: 0; } 60% { transform: scale(1.2) rotate(10deg); opacity: 1; } 100% { transform: none; } }
+@keyframes fx-draw { from { stroke-dashoffset: 24; } to { stroke-dashoffset: 0; } }
+@keyframes fx-ring { 0% { transform: scale(.8); opacity: .55; } 100% { transform: scale(2.3); opacity: 0; } }
+@keyframes fx-particle { 0% { transform: rotate(var(--a)) translateY(0) scale(1); opacity: 1; } 100% { transform: rotate(var(--a)) translateY(-78px) scale(.3); opacity: 0; } }
+@keyframes fx-stamp { 0% { transform: scale(.5); opacity: 0; } 16% { transform: scale(1.08); opacity: 1; } 26% { transform: scale(1); } 78% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(.94) translateY(-10px); } }
+@keyframes fx-float { 0% { transform: translateY(6px); opacity: 0; } 25% { transform: none; opacity: 1; } 100% { transform: translateY(-6px); opacity: 1; } }
+@keyframes fx-timer { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@keyframes fx-glow { 0% { background-color: color-mix(in oklab, var(--accent-soft) 100%, transparent); box-shadow: inset 3px 0 0 var(--accent); } 100% { background-color: transparent; box-shadow: inset 3px 0 0 transparent; } }
+@keyframes fx-row-in { 0% { opacity: 0; transform: translateY(-6px); } 100% { opacity: 1; transform: none; } }
+.fx-fresh { animation: fx-row-in .35s ease-out, fx-glow 2.4s ease-out; border-radius: 10px; }
+.fx-pop { animation: pop .38s ease-out; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

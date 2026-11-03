@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, type ReactNode } from "react";
+import { useEffect, useState, useTransition, type ReactNode } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 import { Button, Field, Input, cx } from "@/components/ui";
 import { useToast } from "@/components/toaster";
@@ -17,7 +17,7 @@ const PORTIONS: [number, string][] = [
   [2, "2×"],
 ];
 
-export type EntrySummary = { id: string; description: string; quantity: string | null; meal: Meal; time: string; calories: number | null };
+export type EntrySummary = { id: string; description: string; quantity: string | null; meal: Meal; time: string; calories: number | null; createdAt?: string };
 
 /** A logged food: tap it to rename, change the amount, move it to another meal or time, or delete it. */
 export function FoodEntryRow({ entry, ownerId, meta, canEdit, canDelete, children }: { entry: EntrySummary; ownerId: string; meta: string; canEdit: boolean; canDelete: boolean; children?: ReactNode }) {
@@ -32,6 +32,13 @@ export function FoodEntryRow({ entry, ownerId, meta, canEdit, canDelete, childre
   const [custom, setCustom] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [pending, start] = useTransition();
+  // Just logged (in the last half minute): glow briefly so it's clear where it went.
+  const [fresh, setFresh] = useState(false);
+  useEffect(() => {
+    if (!entry.createdAt) return;
+    const t = window.setTimeout(() => setFresh(Date.now() - Date.parse(entry.createdAt!) < 30_000), 0);
+    return () => window.clearTimeout(t);
+  }, [entry.createdAt]);
   const f = custom ? Number(custom) || 1 : factor;
   const newKcal = entry.calories == null ? null : Math.round(entry.calories * f);
 
@@ -57,7 +64,7 @@ export function FoodEntryRow({ entry, ownerId, meta, canEdit, canDelete, childre
   }
 
   return (
-    <li className="py-2 text-sm">
+    <li className={cx("py-2 text-sm", fresh && "fx-fresh -mx-2 px-2")}>
       <div className="flex items-center justify-between gap-2">
         <button
           type="button"

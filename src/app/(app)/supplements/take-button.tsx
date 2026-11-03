@@ -22,7 +22,7 @@ export function SupplementTakeButton({ supplementId, ownerId, date, name, taken 
       } else if (value) toast(t("{name} taken", { name }), { undo: () => toggleSupplement(supplementId, ownerId, date, false) });
     });
   return done ? (
-    <Button size="sm" variant="ghost" disabled={pending} onClick={() => set(false)}>
+    <Button size="sm" variant="ghost" disabled={pending} onClick={() => set(false)} className="fx-pop text-accent">
       ✓ {t("Taken")}
     </Button>
   ) : (

@@ -204,7 +204,7 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
                 {list.map((x) => (
                   <FoodEntryRow
                     key={x.id}
-                    entry={{ id: x.id, description: x.description, quantity: x.quantity, meal: x.meal, time: localTime(x.eaten_at, tz), calories: x.calories }}
+                    entry={{ id: x.id, description: x.description, quantity: x.quantity, meal: x.meal, time: localTime(x.eaten_at, tz), calories: x.calories, createdAt: (x as { created_at?: string }).created_at }}
                     ownerId={ownerId}
                     canEdit={canWrite}
                     canDelete={canWrite && (isOwner || x.created_by === session.userId)}
