@@ -12,6 +12,7 @@ const PAGES: PageEntry[] = [
   { href: "/food/product", title: "Scan a packaged food", hint: "Barcode or nutrition label", module: "food_diary", words: "barcode label scan" },
   { href: "/food/dishes", title: "Indian dishes", hint: "Built-in dishes with nutrition", module: "food_diary", words: "dosa poha dal sabzi" },
   { href: "/food/ideas", title: "Meal ideas", hint: "AI ideas from your pantry and goals", module: "food_diary", words: "suggestions what to cook" },
+  { href: "/body/coach", title: "AI coach", hint: "Insights and a fat-loss / weight-loss plan from food, sleep, wearables, medicines and more", module: "body_recomp", words: "ai coach insights recommendations plan fat loss weight loss recomposition muscle" },
   { href: "/body", title: "Body numbers", hint: "Weight, BMI, waist, healthy range, calories to maintain", module: "body_recomp", words: "bmi weight height waist maintenance bmr" },
   { href: "/medicines/manage", title: "Add or edit medicines", hint: "Doses, times, stock", module: "medicines", words: "prescription tablet" },
   { href: "/medicines/history", title: "Medicine history", hint: "Adherence over time", module: "medicines", words: "missed doses" },

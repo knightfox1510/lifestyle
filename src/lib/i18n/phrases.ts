@@ -83,6 +83,7 @@ export const PHRASES: Record<string, { hi: string; mr: string }> = {
   "Trends & triggers": { hi: "रुझान और कारण", mr: "कल आणि कारणे" },
   "Vaccinations & growth": { hi: "टीके और विकास", mr: "लसीकरण आणि वाढ" },
   "Vitals": { hi: "स्वास्थ्य संकेत", mr: "आरोग्य निर्देशक" },
+  "AI coach": { hi: "AI कोच", mr: "AI कोच" },
   "Weekly report": { hi: "साप्ताहिक रिपोर्ट", mr: "साप्ताहिक अहवाल" },
   "✨ Ideas": { hi: "✨ आइडिया", mr: "✨ कल्पना" },
   "📷 Scan": { hi: "📷 स्कैन", mr: "📷 स्कॅन" },

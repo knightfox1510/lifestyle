@@ -94,5 +94,24 @@ reset role;
 do $$ begin
   if (select shopping_day from public.households where name = 'Plan home') <> 6 then raise exception 'stranger changed the shopping day'; end if;
 end $$;
+-- AI coach reports: only the person they're about (and whoever ran them) can read them.
+set role authenticated;
+select set_config('request.jwt.claim.sub', :p, false);
+insert into public.coach_reports (household_id, owner_id, goal, period_days, result) values (:'hid', :p, 'fat_loss', 30, '{"headline": "x"}');
+do $$ begin
+  assert (select count(*) from public.coach_reports) = 1, 'you read your own coach report';
+end $$;
+select set_config('request.jwt.claim.sub', :q, false);
+do $$ begin
+  assert (select count(*) from public.coach_reports) = 0, 'partner cannot read your coach report';
+  insert into public.coach_reports (household_id, owner_id, goal, period_days, result) values (current_setting('test.hid')::uuid, '4d4d4d4d-0000-0000-0000-000000000051', 'fat_loss', 30, '{}');
+  raise exception 'SHOULD_FAIL: coach report about someone who has not shared Body';
+exception when insufficient_privilege then null;
+end $$;
+select set_config('request.jwt.claim.sub', :r, false);
+do $$ begin
+  assert (select count(*) from public.coach_reports) = 0, 'stranger sees none';
+end $$;
+reset role;
 \o
 \echo 'ALL WEEK PLAN TESTS PASSED'

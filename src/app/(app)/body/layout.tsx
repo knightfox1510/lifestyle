@@ -8,6 +8,7 @@ export default function BodyLayout({ children }: LayoutProps<"/body">) {
       tabs={[
         { href: "/body", label: "Progress" },
         { href: "/body/vitals", label: "Vitals" },
+        { href: "/body/coach", label: "AI coach" },
       ]}
     >
       {children}

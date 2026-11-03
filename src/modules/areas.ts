@@ -27,6 +27,7 @@ export const AREAS: Record<AreaKey, AreaItem[]> = {
   ],
   body: [
     { href: "/body", label: "Body", module: "body_recomp" },
+    { href: "/body/coach", label: "AI coach", module: "body_recomp" },
     { href: "/food/goals", label: "Nutrition goals", module: "food_diary" },
     { href: "/fitness", label: "Fitness", module: "fitness" },
     { href: "/wearables", label: "Wearables", module: "wearables" },

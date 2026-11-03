@@ -55,6 +55,11 @@ export default async function NutritionReportPage({ searchParams }: PageProps<"/
           </Card>
 
           <ReportTips week={r.monday} />
+          {session.isShown("body_recomp") && session.accessTo("body_recomp", session.subject.user_id) !== "none" ? (
+            <Link href="/body/coach" className="block rounded-2xl bg-accent-soft px-4 py-3 text-sm hover:opacity-90">
+              ✨ <strong>AI coach:</strong> a fat-loss or weight plan that also looks at your weight trend, sleep, wearables, workouts, medicines and blood tests →
+            </Link>
+          ) : null}
 
           <Card>
             <h2 className="mb-2 text-sm font-semibold">Vitamins & minerals</h2>
