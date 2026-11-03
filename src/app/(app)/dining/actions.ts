@@ -3,7 +3,8 @@
 import { z } from "zod";
 import { errorMessage, refreshModule, requireModule } from "@/lib/guards";
 import { todayIn } from "@/lib/dates";
-import { menuItemSchema, MEALS } from "@/lib/ai/phase2-schemas";
+import { diningImportSchema, menuItemSchema, MEALS } from "@/lib/ai/phase2-schemas";
+import { planImport } from "@/modules/dining/bulk";
 import { getSession } from "@/lib/session";
 import { addFoodItems } from "@/app/(app)/food/actions";
 import { scaleDish } from "@/modules/dining/menu";
@@ -233,4 +234,54 @@ export async function updateOrder(id: string, input: Record<string, unknown>): P
   const parsed = orderSchema.extend({ ordered_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a date") }).safeParse(strings(input));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   return householdUpdate("dining", "dining_orders", id, parsed.data, "/dining");
+}
+
+/**
+ * Saves a reviewed bulk import: new restaurants, the dishes ordered there
+ * (go-to for you if ordered twice or more), and past orders. Places already
+ * saved are matched by name; dishes and orders already there are skipped.
+ */
+export async function importDiningBulk(places: unknown): Promise<ActionResult> {
+  const parsed = diningImportSchema.shape.places.min(1).safeParse(places);
+  if (!parsed.success) return { error: "Some of the restaurants are invalid." };
+  try {
+    const session = await requireModule("dining");
+    const db = session.supabase;
+    const hid = session.household.id;
+    const today = todayIn(session.profile.timezone);
+    const [{ data: ep }, { data: ed }, { data: eo }] = await Promise.all([
+      db.from("dining_places").select("id, name").eq("household_id", hid),
+      db.from("dining_dishes").select("place_id, name").eq("household_id", hid),
+      db.from("dining_orders").select("place_id, ordered_on, items").eq("household_id", hid).gte("ordered_on", `${Number(today.slice(0, 4)) - 3}-01-01`),
+    ]);
+    const plan = planImport(parsed.data, { places: ep ?? [], dishes: ed ?? [], orders: eo ?? [] }, today);
+
+    const toInsert = plan.places.filter((p) => p.insert);
+    const ids = new Map(plan.places.filter((p) => p.existingId).map((p) => [p.key, p.existingId!]));
+    if (toInsert.length) {
+      const { data, error } = await db
+        .from("dining_places")
+        .insert(toInsert.map((p) => ({ ...p.insert, household_id: hid, created_by: session.userId })))
+        .select("id");
+      if (error || !data) return { error: "Couldn't add the restaurants." };
+      toInsert.forEach((p, i) => ids.set(p.key, data[i].id));
+    }
+    const dishes = plan.places.flatMap((p) =>
+      p.dishes.map((d) => ({ place_id: ids.get(p.key)!, household_id: hid, name: d.name, price: d.price, veg: d.veg, calories: d.calories, protein_g: d.protein_g, carbs_g: d.carbs_g, fat_g: d.fat_g, nutrition_estimated: true, source: "menu_import", go_to_for: d.goTo ? [session.userId] : [] })),
+    );
+    const orders = plan.places.flatMap((p) => p.orders.map((o) => ({ ...o, place_id: ids.get(p.key)!, household_id: hid, ordered_by: session.userId })));
+    for (let i = 0; i < dishes.length; i += 300) {
+      const { error } = await db.from("dining_dishes").insert(dishes.slice(i, i + 300));
+      if (error) return { error: "Restaurants added, but couldn't save the dishes." };
+    }
+    for (let i = 0; i < orders.length; i += 300) {
+      const { error } = await db.from("dining_orders").insert(orders.slice(i, i + 300));
+      if (error) return { error: "Restaurants and dishes added, but couldn't save the orders." };
+    }
+    refreshModule("/dining");
+    const n = (x: number, one: string, many: string) => `${x} ${x === 1 ? one : many}`;
+    return { ok: true, message: `Added ${n(toInsert.length, "restaurant", "restaurants")}${plan.places.length > toInsert.length ? ` (${plan.places.length - toInsert.length} already saved)` : ""}, ${n(dishes.length, "dish", "dishes")} and ${n(orders.length, "past order", "past orders")}.` };
+  } catch (e) {
+    return { error: errorMessage(e) };
+  }
 }

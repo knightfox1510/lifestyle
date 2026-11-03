@@ -75,7 +75,12 @@ export function toGeminiSchema(schema: z.ZodType) {
 
 function clampNode(value: unknown, node: unknown): unknown {
   if (!node || typeof node !== "object" || value == null) return value;
-  const n = node as { maxItems?: number; items?: unknown; properties?: Json; anyOf?: unknown[] };
+  const n = node as { maxItems?: number; maxLength?: number; items?: unknown; properties?: Json; anyOf?: unknown[] };
+  // An over-long text (a note, a description) is cut to fit instead of failing the whole answer.
+  if (typeof value === "string") {
+    const max = typeof n.maxLength === "number" ? n.maxLength : (n.anyOf?.find((o) => typeof (o as { maxLength?: number })?.maxLength === "number") as { maxLength?: number } | undefined)?.maxLength;
+    return typeof max === "number" && value.length > max ? `${value.slice(0, Math.max(0, max - 1)).trimEnd()}…` : value;
+  }
   if (Array.isArray(value)) {
     const list = typeof n.maxItems === "number" ? value.slice(0, n.maxItems) : value;
     if (n.items) return list.map((v) => clampNode(v, n.items));
@@ -92,7 +97,7 @@ function clampNode(value: unknown, node: unknown): unknown {
   return value;
 }
 
-/** Trims lists in an AI answer to the schema's item limits (which Gemini can't be given directly). */
+/** Trims lists in an AI answer to the schema's item limits (which Gemini can't be given directly), and over-long texts to their length. */
 export function clampToSchema<T>(value: T, schema: z.ZodType): T {
   return clampNode(value, rawJsonSchema(schema)) as T;
 }

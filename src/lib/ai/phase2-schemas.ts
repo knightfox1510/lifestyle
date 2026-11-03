@@ -247,3 +247,43 @@ export const weekPlanSchema = z.object({
   note: z.string().max(400).nullable().describe("One or two sentences on how the week is balanced for each person"),
 });
 export type WeekPlan = z.infer<typeof weekPlanSchema>;
+
+// ----------------------------------------------- Dining: bulk import ----
+
+export const DINING_PLATFORMS = ["swiggy", "zomato", "eatsure", "magicpin", "direct", "dine_in", "other"] as const;
+
+const orderedItemSchema = z.object({
+  name: z.string().min(1).max(120).describe("Dish name as printed, without the quantity"),
+  quantity: z.number().int().min(1).max(50),
+  price: z.number().min(0).max(100000).nullable().describe("Price for ONE of this item in ₹ if shown, else null"),
+  veg: z.boolean().nullable(),
+  calories: z.number().int().min(0).max(5000).describe("Estimated kcal for ONE person's portion of one item"),
+  protein_g: z.number().min(0).max(500),
+  carbs_g: z.number().min(0).max(1000),
+  fat_g: z.number().min(0).max(500),
+});
+
+export const diningImportSchema = z.object({
+  places: z
+    .array(
+      z.object({
+        name: z.string().min(1).max(120).describe("Restaurant name as shown; if it matches one of the saved restaurants, use the saved name exactly"),
+        cuisine: z.string().max(60).nullable().describe("Short cuisine, e.g. North Indian, Biryani, Pizza, Cafe"),
+        area: z.string().max(80).nullable().describe("Locality/outlet if shown, e.g. Baner"),
+        platform: z.enum(DINING_PLATFORMS).nullable().describe("Where it was ordered from or found"),
+        orders: z
+          .array(
+            z.object({
+              date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().describe("Order date as YYYY-MM-DD; work out relative dates like 'Yesterday' from today's date"),
+              items: z.array(orderedItemSchema).max(30),
+              total: z.number().min(0).max(1000000).nullable().describe("Amount paid in ₹"),
+            }),
+          )
+          .max(60)
+          .describe("Past orders from this place; empty for a plain list of restaurants"),
+      }),
+    )
+    .max(60),
+  note: z.string().max(300).nullable(),
+});
+export type DiningImport = z.infer<typeof diningImportSchema>;

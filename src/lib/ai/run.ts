@@ -21,6 +21,8 @@ export async function runJson<S extends z.ZodType>(
     maxDuration?: number;
     /** Light thinking, for long transcription-like jobs. */
     quick?: boolean;
+    /** Let the model look things up with Google Search (e.g. a restaurant's current menu). */
+    search?: boolean;
   },
 ): Promise<z.infer<S>> {
   const deadline = deadlineFor(opts.maxDuration ?? 60);
@@ -32,6 +34,7 @@ export async function runJson<S extends z.ZodType>(
       responseMimeType: "application/json",
       responseJsonSchema: toGeminiSchema(opts.schema),
       temperature: opts.temperature ?? 0.4,
+      ...(opts.search ? { tools: [{ googleSearch: {} }] } : {}),
     },
   };
   // A malformed or incomplete JSON answer gets one more try before giving up.

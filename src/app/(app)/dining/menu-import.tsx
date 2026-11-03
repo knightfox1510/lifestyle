@@ -1,13 +1,14 @@
 "use client";
 
 import { PhotoButtons } from "@/components/photo-buttons";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { Button, Card, Input, Notice, Textarea, cx } from "@/components/ui";
 import { MAX_UPLOAD_BYTES, compressImage } from "@/lib/compress-image";
 import type { MenuItem } from "@/lib/ai/phase2-schemas";
 import { importMenu } from "./actions";
 
 type Row = MenuItem & { keep: boolean };
+const CITY_KEY = "hearth.dining.city";
 
 /** Screenshot / photo / pasted-text → AI → reviewable dish list → saved menu. */
 export function MenuImport({ placeId, placeName, initialFiles, onDone }: { placeId: string; placeName: string; initialFiles?: File[]; onDone?: () => void }) {
@@ -19,6 +20,46 @@ export function MenuImport({ placeId, placeName, initialFiles, onDone }: { place
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<{ tone: "accent" | "danger"; text: string } | null>(null);
   const [saving, start] = useTransition();
+  const [city, setCity] = useState("");
+  const [searching, setSearching] = useState(false);
+
+  // The city is remembered on this device, for finding menus online.
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      try {
+        setCity(localStorage.getItem(CITY_KEY) ?? "");
+      } catch {
+        /* ignore */
+      }
+    }, 0);
+    return () => window.clearTimeout(t);
+  }, []);
+
+  function show(body: { items: MenuItem[]; note: string | null }, empty: string) {
+    setRows(body.items.map((i) => ({ ...i, keep: true })));
+    setNote(body.note);
+    if (!body.items.length) setMsg({ tone: "danger", text: body.note || empty });
+  }
+
+  async function findOnline() {
+    setSearching(true);
+    setMsg(null);
+    try {
+      try {
+        localStorage.setItem(CITY_KEY, city.trim());
+      } catch {
+        /* ignore */
+      }
+      const res = await fetch("/api/ai/menu-online", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ placeId, city: city.trim() || undefined }) });
+      const body = await res.json().catch(() => ({ error: "Search failed" }));
+      if (!res.ok) throw new Error(body.error ?? "Search failed");
+      show(body, "Couldn't find this menu online. Try screenshots instead.");
+    } catch (e) {
+      setMsg({ tone: "danger", text: (e as Error).message });
+    } finally {
+      setSearching(false);
+    }
+  }
 
   async function read() {
     setLoading(true);
@@ -37,9 +78,7 @@ export function MenuImport({ placeId, placeName, initialFiles, onDone }: { place
       const res = await fetch("/api/ai/menu-import", { method: "POST", body: fd });
       const body = await res.json().catch(() => ({ error: res.status === 413 ? "Upload too large. Try fewer screenshots." : "Reading failed" }));
       if (!res.ok) throw new Error(body.error ?? "Reading failed");
-      setRows((body.items as MenuItem[]).map((i) => ({ ...i, keep: true })));
-      setNote(body.note);
-      if (!body.items.length) setMsg({ tone: "danger", text: "No dishes found. Try clearer or closer screenshots." });
+      show(body, "No dishes found. Try clearer or closer screenshots.");
     } catch (e) {
       setMsg({ tone: "danger", text: (e as Error).message });
     } finally {
@@ -73,6 +112,15 @@ export function MenuImport({ placeId, placeName, initialFiles, onDone }: { place
           Screenshot the restaurant&apos;s page in Zomato or Swiggy (scroll and take a few), or photograph a paper menu. AI reads the dishes and prices and estimates calories. You review before saving.
         </p>
       </div>
+      <div className="space-y-2 rounded-xl bg-surface p-3">
+        <p className="text-sm font-medium">🔎 Easiest: find it online</p>
+        <p className="text-xs text-fg-muted">AI searches Swiggy, Zomato and the restaurant&apos;s site for its menu. Works best for chains and places listed on delivery apps. Takes about a minute.</p>
+        <div className="flex flex-wrap gap-2">
+          <Input value={city} onChange={(e) => setCity(e.target.value)} maxLength={80} placeholder="City (e.g. Pune)" aria-label="City" className="!h-9 w-40" />
+          <Button size="sm" onClick={() => void findOnline()} disabled={searching || loading}>{searching ? "Searching…" : "Find menu online"}</Button>
+        </div>
+      </div>
+      <p className="text-center text-xs text-fg-muted">or from screenshots</p>
       <div className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-border p-4 text-center text-sm">
         <span className="text-2xl" aria-hidden>📸</span>
         {files.length ? `${files.length} image${files.length === 1 ? "" : "s"} selected (max 6)` : "Screenshots or photos of the menu"}
@@ -93,7 +141,7 @@ export function MenuImport({ placeId, placeName, initialFiles, onDone }: { place
       ) : (
         <button type="button" className="text-xs text-fg-muted underline" onClick={() => setShowText(true)}>or paste menu text instead</button>
       )}
-      <Button onClick={read} disabled={loading || (!files.length && !text.trim())}>
+      <Button onClick={read} disabled={loading || searching || (!files.length && !text.trim())}>
         {loading ? "Reading the menu…" : "✨ Read menu"}
       </Button>
       {msg ? <Notice tone={msg.tone}>{msg.text}</Notice> : null}

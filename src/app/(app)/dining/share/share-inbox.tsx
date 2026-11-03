@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, EmptyState, Field, Input, Notice, Select } from "@/components/ui";
 import { MenuImport } from "../menu-import";
+import { BulkImport } from "../bulk-import";
 import { createPlaceQuick } from "../actions";
 
 const SHARE_CACHE = "share-inbox";
@@ -30,6 +31,7 @@ export function ShareInbox({ places }: { places: { id: string; name: string }[] 
   const [placeId, setPlaceId] = useState(places[0]?.id ?? "");
   const [newName, setNewName] = useState("");
   const [chosen, setChosen] = useState<{ id: string; name: string } | null>(null);
+  const [kind, setKind] = useState<"menu" | "orders" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
@@ -50,12 +52,25 @@ export function ShareInbox({ places }: { places: { id: string; name: string }[] 
   if (!files.length) {
     return (
       <EmptyState title="Nothing was shared">
-        On Android, open a menu screenshot (or the Zomato/Swiggy restaurant page screenshot) → Share → Hearth. On iPhone, use “Import menu” on a restaurant in Dining instead.
+        On Android, select screenshots of a menu or of your Swiggy/Zomato orders in the gallery → Share → Hearth. On iPhone, use “Import menu” on a restaurant in Dining instead.
       </EmptyState>
     );
   }
 
   if (chosen) return <MenuImport placeId={chosen.id} placeName={chosen.name} initialFiles={files} onDone={done} />;
+  if (kind === "orders") return <BulkImport savedNames={places.map((p) => p.name)} initialFiles={files} onDone={done} />;
+  if (!kind) {
+    return (
+      <Card className="space-y-3">
+        <p className="font-medium">{files.length} image{files.length === 1 ? "" : "s"} received. What are they?</p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Button variant="secondary" onClick={() => setKind("orders")}>🧾 My orders or a list of restaurants</Button>
+          <Button variant="secondary" onClick={() => setKind("menu")}>📋 One restaurant&apos;s menu</Button>
+        </div>
+        <Button variant="ghost" onClick={done}>Cancel</Button>
+      </Card>
+    );
+  }
 
   return (
     <Card className="space-y-3">

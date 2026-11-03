@@ -4,6 +4,7 @@ import type { DiningDish, DiningOrder, DiningPlace } from "@/lib/types";
 import { formatDate } from "@/modules/medical/meta";
 import { AddDishForm, AddPlaceForm, LogOrderForm, WhatToOrder } from "./client";
 import { PlaceMenu } from "./place-menu";
+import { BulkImport } from "./bulk-import";
 import { deletePlace, toggleFavoritePlace, updateOrder, updatePlace } from "./actions";
 import { EditRecord } from "@/components/edit-record";
 
@@ -29,9 +30,10 @@ export default async function DiningPage() {
       {places.length ? (
         <WhatToOrder members={members} me={session.userId} defaultUseHealth={session.profile.ai_use_medical_history} canLog={canLog} places={placeRefs} dishes={dishRefs} />
       ) : null}
+      <BulkImport savedNames={places.map((x) => x.name)} defaultOpen={places.length === 0} />
       <AddPlaceForm />
       {places.length === 0 ? (
-        <EmptyState title="No places yet">Add your go-to spots (e.g. Good Flippin&apos; Burgers, Doolally), then import each menu from Zomato/Swiggy screenshots or a photo.</EmptyState>
+        <EmptyState title="No places yet">The quickest start: screenshots of your Swiggy or Zomato order history above. Then open any place → Import menu → Find menu online.</EmptyState>
       ) : (
         <ul className="space-y-3">
           {places.map((pl) => {
