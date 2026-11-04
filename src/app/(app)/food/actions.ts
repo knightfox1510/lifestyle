@@ -7,7 +7,8 @@ import { foodItemSchema, MEALS, nutritionGoalSchema } from "@/lib/ai/phase2-sche
 import type { ActionResult } from "@/lib/types";
 import { NUTRIENT_KEYS, scale, splitMacros, type Nutrients } from "@/modules/nutrition/nutrients";
 import { cleanIrritants } from "@/modules/nutrition/irritants";
-import { addDays, localDate, localTime, zonedIso } from "@/lib/dates";
+import { addDays, localDate, localTime, todayIn, zonedIso } from "@/lib/dates";
+import { mealTimeOn } from "@/modules/food/meta";
 import { dishKey } from "@/modules/food/plan";
 
 const MODULE = "food_diary";
@@ -121,78 +122,155 @@ export async function repeatFood(entryId: string, ownerId: string, meal: (typeof
   return { ok: true, id: row.id, message: `${data.description} added to ${meal}${data.calories != null ? ` (${Math.round(Number(data.calories))} kcal)` : ""}.` };
 }
 
+const targetsSchema = z.array(z.object({ ownerId: z.uuid(), factor: z.number().min(0.25).max(3) })).min(1).max(8);
 const copySchema = z.object({
   entryIds: z.array(z.uuid()).min(1).max(30),
-  toOwner: z.uuid(),
+  /** Whose diary, each with their portion (½× … 2×). */
+  targets: targetsSchema,
   meal: z.enum(MEALS),
   toDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  factor: z.number().min(0.25).max(3),
 });
+
+type FoodLike = Record<string, unknown>;
+
+/** Food rows for each person, scaled to their portion; several people share a group_id. */
+function scaledRows(items: FoodLike[], targets: { ownerId: string; factor: number }[], meal: string, at: (item: FoodLike) => string, who: { userId: string; householdId: string }) {
+  const groupId = targets.length > 1 ? crypto.randomUUID() : null;
+  return targets.flatMap(({ ownerId, factor }) => {
+    const k = (v: unknown) => (v == null ? null : Math.round(Number(v) * factor * 10) / 10);
+    const portion = factor === 1 ? "" : `${Math.round(factor * 100)}% portion`;
+    return items.map((e) => ({
+      owner_id: ownerId,
+      created_by: who.userId,
+      household_id: who.householdId,
+      meal,
+      eaten_at: at(e),
+      description: e.description,
+      quantity: portion ? `${e.quantity ? `${e.quantity}, ` : ""}${portion}`.slice(0, 60) : (e.quantity ?? null),
+      calories: e.calories == null ? null : Math.min(5000, Math.round(Number(e.calories) * factor)),
+      protein_g: k(e.protein_g),
+      carbs_g: k(e.carbs_g),
+      fat_g: k(e.fat_g),
+      fiber_g: k(e.fiber_g),
+      grams: k(e.grams),
+      micros: Object.fromEntries(Object.entries((e.micros ?? {}) as Record<string, number>).map(([key, v]) => [key, Math.round(Number(v) * factor * 100) / 100])),
+      recipe_id: e.recipe_id ?? null,
+      dish_id: e.dish_id ?? null,
+      source: e.source ?? "manual",
+      accuracy: e.accuracy ?? "estimated",
+      irritants: e.irritants ?? [],
+      group_id: groupId,
+    }));
+  });
+}
+
+function insertedMessage(rows: { owner_id: string; calories: number | null }[], meal: string, session: { userId: string; members: { user_id: string; display_name: string }[] }) {
+  const owners = [...new Set(rows.map((r) => r.owner_id))];
+  const names = owners.map((o) => (o === session.userId ? "you" : session.members.find((m) => m.user_id === o)?.display_name ?? "them"));
+  const kcal = Math.round(rows.filter((r) => r.owner_id === owners[0]).reduce((a, r) => a + Number(r.calories ?? 0), 0));
+  const per = rows.length / owners.length;
+  return `Added ${per} item${per === 1 ? "" : "s"} to ${meal}${owners.length > 1 ? ` for ${names.join(" and ")}` : ""} (${kcal} kcal${owners.length > 1 ? ` for ${names[0]}` : ""}).`;
+}
 
 /**
  * Copies logged foods into a meal: a partner's lunch you shared, or the same
- * meal on another day. Each item can be scaled (½× … 2×): calories, macros,
- * vitamins and grams all follow. Times keep their clock time on the new day.
- * Reading the originals goes through the database's sharing rules.
+ * meal on another day, for one or more people, each with their own portion:
+ * calories, macros, vitamins and grams all follow. Times keep their clock
+ * time on the new day. Reading the originals goes through the sharing rules.
  */
 export async function copyEntries(input: unknown): Promise<ActionResult & { ids?: string[] }> {
   const parsed = copySchema.safeParse(input);
   if (!parsed.success) return { error: "Pick what to copy." };
-  const { entryIds, toOwner, meal, toDate, factor } = parsed.data;
+  const { entryIds, targets, meal, toDate } = parsed.data;
   try {
-    const session = await requireWrite(MODULE, toOwner);
+    const session = await getSession();
+    if (!session.isModuleEnabled(MODULE)) return { error: "Food diary is turned off." };
+    const allowed = targets.filter((x) => session.accessTo(MODULE, x.ownerId) === "write");
+    if (!allowed.length) return { error: "You can't log food for that person." };
     const tz = session.profile.timezone;
     const { data } = await session.supabase.from("food_entries").select("*").in("id", entryIds);
-    const rows = (data ?? []) as Record<string, unknown>[];
+    const rows = (data ?? []) as FoodLike[];
     if (!rows.length) return { error: "Those foods couldn't be found (or aren't shared with you)." };
     const now = Date.now();
-    const at = (iso: string) => {
-      const t = zonedIso(toDate, localTime(iso, tz), tz);
+    const at = (e: FoodLike) => {
+      const t = zonedIso(toDate, localTime(String(e.eaten_at), tz), tz);
       return Date.parse(t) > now ? new Date(now).toISOString() : t;
     };
-    const k = (v: unknown, cap = 100000) => (v == null ? null : Math.min(cap, Math.round(Number(v) * factor * 10) / 10));
-    const micros = (m: unknown) => Object.fromEntries(Object.entries((m ?? {}) as Record<string, number>).map(([key, v]) => [key, Math.round(Number(v) * factor * 100) / 100]));
-    const portion = factor === 1 ? "" : `${Math.round(factor * 100)}% portion`;
     const { data: inserted, error } = await session.supabase
       .from("food_entries")
-      .insert(
-        rows.map((e) => ({
-          owner_id: toOwner,
-          created_by: session.userId,
-          household_id: session.household.id,
-          meal,
-          eaten_at: at(String(e.eaten_at)),
-          description: e.description,
-          quantity: portion ? `${e.quantity ? `${e.quantity}, ` : ""}${portion}`.slice(0, 60) : e.quantity,
-          calories: e.calories == null ? null : Math.min(5000, Math.round(Number(e.calories) * factor)),
-          protein_g: k(e.protein_g),
-          carbs_g: k(e.carbs_g),
-          fat_g: k(e.fat_g),
-          fiber_g: k(e.fiber_g),
-          grams: k(e.grams),
-          micros: micros(e.micros),
-          recipe_id: e.recipe_id,
-          dish_id: e.dish_id ?? null,
-          source: e.source,
-          accuracy: e.accuracy ?? "estimated",
-          irritants: e.irritants ?? [],
-        })),
-      )
-      .select("id, calories");
+      .insert(scaledRows(rows, allowed, meal, at, { userId: session.userId, householdId: session.household.id }))
+      .select("id, owner_id, calories");
     if (error || !inserted) return { error: "Couldn't copy those foods." };
     refreshModule("/food");
-    const kcal = inserted.reduce((a, r) => a + Number(r.calories ?? 0), 0);
-    return { ok: true, ids: inserted.map((r) => r.id as string), message: `Added ${inserted.length} item${inserted.length === 1 ? "" : "s"} to ${meal} (${Math.round(kcal)} kcal).` };
+    return { ok: true, ids: inserted.map((r) => r.id as string), message: insertedMessage(inserted as { owner_id: string; calories: number | null }[], meal, session) };
   } catch (e) {
     return { error: errorMessage(e) };
   }
 }
 
-/** Undo for a copy: removes the entries it added (only ones you added). */
-export async function undoFoodEntries(ids: string[], ownerId: string): Promise<ActionResult> {
-  if (!z.array(z.uuid()).min(1).max(30).safeParse(ids).success) return { error: "Nothing to undo." };
+// ------------------------------------------------------------ saved meals --
+
+const templateItemKeys = ["description", "quantity", "calories", "protein_g", "carbs_g", "fat_g", "fiber_g", "grams", "micros", "accuracy", "irritants", "source", "recipe_id", "dish_id"] as const;
+
+/** Saves the foods in a meal as a named meal ("Our usual breakfast") for the household. */
+export async function saveMealTemplate(input: unknown): Promise<ActionResult> {
+  const parsed = z.object({ entryIds: z.array(z.uuid()).min(1).max(30), name: z.string().trim().min(1).max(80), meal: z.enum(MEALS) }).safeParse(input);
+  if (!parsed.success) return { error: "Name the meal." };
   const session = await getSession();
-  await session.supabase.from("food_entries").delete().in("id", ids).eq("owner_id", ownerId).eq("created_by", session.userId);
+  const { data } = await session.supabase.from("food_entries").select("*").in("id", parsed.data.entryIds).order("eaten_at");
+  const rows = (data ?? []) as FoodLike[];
+  if (!rows.length) return { error: "Nothing to save." };
+  const items = rows.map((e) => Object.fromEntries(templateItemKeys.map((k) => [k, e[k] ?? null])));
+  const { error } = await session.supabase.from("meal_templates").insert({ household_id: session.household.id, created_by: session.userId, name: parsed.data.name, meal: parsed.data.meal, items });
+  if (error) return { error: error.code === "42P01" ? "Run the latest database update in Supabase first." : "Couldn't save the meal." };
+  refreshModule("/food");
+  return { ok: true, message: `Saved “${parsed.data.name}”. Find it under + Add on any meal.` };
+}
+
+/** Adds a saved meal (all or some of its items) for one or more people, each with their portion. */
+export async function logMealTemplate(input: unknown): Promise<ActionResult & { ids?: string[] }> {
+  const parsed = z.object({ templateId: z.uuid(), items: z.array(z.number().int().min(0).max(29)).min(1).max(30), targets: targetsSchema, meal: z.enum(MEALS), toDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).safeParse(input);
+  if (!parsed.success) return { error: "Pick what to add." };
+  const { templateId, items, targets, meal, toDate } = parsed.data;
+  try {
+    const session = await getSession();
+    if (!session.isModuleEnabled(MODULE)) return { error: "Food diary is turned off." };
+    const allowed = targets.filter((x) => session.accessTo(MODULE, x.ownerId) === "write");
+    if (!allowed.length) return { error: "You can't log food for that person." };
+    const { data: tpl } = await session.supabase.from("meal_templates").select("id, items, uses").eq("id", templateId).eq("household_id", session.household.id).maybeSingle();
+    if (!tpl) return { error: "That saved meal is gone." };
+    const chosen = items.map((i) => (tpl.items as FoodLike[])[i]).filter(Boolean);
+    if (!chosen.length) return { error: "Pick what to add." };
+    const tz = session.profile.timezone;
+    const today = todayIn(tz);
+    const at = () => (toDate === today ? new Date().toISOString() : mealTimeOn(toDate, meal, tz));
+    const { data: inserted, error } = await session.supabase
+      .from("food_entries")
+      .insert(scaledRows(chosen, allowed, meal, at, { userId: session.userId, householdId: session.household.id }))
+      .select("id, owner_id, calories");
+    if (error || !inserted) return { error: "Couldn't add the saved meal." };
+    await session.supabase.from("meal_templates").update({ uses: Number(tpl.uses ?? 0) + 1, last_used_at: new Date().toISOString() }).eq("id", templateId);
+    refreshModule("/food");
+    return { ok: true, ids: inserted.map((r) => r.id as string), message: insertedMessage(inserted as { owner_id: string; calories: number | null }[], meal, session) };
+  } catch (e) {
+    return { error: errorMessage(e) };
+  }
+}
+
+export async function deleteMealTemplate(id: string): Promise<ActionResult> {
+  if (!z.uuid().safeParse(id).success) return { error: "Invalid." };
+  const session = await getSession();
+  const { error } = await session.supabase.from("meal_templates").delete().eq("id", id).eq("household_id", session.household.id);
+  if (error) return { error: "Couldn't delete it." };
+  refreshModule("/food");
+  return { ok: true, message: "Saved meal deleted." };
+}
+
+/** Undo for a copy: removes the entries it added (only ones you added). */
+export async function undoFoodEntries(ids: string[]): Promise<ActionResult> {
+  if (!z.array(z.uuid()).min(1).max(240).safeParse(ids).success) return { error: "Nothing to undo." };
+  const session = await getSession();
+  await session.supabase.from("food_entries").delete().in("id", ids).eq("created_by", session.userId);
   refreshModule("/food");
   return { ok: true };
 }

@@ -55,7 +55,7 @@ export function FoodQuickSearch({ ownerId, people, day, meal, recent, compact }:
     start(async () => {
       const res = await repeatFood(r.id, ownerId, targetMeal, eatenAtFor(day, targetMeal));
       if (res.error) return toast(res.error, { tone: "error" });
-      toast(`${r.description} added to ${MEAL_META[targetMeal].label}${r.calories != null ? ` · ${r.calories} kcal` : ""}`, { kind: "food", undo: res.id ? () => undoFoodEntries([res.id!], ownerId) : undefined });
+      toast(`${r.description} added to ${MEAL_META[targetMeal].label}${r.calories != null ? ` · ${r.calories} kcal` : ""}`, { kind: "food", undo: res.id ? () => undoFoodEntries([res.id!]) : undefined });
       setQ("");
     });
 
@@ -146,7 +146,7 @@ export function AgainChips({ ownerId, day, foods }: { ownerId: string; day: LogD
             start(async () => {
               const res = await repeatFood(f.id, ownerId, f.meal, eatenAtFor(day, f.meal));
               if (res.error) return toast(res.error, { tone: "error" });
-              toast(`${f.description} added to ${MEAL_META[f.meal].label}${f.calories != null ? ` · ${f.calories} kcal` : ""}`, { kind: "food", undo: res.id ? () => undoFoodEntries([res.id!], ownerId) : undefined });
+              toast(`${f.description} added to ${MEAL_META[f.meal].label}${f.calories != null ? ` · ${f.calories} kcal` : ""}`, { kind: "food", undo: res.id ? () => undoFoodEntries([res.id!]) : undefined });
             })
           }
           className="pressable rounded-full border border-border px-3 py-1 text-sm hover:border-accent hover:text-accent"

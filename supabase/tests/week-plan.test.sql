@@ -113,5 +113,27 @@ do $$ begin
   assert (select count(*) from public.coach_reports) = 0, 'stranger sees none';
 end $$;
 reset role;
+-- Saved meals: members share them; strangers can't see or add.
+set role authenticated;
+select set_config('request.jwt.claim.sub', :p, false);
+insert into public.meal_templates (household_id, name, meal, items) values (:'hid', 'Our usual breakfast', 'breakfast', '[{"description": "Poha", "calories": 250}]');
+select set_config('request.jwt.claim.sub', :q, false);
+do $$ begin
+  assert (select count(*) from public.meal_templates) = 1, 'partner sees the household''s saved meals';
+end $$;
+select set_config('request.jwt.claim.sub', :r, false);
+do $$ begin
+  assert (select count(*) from public.meal_templates) = 0, 'stranger sees none';
+  insert into public.meal_templates (household_id, name, items) values (current_setting('test.hid')::uuid, 'x', '[{"description": "x"}]');
+  raise exception 'SHOULD_FAIL: stranger adds a saved meal';
+exception when insufficient_privilege then null;
+end $$;
+select set_config('request.jwt.claim.sub', :p, false);
+do $$ begin
+  insert into public.meal_templates (household_id, name, items) values (current_setting('test.hid')::uuid, 'empty', '[]');
+  raise exception 'SHOULD_FAIL: empty saved meal';
+exception when check_violation then null;
+end $$;
+reset role;
 \o
 \echo 'ALL WEEK PLAN TESTS PASSED'

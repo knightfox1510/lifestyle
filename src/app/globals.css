@@ -170,6 +170,7 @@ h1, h2, h3 {
 @keyframes fx-timer { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 @keyframes fx-glow { 0% { background-color: color-mix(in oklab, var(--accent-soft) 100%, transparent); box-shadow: inset 3px 0 0 var(--accent); } 100% { background-color: transparent; box-shadow: inset 3px 0 0 transparent; } }
 @keyframes fx-row-in { 0% { opacity: 0; transform: translateY(-6px); } 100% { opacity: 1; transform: none; } }
+@keyframes ring-fill { from { stroke-dashoffset: var(--ring-from); } to { stroke-dashoffset: var(--ring-to); } }
 .fx-fresh { animation: fx-row-in .35s ease-out, fx-glow 2.4s ease-out; border-radius: 10px; }
 .fx-pop { animation: pop .38s ease-out; }
 

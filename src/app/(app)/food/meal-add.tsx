@@ -49,7 +49,7 @@ export function MealAdd({
           {copies.length ? (
             <div className="space-y-1.5">
               {copies.map((c) => (
-                <CopyPicker key={c.key} source={c} ownerId={ownerId} meal={meal} date={day.date} onDone={() => setOpen(false)} />
+                <CopyPicker key={c.key} source={c} ownerId={ownerId} people={people} meal={meal} date={day.date} onDone={() => setOpen(false)} />
               ))}
             </div>
           ) : null}

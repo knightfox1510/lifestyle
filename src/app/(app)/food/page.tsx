@@ -3,7 +3,7 @@ import { WaterButtons } from "@/components/water-buttons";
 import { getT } from "@/lib/i18n/server";
 import { getSession } from "@/lib/session";
 import { addDays, localDate, localTime, shortDate, startOfLocalDayIso, todayIn } from "@/lib/dates";
-import { Card, buttonClass, cx, Notice } from "@/components/ui";
+import { Card, buttonClass, Notice } from "@/components/ui";
 import type { FluidIntake, FoodEntry, Meal, NutritionGoals } from "@/lib/types";
 import { MEAL_META, MEAL_ORDER, totals } from "@/modules/food/meta";
 import { DateJump } from "@/components/date-jump";
@@ -17,6 +17,9 @@ import type { LabResult } from "@/lib/types";
 import { MealAdd } from "./meal-add";
 import { AgainChips } from "./quick-search";
 import { FoodAddPanel } from "./food-add-panel";
+import { SaveMealButton } from "./copy-picker";
+import { KcalRing } from "@/components/kcal-ring";
+import { mealBudgets } from "@/modules/food/meal-budget";
 import { RestaurantPicker } from "./restaurant-picker";
 import { FoodEntryRow } from "./entry-row";
 
@@ -52,6 +55,8 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
     diningOn ? session.supabase.from("dining_places").select("id, name").eq("household_id", session.household.id).order("favorite", { ascending: false }).order("name") : Promise.resolve({ data: [] }),
     diningOn ? session.supabase.from("dining_dishes").select("id, name, place_id, calories, section").eq("household_id", session.household.id).order("name") : Promise.resolve({ data: [] }),
   ]);
+  const { data: tplRows } = canWrite ? await session.supabase.from("meal_templates").select("id, name, meal, items, last_used_at").eq("household_id", session.household.id).order("last_used_at", { ascending: false, nullsFirst: false }).limit(30) : { data: [] };
+  const templates = (tplRows ?? []) as { id: string; name: string; meal: Meal | null; items: { description: string; quantity: string | null; calories: number | null }[] }[];
   const { data: otherRows } = canWrite && others.length
     ? await session.supabase.from("food_entries").select("id, owner_id, eaten_at, meal, description, quantity, calories").in("owner_id", others.map((m) => m.user_id)).gte("eaten_at", startOfLocalDayIso(date)).lt("eaten_at", startOfLocalDayIso(addDays(date, 2))).order("eaten_at")
     : { data: [] };
@@ -85,12 +90,22 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
     ...others
       .map((m) => ({ m, items: otherEntries.filter((x) => x.owner_id === m.user_id && x.meal === meal).map(item) }))
       .filter((x) => x.items.length)
-      .map(({ m, items }) => ({ key: `p-${m.user_id}`, label: t("Copy {name}'s {meal}", { name: m.display_name, meal: t(MEAL_META[meal].label).toLowerCase() }), who: m.display_name, items })),
+      .map(({ m, items }) => ({ key: `p-${m.user_id}`, kind: "entries" as const, label: t("Copy {name}'s {meal}", { name: m.display_name, meal: t(MEAL_META[meal].label).toLowerCase() }), who: m.display_name, fromId: m.user_id, items })),
     ...(() => {
       const items = prevEntries.filter((x) => x.meal === meal).map(item);
-      return items.length ? [{ key: "prev", label: t("Same as {day}", { day: prevDate === addDays(today, -1) ? t("yesterday") : shortDate(prevDate) }), who: null, items }] : [];
+      return items.length ? [{ key: "prev", kind: "entries" as const, label: t("Same as {day}", { day: prevDate === addDays(today, -1) ? t("yesterday") : shortDate(prevDate) }), who: null, items }] : [];
     })(),
+    // Saved meals: this meal's first, then the rest (a few).
+    ...[...templates.filter((x) => x.meal === meal), ...templates.filter((x) => x.meal !== meal)].slice(0, 5).map((x) => ({
+      key: `t-${x.id}`,
+      kind: "template" as const,
+      templateId: x.id,
+      label: x.name,
+      who: null,
+      items: x.items.map((i, n) => ({ id: String(n), description: i.description, quantity: i.quantity ?? null, calories: i.calories ?? null })),
+    })),
   ];
+  const budgets = goals?.calories ? mealBudgets(goals.calories, Object.fromEntries(MEAL_ORDER.map((m) => [m, totals(entries.filter((x) => x.meal === m)).calories]))) : [];
   // Recently logged foods (one per name and meal), for search and one-tap re-adding.
   const recentSeen = new Set<string>();
   const recentFoods = ((recent ?? []) as FoodEntry[])
@@ -132,26 +147,44 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
         )}
       </div>
 
-      <Card className="space-y-3">
-        {bars.map((b) => {
-          const pct = b.goal ? Math.min(100, (b.value / b.goal) * 100) : 0;
-          const over = b.goal !== null && b.value > b.goal * 1.05;
-          return (
-            <div key={b.label}>
-              <div className="mb-1 flex justify-between text-sm">
-                <span className="font-medium">{t(b.label)}</span>
-                <span className="tabular-nums text-fg-muted">
-                  <span className={cx("text-fg", over && b.label === "Calories" && "text-danger")}>{b.value.toLocaleString("en-IN")}</span>
-                  {b.goal ? ` / ${b.goal.toLocaleString("en-IN")}` : ""} {b.unit}
-                  {b.goal && b.label === "Calories" ? ` · ${b.goal - b.value >= 0 ? t("{n} left", { n: (b.goal - b.value).toLocaleString("en-IN") }) : t("{n} over", { n: (b.value - b.goal).toLocaleString("en-IN") })}` : ""}
-                </span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-surface-2">
-                <div className={cx("h-full rounded-full", over && b.label === "Calories" ? "bg-danger" : "bg-series-1")} style={{ width: `${pct}%` }} />
-              </div>
+      <Card className="space-y-4">
+        <div className="flex items-center gap-4">
+          <KcalRing value={tot.calories} goal={goals?.calories ?? null} size={104} stroke={10} label={t("{n} kcal eaten", { n: tot.calories })}>
+            <span>
+              <span className="block text-[22px] font-semibold leading-none tabular-nums">{tot.calories.toLocaleString("en-IN")}</span>
+              <span className="text-[11px] text-fg-muted">kcal</span>
+            </span>
+          </KcalRing>
+          <div className="min-w-0 flex-1 space-y-2">
+            <p className="text-sm">
+              {goals?.calories ? (
+                goals.calories - tot.calories >= 0 ? (
+                  <><strong className="text-[17px] tabular-nums">{(goals.calories - tot.calories).toLocaleString("en-IN")}</strong> <span className="text-fg-muted">{t("kcal left of {goal}", { goal: goals.calories.toLocaleString("en-IN") })}</span></>
+                ) : (
+                  <><strong className="text-[17px] tabular-nums text-danger">{(tot.calories - goals.calories).toLocaleString("en-IN")}</strong> <span className="text-fg-muted">{t("kcal over {goal}", { goal: goals.calories.toLocaleString("en-IN") })}</span></>
+                )
+              ) : (
+                <span className="text-fg-muted">{t("No calorie goal yet")}</span>
+              )}
+            </p>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+              {bars.filter((b) => b.label !== "Calories").map((b) => {
+                const pct = b.goal ? Math.min(100, (b.value / b.goal) * 100) : 0;
+                return (
+                  <div key={b.label}>
+                    <div className="flex justify-between gap-1 text-[12px]">
+                      <span className="truncate text-fg-muted">{t(b.label)}</span>
+                      <span className="shrink-0 tabular-nums"><span className="font-medium">{Math.round(b.value).toLocaleString("en-IN")}</span>{b.goal ? <span className="text-fg-muted">/{b.goal.toLocaleString("en-IN")}</span> : null} <span className="text-fg-muted">{b.unit}</span></span>
+                    </div>
+                    <div className="mt-0.5 h-1.5 overflow-hidden rounded-full bg-surface-2">
+                      <div className="h-full rounded-full bg-series-1 transition-[width] duration-700" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          );
-        })}
+          </div>
+        </div>
         {isOwner && date === today ? <WaterButtons /> : null}
         {!goals?.calories ? (
           <p className="text-xs text-fg-muted">
@@ -191,11 +224,17 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
         return (
           <Card key={meal} className="!p-4">
             {(() => {
+              const b = budgets.find((x) => x.meal === meal);
               const heading = (
-                <>
-                  <h2 className="font-semibold">{MEAL_META[meal].icon} {t(MEAL_META[meal].label)}</h2>
-                  <span className="ml-auto mr-3 text-sm tabular-nums text-fg-muted">{mt.calories} kcal{list.length ? ` · ${Math.round(mt.protein_g)} g P` : ""}</span>
-                </>
+                <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                  {b ? <KcalRing value={mt.calories} goal={b.budget} label={t("{n} of about {budget} kcal", { n: mt.calories, budget: b.budget })} /> : null}
+                  <div className="min-w-0">
+                    <h2 className="font-semibold leading-tight">{MEAL_META[meal].icon} {t(MEAL_META[meal].label)}</h2>
+                    <p className="text-[12px] tabular-nums text-fg-muted">
+                      {list.length ? `${mt.calories} kcal · ${Math.round(mt.protein_g)} g protein` : b?.fits != null && date === today ? t("About {n} kcal fits", { n: b.fits.toLocaleString("en-IN") }) : t("Nothing logged")}
+                    </p>
+                  </div>
+                </div>
               );
               return canWrite ? (
                 <MealAdd key={`${date}-${meal}`} ownerId={ownerId} people={people} day={day} meal={meal} recent={recentFoods} copies={copiesFor(meal)}>{heading}</MealAdd>
@@ -227,9 +266,12 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
                   </FoodEntryRow>
                 ))}
               </ul>
-            ) : (
-              <p className="text-sm text-fg-muted">{t("Nothing logged.")}</p>
-            )}
+            ) : null}
+            {canWrite && list.length ? (
+              <div className="mt-1.5">
+                <SaveMealButton entryIds={list.map((x) => x.id)} meal={meal} suggestion={`${isOwner ? "My" : `${session.subject.display_name}'s`} usual ${t(MEAL_META[meal].label).toLowerCase()}`} />
+              </div>
+            ) : null}
           </Card>
         );
       })}
