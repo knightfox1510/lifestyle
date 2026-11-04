@@ -178,6 +178,17 @@ h1, h2, h3 {
 .fx-fresh { animation: fx-row-in .35s ease-out, fx-glow 2.4s ease-out; border-radius: 10px; }
 .fx-pop { animation: pop .38s ease-out; }
 
+/* ---- Tab switches slide the page (View Transitions) ---- */
+::view-transition-old(.tab-forward) { --slide-offset: -48px; animation: 140ms ease-in both vt-fade reverse, 320ms cubic-bezier(.3,.8,.3,1) both vt-slide reverse; }
+::view-transition-new(.tab-forward) { --slide-offset: 48px; animation: 200ms ease-out 100ms both vt-fade, 320ms cubic-bezier(.3,.8,.3,1) both vt-slide; }
+::view-transition-old(.tab-back) { --slide-offset: 48px; animation: 140ms ease-in both vt-fade reverse, 320ms cubic-bezier(.3,.8,.3,1) both vt-slide reverse; }
+::view-transition-new(.tab-back) { --slide-offset: -48px; animation: 200ms ease-out 100ms both vt-fade, 320ms cubic-bezier(.3,.8,.3,1) both vt-slide; }
+@keyframes vt-slide { from { translate: var(--slide-offset); } to { translate: 0; } }
+@keyframes vt-fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

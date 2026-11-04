@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useRef, useState, type ReactNod
 import { useT } from "@/lib/i18n/client";
 import { FxBadge, FxStamp } from "@/components/feedback-fx";
 import { KIND_META, inferDetail, inferKind, type FeedbackKind } from "@/lib/feedback-kind";
+import { hapticsOn, playTick } from "@/lib/feedback-prefs";
 
 type Toast = { id: number; message: string; tone: "ok" | "error"; kind: FeedbackKind; detail: string | null; ms: number; undo?: () => void | Promise<unknown> };
 export type ToastOptions = {
@@ -32,6 +33,7 @@ export function useToast() {
 /** A light tap on phones that support it (Android); silently ignored elsewhere. */
 export function haptic(ms: number | number[] = 10) {
   try {
+    if (!hapticsOn()) return;
     navigator.vibrate?.(ms);
   } catch {
     /* not supported */
@@ -45,7 +47,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const [stampNow, setStampNow] = useState<Stamp | null>(null);
   const seq = useRef(0);
   const dismiss = useCallback((id: number) => setItems((xs) => xs.filter((x) => x.id !== id)), []);
-  const stamp = useCallback<Ctx["stamp"]>((kind, label, detail = null) => {
+  const showStamp = useCallback<Ctx["stamp"]>((kind, label, detail = null) => {
     const id = ++seq.current;
     setStampNow({ id, kind, label, detail });
     setTimeout(() => setStampNow((s) => (s?.id === id ? null : s)), 1300);
@@ -60,11 +62,23 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       setItems((xs) => [...xs.slice(-2), { id, message, tone, kind, detail, ms, undo: opts?.undo }]);
       if (tone === "ok") {
         haptic(KIND_META[kind].stamp ? [12, 40, 18] : 10);
-        if (opts?.stamp ?? KIND_META[kind].stamp) stamp(kind, message, detail);
-      } else haptic([30, 60, 30]);
+        playTick(KIND_META[kind].stamp ? "log" : "save");
+        if (opts?.stamp ?? KIND_META[kind].stamp) showStamp(kind, message, detail);
+      } else {
+        haptic([30, 60, 30]);
+        playTick("error");
+      }
       setTimeout(() => dismiss(id), ms);
     },
-    [dismiss, stamp],
+    [dismiss, showStamp],
+  );
+  // On its own (e.g. the + sheet), the stamp brings its own sound.
+  const stamp = useCallback<Ctx["stamp"]>(
+    (kind, label, detail = null) => {
+      playTick("log");
+      showStamp(kind, label, detail);
+    },
+    [showStamp],
   );
   return (
     <ToastCtx.Provider value={{ toast, stamp }}>

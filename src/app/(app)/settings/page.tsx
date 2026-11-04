@@ -2,6 +2,7 @@ import { getSession } from "@/lib/session";
 import { Card, PageHeader } from "@/components/ui";
 import { SignOutButton } from "@/components/sign-out-button";
 import { InstallPrompt } from "@/components/install-prompt";
+import { FeedbackSettings } from "@/components/feedback-settings";
 import { HubList } from "@/components/hub";
 import { ProfileSettingsForm } from "./profile-settings-form";
 import { getT } from "@/lib/i18n/server";
@@ -38,6 +39,7 @@ export default async function SettingsPage() {
             { href: "/settings/privacy", name: t("Privacy & data"), hint: t("App lock, download your data, delete your account."), icon: <Lock />, tint: "var(--fg-muted)" },
           ]}
         />
+        <FeedbackSettings />
         <InstallPrompt />
         <SignOutButton />
         <p className="pt-2 text-center text-[12px] text-fg-muted">

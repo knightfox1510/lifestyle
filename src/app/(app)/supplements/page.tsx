@@ -1,4 +1,5 @@
 import { getSession } from "@/lib/session";
+import { PillLookPicker } from "@/components/pill-look-picker";
 import { lastNDays, addDays, localDate, shortDate, todayIn } from "@/lib/dates";
 import { describeRepeat, isDueOn, nextDueOn } from "@/modules/schedule";
 import { supplementRepeat } from "@/modules/supplements/meta";
@@ -94,6 +95,9 @@ export default async function SupplementsPage() {
               {all.map((s) => (
                 <tr key={s.id} className={`border-t border-border ${s.active ? "" : "opacity-60"}`}>
                   <td className="py-2 pr-2">
+                    <span className="flex items-start gap-2">
+                    <PillLookPicker kind="supplement" id={s.id} ownerId={ownerId} shape={(s as { pill_shape?: string | null }).pill_shape ?? null} color={(s as { pill_color?: string | null }).pill_color ?? null} canEdit={canWrite} />
+                    <span className="min-w-0">
                     <span className="font-medium">{s.name}</span>
                     <span className="block text-xs text-fg-muted">
                       {[s.dose, TIMING_LABEL[s.timing], describeRepeat(repeatOf(s)), s.stock_count !== null ? `${s.stock_count} left` : null].filter(Boolean).join(" · ")}
@@ -114,6 +118,7 @@ export default async function SupplementsPage() {
                         onSave={updateSupplement.bind(null, s.id, ownerId)}
                       />
                     ) : null}
+                  </span></span>
                   </td>
                   {days.map((d) => (
                     <td key={d} className="px-0.5 text-center" title={`${shortDate(d)}: ${has(s.id, d) ? "taken" : "not taken"}`}>

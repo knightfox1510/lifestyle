@@ -12,6 +12,7 @@ import { buttonClass, cx } from "@/components/ui";
 import { loadDays, waterSettings } from "@/lib/today";
 import { waterAccess } from "@/lib/water";
 import { WaterButtons } from "@/components/water-buttons";
+import { finishWelcome } from "./welcome/actions";
 import { activityFor, checkMilestones, recentCheers } from "@/lib/engagement";
 import { dayScore, missedOn, nextUp } from "@/modules/engagement/rings";
 import { DayArc, DayBars, DayTiles, WeekStrip } from "@/components/today/day-views";
@@ -120,6 +121,20 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
           {me.streak}
         </span>
       </header>
+
+      {isSelf && !past && (session.profile as { welcome_done_at?: string | null }).welcome_done_at === null ? (
+        <section className="flex flex-wrap items-center gap-3 rounded-[20px] bg-accent-soft p-4 [animation:toast-in_.3s_ease-out]">
+          <span className="text-2xl" aria-hidden>👋</span>
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold">{t("Welcome to Hearth")}</p>
+            <p className="text-[13px] text-fg-muted">{t("Three quick steps: pick your features, share with {name}, put the app on your home screen.", { name: session.partner?.display_name ?? t("your partner") })}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <form action={finishWelcome}><button className="text-[13px] text-fg-muted hover:text-fg">{t("Not now")}</button></form>
+            <Link href="/welcome" className={buttonClass("primary", "sm")}>{t("Start")}</Link>
+          </div>
+        </section>
+      ) : null}
 
       {isSelf && !past ? <Celebrate milestones={fresh.map((m) => ({ key: m.key, title: m.title, detail: m.detail }))} closedToday={day.today.closed} date={today} /> : null}
 

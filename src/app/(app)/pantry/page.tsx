@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PantrySwipe } from "./pantry-swipe";
 import { getSession } from "@/lib/session";
 import { shortDate, todayIn } from "@/lib/dates";
 import { Badge, Card, EmptyState, buttonClass, cx } from "@/components/ui";
@@ -70,7 +71,8 @@ export default async function PantryPage() {
                 {list.map((i) => {
                   const d = daysUntil(i.expires_on, today);
                   return (
-                    <li key={i.id} className="rounded-xl border border-border bg-surface px-3 py-2">
+                    <PantrySwipe key={i.id} id={i.id} name={i.name}>
+                    <div className="rounded-xl border border-border bg-surface px-3 py-2">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="min-w-0">
                           <p className="truncate text-sm">
@@ -120,7 +122,8 @@ export default async function PantryPage() {
                           </details>
                         </div>
                       </div>
-                    </li>
+                    </div>
+                    </PantrySwipe>
                   );
                 })}
               </ul>

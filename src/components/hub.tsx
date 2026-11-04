@@ -3,7 +3,16 @@ import { ChevronRight } from "lucide-react";
 import { ModuleIcon } from "@/components/icons";
 import { cx } from "@/components/ui";
 
-export type HubItem = { href: string; iconKey: string; name: string; status?: string | null; alert?: boolean };
+export type HubItem = { href: string; iconKey: string; name: string; status?: string | null; alert?: boolean; /** A number worth a bubble on the icon (doses left, items expiring). */ count?: number };
+
+/** Each feature's colour, for its icon badge. */
+const TINT: Record<string, string> = {
+  medicines: "var(--cat-meds)", supplements: "var(--cat-meds)", checkin: "var(--cat-check)", habits: "var(--cat-check)",
+  bladder_diary: "var(--cat-water)", pelvic_floor: "var(--cat-water)", cycle: "var(--danger)",
+  body_recomp: "var(--accent)", fitness: "var(--sun)", wearables: "var(--danger)", medical_records: "var(--accent)",
+  food_diary: "var(--cat-food)", groceries: "var(--cat-food)", pantry: "var(--cat-food)", recipes: "var(--cat-food)", dining: "var(--cat-food)",
+  child: "var(--sun)", maintenance: "var(--fg-muted)", documents: "var(--cat-water)", subscriptions: "var(--accent)", occasions: "var(--danger)", travel: "var(--cat-water)", watchlist: "var(--cat-meds)",
+};
 
 /** Big tappable tiles with a live one-line status (used by the Health and Me hubs). */
 export function HubGrid({ title, items }: { title?: string; items: HubItem[] }) {
@@ -19,8 +28,13 @@ export function HubGrid({ title, items }: { title?: string; items: HubItem[] }) 
             className="pressable group flex min-h-[112px] flex-col justify-between rounded-[20px] bg-surface p-4 shadow-[0_0_0_1px_var(--border)] hover:bg-surface-2/50"
           >
             <div className="flex items-start justify-between">
-              <span className="grid size-10 place-items-center rounded-2xl bg-surface-2 text-fg">
+              <span className="relative grid size-10 place-items-center rounded-2xl" style={{ background: `color-mix(in oklab, ${TINT[i.iconKey] ?? "var(--fg-muted)"} 16%, var(--surface))`, color: TINT[i.iconKey] ?? "var(--fg)" }}>
                 <ModuleIcon moduleKey={i.iconKey} />
+                {i.count ? (
+                  <span className={cx("absolute -right-1.5 -top-1.5 grid h-5 min-w-5 place-items-center rounded-full px-1 text-[11px] font-semibold tabular-nums ring-2 ring-surface [animation:pop_.4s_ease-out]", i.alert ? "bg-danger text-white" : "bg-fg text-bg")}>
+                    {i.count > 99 ? "99+" : i.count}
+                  </span>
+                ) : null}
               </span>
               <ChevronRight className="size-4 text-fg-muted opacity-0 transition group-hover:opacity-100" aria-hidden />
             </div>

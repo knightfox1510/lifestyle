@@ -1,4 +1,5 @@
 import { getSession } from "@/lib/session";
+import { PillLookPicker } from "@/components/pill-look-picker";
 import { Badge, Card, buttonClass } from "@/components/ui";
 import type { Medicine } from "@/lib/types";
 import { doseLabel, refillInfo } from "@/modules/medicines/logic";
@@ -47,6 +48,8 @@ export default async function ManageMedicinesPage({ searchParams }: PageProps<"/
             <li key={m.id}>
               <Card className={m.active ? "" : "opacity-70"}>
                 <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="flex min-w-0 items-start gap-2.5">
+                  <PillLookPicker kind="medicine" id={m.id} ownerId={ownerId} shape={(m as { pill_shape?: string | null }).pill_shape ?? null} color={(m as { pill_color?: string | null }).pill_color ?? null} canEdit={canWrite} />
                   <div className="min-w-0">
                     <p className="font-medium">
                       {m.name} {m.strength ? <span className="text-fg-muted">{m.strength}</span> : null}
@@ -60,6 +63,7 @@ export default async function ManageMedicinesPage({ searchParams }: PageProps<"/
                     {m.reason || m.prescribed_by ? (
                       <p className="text-xs text-fg-muted">{[m.reason && `For ${m.reason}`, m.prescribed_by && `Dr: ${m.prescribed_by}`].filter(Boolean).join(" · ")}</p>
                     ) : null}
+                  </div>
                   </div>
                   <div className="flex flex-wrap gap-1">
                     {!m.active ? <Badge>stopped</Badge> : m.start_date > today ? <Badge tone="accent">starts {shortDate(m.start_date)}</Badge> : m.end_date && m.end_date < today ? <Badge>ended</Badge> : null}

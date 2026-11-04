@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import type { ReactNode } from "react";
 import { cx } from "@/components/ui";
 
@@ -40,6 +43,7 @@ export function ColumnChart({
   markers,
   compare,
   compareLabel,
+  best,
 }: {
   title: string;
   subtitle?: ReactNode;
@@ -55,7 +59,11 @@ export function ColumnChart({
   /** The previous period's value for each column (e.g. same weekday last week): a dashed line, and "vs last week" above the chart. */
   compare?: (number | null)[];
   compareLabel?: string;
+  /** Mark the best column with a star: the highest value (steps, sleep). */
+  best?: "max";
 }) {
+  // Phones have no hover: tap a column to pin its tooltip, tap again to hide it.
+  const [pin, setPin] = useState<number | null>(null);
   const max = niceMax(Math.max(...data.map((d) => d.value), ...(line ?? []).map((v) => v ?? 0), ...(compare ?? []).map((v) => v ?? 0)));
   const ticks = [0, max / 2, max];
   // About 5 date labels whatever the width, so they never get cut off.
@@ -86,6 +94,7 @@ export function ColumnChart({
   const nowAvg = avg(data.map((d) => d.value));
   const thenAvg = compare ? avg(compare) : null;
   const change = nowAvg != null && thenAvg ? Math.round(((nowAvg - thenAvg) / thenAvg) * 100) : null;
+  const bestIndex = best === "max" && data.some((d) => d.value > 0) ? data.reduce((bi, d, i) => (d.value > data[bi].value ? i : bi), 0) : -1;
 
   return (
     <figure className="space-y-2">
@@ -93,11 +102,12 @@ export function ColumnChart({
         <p className="text-sm font-semibold">{title}</p>
         {subtitle ? <p className="text-xs text-fg-muted">{subtitle}</p> : null}
       </figcaption>
-      {(line && barLabel && lineLabel) || compare ? (
+      {(line && barLabel && lineLabel) || compare || bestIndex >= 0 ? (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-fg-muted">
           {barLabel ? <span className="flex items-center gap-1.5" aria-hidden><span className="inline-block size-2.5 rounded-sm bg-series-1" />{barLabel}</span> : null}
           {line && lineLabel ? <span className="flex items-center gap-1.5" aria-hidden><span className="inline-block h-0.5 w-4 rounded bg-series-2" />{lineLabel}</span> : null}
           {compare ? <span className="flex items-center gap-1.5" aria-hidden><span className="inline-block w-4 border-t-2 border-dashed border-fg-muted/70" />{compareLabel ?? "Last week"}</span> : null}
+          {bestIndex >= 0 ? <span className="flex items-center gap-1" aria-hidden><span className="text-sun">★</span> best {data[bestIndex].label}</span> : null}
           {change != null && thenAvg != null && nowAvg != null ? (
             <span className="ml-auto rounded-full bg-surface-2 px-2 py-0.5 tabular-nums text-fg">
               avg {fmt(nowAvg >= 100 ? Math.round(nowAvg) : Math.round(nowAvg * 10) / 10)}{unit} vs {fmt(thenAvg >= 100 ? Math.round(thenAvg) : Math.round(thenAvg * 10) / 10)}{unit} <span className={change === 0 ? "text-fg-muted" : "font-semibold"}>({change > 0 ? "+" : ""}{change}%)</span>
@@ -119,13 +129,14 @@ export function ColumnChart({
               <div key={t} className="absolute inset-x-0 h-px bg-grid" style={{ top: `${100 - (t / max) * 100}%` }} />
             ))}
             <div className="absolute inset-0 flex items-end">
-              {data.map((d) => (
-                <div key={d.key} className="group relative flex h-full flex-1 items-end justify-center px-px" tabIndex={0} aria-label={d.tooltip ?? `${d.label}: ${d.value}${unit}`}>
+              {data.map((d, i) => (
+                <div key={d.key} className="group relative flex h-full flex-1 cursor-pointer items-end justify-center px-px" tabIndex={0} aria-label={d.tooltip ?? `${d.label}: ${d.value}${unit}`} onClick={() => setPin(pin === i ? null : i)}>
+                  {i === bestIndex ? <span aria-hidden className="pointer-events-none absolute z-[1] text-[12px] leading-none text-sun drop-shadow-sm" style={{ bottom: `calc(${(d.value / max) * 100}% + 3px)` }}>★</span> : null}
                   <div
-                    className="w-full max-w-6 origin-bottom rounded-t transition-opacity group-hover:opacity-80"
+                    className={cx("w-full max-w-6 origin-bottom rounded-t transition-opacity group-hover:opacity-80", pin !== null && pin !== i && "opacity-50")}
                     style={{ height: `${(d.value / max) * 100}%`, minHeight: d.value > 0 ? 2 : 0, background: "linear-gradient(to top, color-mix(in oklab, var(--series-1) 55%, transparent), var(--series-1))", animation: `bar-grow .55s ${Math.min(0.4, data.indexOf(d) * 0.015).toFixed(3)}s cubic-bezier(.3,.8,.3,1) both` }}
                   />
-                  <div className="pointer-events-none absolute bottom-full z-10 mb-1 hidden whitespace-nowrap rounded-lg bg-fg px-2 py-1 text-xs text-bg shadow group-hover:block group-focus:block">
+                  <div className={cx("pointer-events-none absolute bottom-full z-10 mb-1 whitespace-nowrap rounded-lg bg-fg px-2 py-1 text-xs text-bg shadow group-hover:block group-focus:block", pin === i ? "block [animation:toast-in_.15s_ease-out]" : "hidden", i < n / 4 ? "left-0" : i > (n * 3) / 4 ? "right-0" : "")}>
                     {d.tooltip ?? `${d.label}: ${fmt(d.value)}${unit}`}
                   </div>
                 </div>
@@ -220,13 +231,6 @@ export function BarList({ title, items, unit = "" }: { title: string; items: { l
   );
 }
 
-export function rollingAverage(values: number[], window = 7): (number | null)[] {
-  return values.map((_, i) => {
-    if (i < window - 1) return null;
-    const slice = values.slice(i - window + 1, i + 1);
-    return Math.round((slice.reduce((a, b) => a + b, 0) / window) * 10) / 10;
-  });
-}
 
 /**
  * Line over time for a single measure (weight, a lab marker…). Points are
@@ -252,6 +256,7 @@ export function LineChart({
   targetLabel?: string;
   height?: number;
 }) {
+  const [pin, setPin] = useState<number | null>(null);
   if (points.length === 0) return null;
   const sorted = [...points].sort((a, b) => a.date.localeCompare(b.date));
   const values = [...sorted.map((p) => p.value), ...(target != null ? [target] : []), ...(band?.low != null ? [band.low] : []), ...(band?.high != null ? [band.high] : [])];
@@ -328,11 +333,12 @@ export function LineChart({
               key={`${p.date}-${i}`}
               tabIndex={0}
               aria-label={p.tooltip ?? `${p.label}: ${p.value}${unit}`}
-              className="group absolute size-4 -translate-x-1/2 -translate-y-1/2"
+              className="group absolute size-6 -translate-x-1/2 -translate-y-1/2 cursor-pointer"
               style={{ left: `${x(p.date)}%`, top: `${y(p.value)}%` }}
+              onClick={() => setPin(pin === i ? null : i)}
             >
-              <span className="absolute inset-1 rounded-full bg-series-1 ring-2 ring-surface" />
-              <span className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded-lg bg-fg px-2 py-1 text-xs text-bg shadow group-hover:block group-focus:block">
+              <span className={cx("absolute rounded-full bg-series-1 ring-2 ring-surface transition-transform", pin === i ? "inset-1 scale-125" : "inset-[7px]")} />
+              <span className={cx("pointer-events-none absolute bottom-full z-10 mb-1 whitespace-nowrap rounded-lg bg-fg px-2 py-1 text-xs text-bg shadow group-hover:block group-focus:block", pin === i ? "block" : "hidden", x(p.date) < 20 ? "left-0" : x(p.date) > 80 ? "right-0" : "left-1/2 -translate-x-1/2")}>
                 {p.tooltip ?? `${p.label}: ${p.value}${unit}`}
               </span>
             </div>

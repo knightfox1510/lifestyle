@@ -3,6 +3,7 @@ import { Search } from "lucide-react";
 import { getSession } from "@/lib/session";
 import { MODULES } from "@/modules/registry";
 import { TAB_MATCH } from "@/modules/areas";
+import { PageTransition } from "@/components/page-transition";
 import { AppNav, type NavGroup, type NavItem } from "@/components/app-nav";
 import { ToastProvider } from "@/components/toaster";
 import { PartnerViewBanner, ViewSwitch } from "@/components/view-switch";
@@ -68,7 +69,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         </header>
         {session.viewMode === "partner" && session.partner ? <PartnerViewBanner partnerName={session.partner.display_name} /> : null}
         </div>
-        <main className="mx-auto w-full max-w-4xl px-4 py-6 md:px-8">{children}</main>
+        <main className="mx-auto w-full max-w-4xl px-4 py-6 md:px-8"><PageTransition>{children}</PageTransition></main>
       </div>
       <AppLockGate />
     </div>

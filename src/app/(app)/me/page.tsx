@@ -19,6 +19,7 @@ export default async function MeHub() {
       name: t(m.name),
       status: status[m.key]?.text ?? null,
       alert: status[m.key]?.alert,
+      count: status[m.key]?.count,
     }));
   return (
     <div className="space-y-6">

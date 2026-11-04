@@ -51,10 +51,10 @@ export default async function WearablesPage() {
       ) : (
         <Section title="Last 30 days">
           <Card>
-            <ColumnChart title="Steps" data={days30.map((d) => ({ key: d, label: shortDate(d), value: byDay.get(d)?.steps ?? 0, tooltip: `${shortDate(d)}: ${byDay.get(d)?.steps?.toLocaleString("en-IN") ?? "no data"} steps${byDay.get(addDays(d, -30))?.steps ? ` (30 days before: ${byDay.get(addDays(d, -30))!.steps!.toLocaleString("en-IN")})` : ""}` }))} compare={prev30("steps")} compareLabel="Previous 30 days" height={120} />
+            <ColumnChart title="Steps" data={days30.map((d) => ({ key: d, label: shortDate(d), value: byDay.get(d)?.steps ?? 0, tooltip: `${shortDate(d)}: ${byDay.get(d)?.steps?.toLocaleString("en-IN") ?? "no data"} steps${byDay.get(addDays(d, -30))?.steps ? ` (30 days before: ${byDay.get(addDays(d, -30))!.steps!.toLocaleString("en-IN")})` : ""}` }))} compare={prev30("steps")} compareLabel="Previous 30 days" best="max" height={120} />
           </Card>
           <Card>
-            <ColumnChart title="Sleep (hours)" compare={prev30("sleep_minutes")?.map((v) => (v == null ? null : Math.round((v / 60) * 10) / 10))} compareLabel="Previous 30 days" data={days30.map((d) => ({ key: d, label: shortDate(d), value: Math.round(((byDay.get(d)?.sleep_minutes ?? 0) / 60) * 10) / 10, tooltip: `${shortDate(d)}: ${byDay.get(d)?.sleep_minutes ? `${Math.round((byDay.get(d)!.sleep_minutes! / 60) * 10) / 10} h` : "no data"}${byDay.get(d)?.deep_sleep_minutes ? ` (deep ${byDay.get(d)!.deep_sleep_minutes} min)` : ""}` }))} unit=" h" height={120} />
+            <ColumnChart title="Sleep (hours)" best="max" compare={prev30("sleep_minutes")?.map((v) => (v == null ? null : Math.round((v / 60) * 10) / 10))} compareLabel="Previous 30 days" data={days30.map((d) => ({ key: d, label: shortDate(d), value: Math.round(((byDay.get(d)?.sleep_minutes ?? 0) / 60) * 10) / 10, tooltip: `${shortDate(d)}: ${byDay.get(d)?.sleep_minutes ? `${Math.round((byDay.get(d)!.sleep_minutes! / 60) * 10) / 10} h` : "no data"}${byDay.get(d)?.deep_sleep_minutes ? ` (deep ${byDay.get(d)!.deep_sleep_minutes} min)` : ""}` }))} unit=" h" height={120} />
           </Card>
           {rows.some((r) => r.resting_hr) ? (
             <Card>

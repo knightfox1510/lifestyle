@@ -54,16 +54,16 @@ export function waterPace(now: string, start: string, end: string, target: numbe
 
 export type NextUpInput = {
   now: string;
-  dueDoses: { medicineId: string; name: string; strength: string | null; time: string }[];
+  dueDoses: { medicineId: string; name: string; strength: string | null; time: string; pillShape?: string | null; pillColor?: string | null }[];
   /** Supplements not ticked yet today; `time` null = any time (e.g. post-workout), never pushed. */
-  dueSupplements?: { supplementId: string; name: string; dose: string | null; time: string | null }[];
+  dueSupplements?: { supplementId: string; name: string; dose: string | null; time: string | null; pillShape?: string | null; pillColor?: string | null }[];
   water: { ml: number; target: number; start: string; end: string } | null;
   mealsLogged: string[] | null;
   checkinDone: boolean | null;
 };
 export type NextUpItem =
-  | { kind: "dose"; medicineId: string; name: string; strength: string | null; time: string; overdue: boolean }
-  | { kind: "supplement"; supplementId: string; name: string; dose: string | null; time: string; overdue: boolean }
+  | { kind: "dose"; medicineId: string; name: string; strength: string | null; time: string; overdue: boolean; pillShape?: string | null; pillColor?: string | null }
+  | { kind: "supplement"; supplementId: string; name: string; dose: string | null; time: string; overdue: boolean; pillShape?: string | null; pillColor?: string | null }
   | { kind: "water"; ml: number; target: number; behind: number }
   | { kind: "meal"; meal: (typeof MAIN_MEALS)[number] }
   | { kind: "check" };
@@ -93,7 +93,7 @@ export function nextUp(i: NextUpInput, limit = 5): NextUpItem[] {
   out.push(...doses);
   // Supplements once their time of day has come (or is within the hour); they're gentler than doses, so "overdue" waits 2 hours.
   const supps = (i.dueSupplements ?? [])
-    .filter((x): x is { supplementId: string; name: string; dose: string | null; time: string } => x.time !== null && toMin(x.time) <= n + 60)
+    .filter((x): x is { supplementId: string; name: string; dose: string | null; time: string; pillShape?: string | null; pillColor?: string | null } => x.time !== null && toMin(x.time) <= n + 60)
     .sort((a, b) => a.time.localeCompare(b.time))
     .map((x) => ({ kind: "supplement" as const, ...x, overdue: toMin(x.time) + 120 < n }));
   out.push(...supps);

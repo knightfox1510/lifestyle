@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PillIcon } from "@/components/pill-icon";
 import { getSession } from "@/lib/session";
 import { addDays, localDate, localTime, shortDate, todayIn } from "@/lib/dates";
 import { Badge, Card, EmptyState, Notice, buttonClass } from "@/components/ui";
@@ -115,6 +116,8 @@ export default async function MedicinesTodayPage({ searchParams }: PageProps<"/m
               const overdue = isToday && !s.dose && s.time < now;
               return (
                 <li key={`${s.medicine.id}-${s.time}`} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
+                  <div className="flex min-w-0 items-center gap-2.5">
+                  <PillIcon shape={(s.medicine as { pill_shape?: string | null }).pill_shape} color={(s.medicine as { pill_color?: string | null }).pill_color} size={30} />
                   <div className="min-w-0">
                     <p className="font-medium">
                       <span className="mr-2 font-mono text-sm text-fg-muted">{s.time}</span>
@@ -125,6 +128,7 @@ export default async function MedicinesTodayPage({ searchParams }: PageProps<"/m
                       {s.medicine.instructions ? ` · ${s.medicine.instructions}` : ""}
                       {startedLater.has(s.medicine.id) ? ` · ${t("added later; logging moves its start date back")}` : ""}
                     </p>
+                  </div>
                   </div>
                   <div className="flex flex-wrap items-center justify-end gap-2">
                     {s.dose ? (

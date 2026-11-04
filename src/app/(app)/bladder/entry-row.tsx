@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, type ReactNode } from "react";
+import { SwipeRow } from "@/components/swipe-row";
 import { Pencil, Trash2 } from "lucide-react";
 import { Badge, Button, Field, Input, Select, Textarea, cx } from "@/components/ui";
 import { useToast } from "@/components/toaster";
@@ -40,9 +41,10 @@ function WhenFields({ date, time, setDate, setTime, today }: { date: string; tim
   );
 }
 
-function Shell({ summary, open, setOpen, canEdit, children }: { summary: ReactNode; open: boolean; setOpen: (v: boolean) => void; canEdit: boolean; children: ReactNode }) {
+function Shell({ summary, open, setOpen, canEdit, children, onDelete }: { summary: ReactNode; open: boolean; setOpen: (v: boolean) => void; canEdit: boolean; children: ReactNode; onDelete?: () => void }) {
   return (
-    <li className="py-2.5 text-sm">
+    <SwipeRow className="text-sm" right={canEdit ? { label: "Edit", icon: <Pencil className="size-4" aria-hidden />, onAction: () => setOpen(true) } : undefined} left={onDelete ? { label: "Delete", onAction: onDelete } : undefined}>
+    <div className="bg-surface py-2.5">
       <div className="flex items-start justify-between gap-2">
         <button type="button" disabled={!canEdit} onClick={() => setOpen(!open)} aria-expanded={open} className={cx("min-w-0 flex-1 text-left", canEdit && "rounded-lg hover:bg-surface-2/60")}>
           {summary}
@@ -54,7 +56,8 @@ function Shell({ summary, open, setOpen, canEdit, children }: { summary: ReactNo
         ) : null}
       </div>
       {open ? <div className="mt-2 space-y-3 rounded-xl border border-border bg-surface-2/40 p-3">{children}</div> : null}
-    </li>
+    </div>
+    </SwipeRow>
   );
 }
 
@@ -115,7 +118,7 @@ export function BladderEventRow({ e, ownerId, date: d0, time: t0, today, canEdit
   );
 
   return (
-    <Shell summary={summary} open={open} setOpen={(v) => { if (!v) reset(); setOpen(v); }} canEdit={canEdit}>
+    <Shell summary={summary} open={open} setOpen={(v) => { if (!v) reset(); setOpen(v); }} canEdit={canEdit} onDelete={canDelete ? () => start(async () => { const r = await deleteBladderEvent(e.id, ownerId); toast(r.error ?? "Deleted.", r.error ? { tone: "error" } : { kind: "delete" }); }) : undefined}>
       <WhenFields date={date} time={time} setDate={setDate} setTime={setTime} today={today} />
       <div className="flex flex-wrap gap-1.5">
         {BLADDER_KINDS.map((k) => (
@@ -184,7 +187,7 @@ export function FluidRow({ f, ownerId, date: d0, time: t0, today, canEdit, canDe
   );
 
   return (
-    <Shell summary={summary} open={open} setOpen={(v) => { if (!v) reset(); setOpen(v); }} canEdit={canEdit}>
+    <Shell summary={summary} open={open} setOpen={(v) => { if (!v) reset(); setOpen(v); }} canEdit={canEdit} onDelete={canDelete ? () => start(async () => { const r = await deleteFluid(f.id, ownerId); toast(r.error ?? "Deleted.", r.error ? { tone: "error" } : { kind: "delete" }); }) : undefined}>
       <WhenFields date={date} time={time} setDate={setDate} setTime={setTime} today={today} />
       <div className="grid grid-cols-2 gap-2">
         <Field label="Drink">

@@ -1,5 +1,6 @@
 "use client";
 
+import { tabIndexOf } from "@/components/page-transition";
 import { useState } from "react";
 import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
@@ -68,13 +69,17 @@ export function AppNav({
   const left = tabs.slice(0, 2);
   const right = tabs.slice(2);
 
+  const current = tabs.findIndex((x) => activeHref(x.href, x.match));
+  const here = tabIndexOf(path);
   const tab = (item: NavItem) => {
     const Icon = iconFor(item.icon);
     const on = activeHref(item.href, item.match);
+    const index = tabs.indexOf(item);
     return (
       <Link
         key={item.href}
         href={item.href}
+        transitionTypes={here >= 0 && index !== here ? [index > here ? "tab-forward" : "tab-back"] : undefined}
         onClick={() => setClicked({ href: item.href, from: path })}
         aria-current={on ? "page" : undefined}
         className={cx("pressable relative flex h-full flex-col items-center justify-center gap-1 text-[11px] font-medium", on ? "text-fg" : "text-fg-muted")}
@@ -127,8 +132,14 @@ export function AppNav({
 
       <nav
         aria-label="Main"
-        className="print:!hidden fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+10px)] z-30 grid h-16 grid-cols-5 rounded-[22px] bg-bg/80 shadow-[0_0_0_1px_var(--border),0_12px_32px_-12px_rgb(0_0_0/0.25)] backdrop-blur-xl md:hidden"
+        className="print:!hidden fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+10px)] z-30 isolate grid h-16 grid-cols-5 rounded-[22px] bg-bg/80 shadow-[0_0_0_1px_var(--border),0_12px_32px_-12px_rgb(0_0_0/0.25)] backdrop-blur-xl md:hidden"
       >
+        {current >= 0 ? (
+          // The highlight glides to the tapped tab (the ＋ sits in the middle column).
+          <span aria-hidden className="pointer-events-none absolute inset-y-1.5 w-[20%] px-1.5 transition-[left] duration-300 ease-[cubic-bezier(.3,1.3,.5,1)]" style={{ left: `${(current < 2 ? current : current + 1) * 20}%` }}>
+            <span className="block h-full rounded-2xl bg-surface-2" />
+          </span>
+        ) : null}
         {left.map(tab)}
         <div className="grid place-items-center">
           <button

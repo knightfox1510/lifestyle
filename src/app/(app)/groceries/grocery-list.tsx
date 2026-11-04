@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { SwipeRow } from "@/components/swipe-row";
+import { Check } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useT } from "@/lib/i18n/client";
 import { useToast } from "@/components/toaster";
@@ -354,8 +356,16 @@ function Row({
       </li>
     );
   }
+  const toggle = () =>
+    void onChange({
+      ...item,
+      checked: !item.checked,
+      checked_by: !item.checked ? userId : null,
+      checked_at: !item.checked ? new Date().toISOString() : null,
+    });
   return (
-    <li className={cx("flex items-center gap-3 rounded-xl border border-border bg-surface px-3 py-2", item.checked && "opacity-60")}>
+    <SwipeRow className="rounded-xl" right={{ label: item.checked ? "Put back" : "Got it", icon: <Check className="size-4" aria-hidden />, onAction: toggle }} left={{ label: "Remove", onAction: () => void onChange({ ...item, deleted_at: new Date().toISOString() }) }}>
+    <div className={cx("flex items-center gap-3 rounded-xl border border-border bg-surface px-3 py-2", item.checked && "opacity-60")}>
       <button
         type="button"
         aria-pressed={item.checked}
@@ -407,6 +417,7 @@ function Row({
       >
         ✕
       </button>
-    </li>
+    </div>
+    </SwipeRow>
   );
 }

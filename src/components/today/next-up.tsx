@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { PillIcon } from "@/components/pill-icon";
 import { Droplet, Smile, Utensils } from "lucide-react";
 import type { NextUpItem } from "@/modules/engagement/rings";
 import { DoseButtons } from "@/app/(app)/medicines/dose-buttons";
@@ -21,7 +22,7 @@ export function NextUp({ items, ownerId, date, past = false }: { items: NextUpIt
         {items.map((i, k) => (
           <li key={k} className="flex items-center gap-3 py-3.5">
             <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-surface-2 text-fg-muted">
-              {i.kind === "dose" ? <ModuleIcon moduleKey="medicines" className="size-[18px]" /> : i.kind === "supplement" ? <ModuleIcon moduleKey="supplements" className="size-[18px]" /> : i.kind === "water" ? <Droplet className="size-[18px]" aria-hidden /> : i.kind === "meal" ? <Utensils className="size-[18px]" aria-hidden /> : <Smile className="size-[18px]" aria-hidden />}
+              {(i.kind === "dose" || i.kind === "supplement") && (i.pillShape || i.pillColor) ? <PillIcon shape={i.pillShape} color={i.pillColor} size={28} /> : i.kind === "dose" ? <ModuleIcon moduleKey="medicines" className="size-[18px]" /> : i.kind === "supplement" ? <ModuleIcon moduleKey="supplements" className="size-[18px]" /> : i.kind === "water" ? <Droplet className="size-[18px]" aria-hidden /> : i.kind === "meal" ? <Utensils className="size-[18px]" aria-hidden /> : <Smile className="size-[18px]" aria-hidden />}
             </span>
             <div className="min-w-0 flex-1">
               {i.kind === "dose" ? (

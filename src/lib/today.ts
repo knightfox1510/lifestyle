@@ -90,14 +90,17 @@ export async function loadDays(
     waterMl: todayFluids.filter((f) => f.drink !== "alcohol").reduce((a, f) => a + f.volume_ml, 0),
     mealsToday: [...new Set(foods.filter((f) => localDate(f.eaten_at, tz) === today).map((f) => f.meal))],
     checkinToday: checkins.some((c) => c.checkin_date === today),
-    dueDoses: todaySlots.filter((s) => !s.dose).map((s) => ({ medicineId: s.medicine.id, name: s.medicine.name, strength: s.medicine.strength, time: s.time })),
+    dueDoses: todaySlots.filter((s) => !s.dose).map((s) => ({ medicineId: s.medicine.id, name: s.medicine.name, strength: s.medicine.strength, time: s.time, ...look(s.medicine) })),
     /** Supplements not ticked yet today, with the clock time of their timing (null = any time). */
     dueSupplements: suppsOn(today)
       .filter((x) => !suppLogs.some((l) => l.supplement_id === x.id && l.log_date === today))
-      .map((x) => ({ supplementId: x.id, name: x.name, dose: x.dose, timing: x.timing, time: times[x.timing] })),
+      .map((x) => ({ supplementId: x.id, name: x.name, dose: x.dose, timing: x.timing, time: times[x.timing], ...look(x) })),
     week: lastNDays(today, 7).map((d) => statuses.find((s) => s.date === d) ?? { date: d, rings: [], closed: false, any: false }),
   };
 }
+
+/** How a medicine/supplement looks, for its icon. */
+const look = (m: object) => ({ pillShape: (m as { pill_shape?: string | null }).pill_shape ?? null, pillColor: (m as { pill_color?: string | null }).pill_color ?? null });
 
 export type DayData = Awaited<ReturnType<typeof loadDays>>;
 

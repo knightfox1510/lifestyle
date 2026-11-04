@@ -112,3 +112,14 @@ describe("missed on an earlier day", () => {
     expect(items.filter((i) => i.kind === "meal").map((i) => (i as { meal: string }).meal)).toEqual(["breakfast", "dinner"]);
   });
 });
+
+describe("tab of a path (for sliding page transitions)", () => {
+  it("maps pages to their bottom tab", async () => {
+    const { tabIndexOf } = await import("@/components/page-transition");
+    expect(tabIndexOf("/")).toBe(0);
+    expect(tabIndexOf("/medicines/manage")).toBe(1);
+    expect(tabIndexOf("/food/plan")).toBe(2);
+    expect(tabIndexOf("/settings/sharing")).toBe(3);
+    expect(tabIndexOf("/assistant")).toBe(-1);
+  });
+});
