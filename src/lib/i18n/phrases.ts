@@ -158,6 +158,7 @@ export const PHRASES: Record<string, { hi: string; mr: string }> = {
   "for {name}": { hi: "{name} के लिए", mr: "{name} साठी" },
   "Water for {name}": { hi: "{name} का पानी", mr: "{name} चे पाणी" },
   "{name} hasn't shared water with you, so it isn't shown. They can turn it on in Settings → Sharing → Water intake.": { hi: "{name} ने आपके साथ पानी साझा नहीं किया है, इसलिए यह नहीं दिखता। वे इसे सेटिंग्स → शेयरिंग → पानी में चालू कर सकते हैं।", mr: "{name} यांनी पाणी तुमच्याशी शेअर केलेले नाही, म्हणून ते दिसत नाही. ते सेटिंग्ज → शेअरिंग → पाणी येथे सुरू करू शकतात." },
+  "Copy {name}'s {meal}": { hi: "{name} का {meal} कॉपी करें", mr: "{name} चे {meal} कॉपी करा" },
   "Missed that day": { hi: "उस दिन छूटा", mr: "त्या दिवशी राहिलेले" },
   "Supplement": { hi: "सप्लीमेंट", mr: "सप्लिमेंट" },
   "{ml} of {target} ml": { hi: "{target} में से {ml} ml", mr: "{target} पैकी {ml} ml" },

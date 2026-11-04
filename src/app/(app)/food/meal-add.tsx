@@ -1,25 +1,27 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { buttonClass } from "@/components/ui";
+import { useState } from "react";
+import { buttonClass, cx } from "@/components/ui";
 import type { PersonPortion } from "@/components/nutrition-ui";
 import type { Meal } from "@/lib/types";
 import type { LogDay } from "@/modules/food/meta";
 import { useT } from "@/lib/i18n/client";
-import { FoodAiAdd } from "./food-ai-add";
-import { ManualFoodForm } from "./manual-food-form";
-import { FoodQuickSearch, type RecentFood } from "./quick-search";
-import { copyMeal } from "./actions";
-import { useToast } from "@/components/toaster";
+import { FoodAddPanel } from "./food-add-panel";
+import type { RecentFood } from "./quick-search";
+import { CopyPicker, type CopySource } from "./copy-picker";
 
-/** "＋ Add" on a meal card: opens the logger right inside that card, set to that meal. */
+/**
+ * "＋ Add" on a meal card: opens right inside that card, set to that meal.
+ * Quickest first: copy what your partner had (with your portion) or the
+ * same meal yesterday, then search / describe / type it in.
+ */
 export function MealAdd({
   ownerId,
   people,
   day,
   meal,
   recent,
-  previous,
+  copies,
   children,
 }: {
   ownerId: string;
@@ -27,37 +29,31 @@ export function MealAdd({
   day: LogDay;
   meal: Meal;
   recent: RecentFood[];
-  /** The same meal on the day before, if anything was logged: one tap copies it. */
-  previous: { date: string; label: string; items: string[] } | null;
+  /** Partner's same meal that day, and this meal yesterday: tick items, pick a portion, add. */
+  copies: CopySource[];
   children: React.ReactNode;
 }) {
   const t = useT();
-  const { toast } = useToast();
   const [open, setOpen] = useState(false);
-  const [pending, start] = useTransition();
   return (
     <>
       <div className="mb-1 flex items-baseline justify-between">
         {children}
-        <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className={buttonClass("soft", "sm")}>
+        <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className={cx(buttonClass(open ? "ghost" : "soft", "sm"), "relative")}>
           {open ? t("Close") : `＋ ${t("Add")}`}
+          {!open && copies.some((c) => c.who) ? <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-accent" aria-hidden /> : null}
         </button>
       </div>
       {open ? (
-        <div className="mb-3 space-y-2">
-          {previous ? (
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => start(async () => { const r = await copyMeal(ownerId, previous.date, meal, day.date); toast(r.error ?? r.message ?? "Added.", r.error ? { tone: "error" } : undefined); if (!r.error) setOpen(false); })}
-              className="w-full rounded-xl border border-dashed border-accent/50 px-3 py-2 text-left text-sm hover:bg-accent-soft"
-            >
-              ↻ {t("Same as {day}", { day: previous.label })}: <span className="text-fg-muted">{previous.items.join(", ")}</span>
-            </button>
+        <div className="mb-3 space-y-2.5 [animation:toast-in_.2s_ease-out]">
+          {copies.length ? (
+            <div className="space-y-1.5">
+              {copies.map((c) => (
+                <CopyPicker key={c.key} source={c} ownerId={ownerId} meal={meal} date={day.date} onDone={() => setOpen(false)} />
+              ))}
+            </div>
           ) : null}
-          <FoodQuickSearch ownerId={ownerId} people={people} day={day} meal={meal} recent={recent} compact />
-          <FoodAiAdd ownerId={ownerId} people={people} day={day} meal={meal} />
-          <ManualFoodForm ownerId={ownerId} day={day} meal={meal} />
+          <FoodAddPanel ownerId={ownerId} people={people} day={day} meal={meal} recent={recent} compact />
         </div>
       ) : null}
     </>

@@ -5,7 +5,7 @@ import { getSession } from "@/lib/session";
 import { addDays, localDate, localTime, shortDate, startOfLocalDayIso, todayIn } from "@/lib/dates";
 import { Card, buttonClass, cx, Notice } from "@/components/ui";
 import type { FluidIntake, FoodEntry, Meal, NutritionGoals } from "@/lib/types";
-import { MEAL_META, MEAL_ORDER, eatenAtFor, totals } from "@/modules/food/meta";
+import { MEAL_META, MEAL_ORDER, totals } from "@/modules/food/meta";
 import { DateJump } from "@/components/date-jump";
 import { supplementNutrientsByDay } from "@/lib/supplement-nutrients";
 import { MicroPanel } from "@/components/micro-panel";
@@ -14,12 +14,10 @@ import { dailyTargets, fromEntry, sum } from "@/modules/nutrition/nutrients";
 import { labNutrientLinks } from "@/modules/nutrition/labs-link";
 import { IRRITANT_META, type Irritant } from "@/modules/nutrition/irritants";
 import type { LabResult } from "@/lib/types";
-import { FoodAiAdd } from "./food-ai-add";
-import { ManualFoodForm } from "./manual-food-form";
 import { MealAdd } from "./meal-add";
-import { FoodQuickSearch } from "./quick-search";
+import { AgainChips } from "./quick-search";
+import { FoodAddPanel } from "./food-add-panel";
 import { RestaurantPicker } from "./restaurant-picker";
-import { repeatFood } from "./actions";
 import { FoodEntryRow } from "./entry-row";
 
 export const metadata = { title: "Food diary" };
@@ -39,7 +37,9 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
   // Your own drinks always show (water reminders); a partner's only with bladder-diary access.
   const fluidsVisible = ownerId === session.userId || (session.isModuleEnabled("bladder_diary") && session.accessTo("bladder_diary", ownerId) !== "none");
 
-  const people = session.members.filter((m) => session.accessTo("food_diary", m.user_id) === "write").map((m) => ({ id: m.user_id, name: m.user_id === session.userId ? "Me" : m.display_name }));
+  const people = session.members.filter((m) => session.accessTo("food_diary", m.user_id) === "write").map((m) => ({ id: m.user_id, name: m.user_id === session.userId ? `${m.display_name} (me)` : m.display_name }));
+  // Others in the household whose food diary you can see: their meals can be copied into this one.
+  const others = session.members.filter((m) => m.user_id !== ownerId && session.isModuleEnabled("food_diary") && session.accessTo("food_diary", m.user_id) !== "none");
 
   const diningOn = session.isModuleEnabled("dining");
   const [{ data: e }, { data: g }, { data: recent }, fl, rp, rd] = await Promise.all([
@@ -52,6 +52,10 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
     diningOn ? session.supabase.from("dining_places").select("id, name").eq("household_id", session.household.id).order("favorite", { ascending: false }).order("name") : Promise.resolve({ data: [] }),
     diningOn ? session.supabase.from("dining_dishes").select("id, name, place_id, calories, section").eq("household_id", session.household.id).order("name") : Promise.resolve({ data: [] }),
   ]);
+  const { data: otherRows } = canWrite && others.length
+    ? await session.supabase.from("food_entries").select("id, owner_id, eaten_at, meal, description, quantity, calories").in("owner_id", others.map((m) => m.user_id)).gte("eaten_at", startOfLocalDayIso(date)).lt("eaten_at", startOfLocalDayIso(addDays(date, 2))).order("eaten_at")
+    : { data: [] };
+  const otherEntries = ((otherRows ?? []) as Pick<FoodEntry, "id" | "owner_id" | "eaten_at" | "meal" | "description" | "quantity" | "calories">[]).filter((x) => localDate(x.eaten_at, tz) === date);
   const medicalOn = session.isModuleEnabled("medical_records") && session.accessTo("medical_records", ownerId) !== "none";
   const [{ data: mp }, { data: labRows }] = await Promise.all([
     medicalOn ? session.supabase.from("medical_profiles").select("sex").eq("owner_id", ownerId).maybeSingle() : Promise.resolve({ data: null }),
@@ -75,10 +79,18 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
 
   const prevDate = addDays(date, -1);
   const prevEntries = ((e ?? []) as FoodEntry[]).filter((x) => localDate(x.eaten_at, tz) === prevDate);
-  const previousFor = (meal: Meal) => {
-    const items = prevEntries.filter((x) => x.meal === meal).map((x) => x.description);
-    return items.length ? { date: prevDate, label: prevDate === addDays(today, -1) ? t("yesterday") : shortDate(prevDate), items } : null;
-  };
+  const item = (x: Pick<FoodEntry, "id" | "description" | "quantity" | "calories">) => ({ id: x.id, description: x.description, quantity: x.quantity, calories: x.calories });
+  /** What can be copied into a meal: each partner's same meal that day, then this meal the day before. */
+  const copiesFor = (meal: Meal) => [
+    ...others
+      .map((m) => ({ m, items: otherEntries.filter((x) => x.owner_id === m.user_id && x.meal === meal).map(item) }))
+      .filter((x) => x.items.length)
+      .map(({ m, items }) => ({ key: `p-${m.user_id}`, label: t("Copy {name}'s {meal}", { name: m.display_name, meal: t(MEAL_META[meal].label).toLowerCase() }), who: m.display_name, items })),
+    ...(() => {
+      const items = prevEntries.filter((x) => x.meal === meal).map(item);
+      return items.length ? [{ key: "prev", label: t("Same as {day}", { day: prevDate === addDays(today, -1) ? t("yesterday") : shortDate(prevDate) }), who: null, items }] : [];
+    })(),
+  ];
   // Recently logged foods (one per name and meal), for search and one-tap re-adding.
   const recentSeen = new Set<string>();
   const recentFoods = ((recent ?? []) as FoodEntry[])
@@ -148,36 +160,28 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
         ) : null}
       </Card>
 
-      {entries.length || Object.keys(supp).length ? (
-        <Card>
-          <details open={labLinks.size > 0}>
-            <summary className="cursor-pointer text-sm font-semibold">{t("Vitamins & minerals")} {labLinks.size ? <span className="text-xs font-normal text-danger">· {t("linked to your blood work")}</span> : null}</summary>
-            <div className="mt-3">
-              <MicroPanel totals={dayNutrients} targets={targets} labLinks={labLinks} coverage={{ withData, total: entries.length }} supplements={supp} />
-            </div>
-          </details>
-        </Card>
-      ) : null}
 
       {canWrite ? (
         <div id="add" className="scroll-mt-20 space-y-3">
           {date !== today ? (
             <Notice tone="accent">{t("Adding to {date}. Entries are saved at the meal's usual time.", { date: shortDate(date) })}</Notice>
           ) : null}
-          <FoodQuickSearch ownerId={ownerId} people={people} day={day} meal={presetMeal} recent={recentFoods} />
-          <FoodAiAdd
-            key={`${date}-${presetMeal ?? ""}`}
-            ownerId={ownerId}
-            day={day}
-            meal={presetMeal}
-            people={people}
-          />
-          <div className="flex flex-wrap gap-x-6 gap-y-2">
-            <ManualFoodForm key={`m-${date}-${presetMeal ?? ""}`} ownerId={ownerId} day={day} meal={presetMeal} />
-            <Link href="/food/product" className="text-sm text-fg-muted hover:text-fg">▥ {t("Scan a packaged food")}</Link>
-            <Link href="/food/dishes" className="text-sm text-fg-muted hover:text-fg">🍛 {t("Indian dishes")}</Link>
-            {restaurantPlaces.length ? <RestaurantPicker ownerId={ownerId} places={restaurantPlaces} dishes={restaurantDishes} day={day} /> : null}
-          </div>
+          <Card className="!p-4">
+            <FoodAddPanel
+              ownerId={ownerId}
+              people={people}
+              day={day}
+              meal={presetMeal}
+              recent={recentFoods}
+              extra={
+                <>
+                  <Link href="/food/product" className="text-sm text-fg-muted hover:text-fg">▥ {t("Scan a packaged food")}</Link>
+                  <Link href="/food/dishes" className="text-sm text-fg-muted hover:text-fg">🍛 {t("Indian dishes")}</Link>
+                  {restaurantPlaces.length ? <RestaurantPicker ownerId={ownerId} places={restaurantPlaces} dishes={restaurantDishes} day={day} /> : null}
+                </>
+              }
+            />
+          </Card>
         </div>
       ) : null}
 
@@ -190,11 +194,11 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
               const heading = (
                 <>
                   <h2 className="font-semibold">{MEAL_META[meal].icon} {t(MEAL_META[meal].label)}</h2>
-                  <span className="ml-auto mr-3 text-sm tabular-nums text-fg-muted">{mt.calories} kcal</span>
+                  <span className="ml-auto mr-3 text-sm tabular-nums text-fg-muted">{mt.calories} kcal{list.length ? ` · ${Math.round(mt.protein_g)} g P` : ""}</span>
                 </>
               );
               return canWrite ? (
-                <MealAdd key={`${date}-${meal}`} ownerId={ownerId} people={people} day={day} meal={meal} recent={recentFoods} previous={list.length ? null : previousFor(meal)}>{heading}</MealAdd>
+                <MealAdd key={`${date}-${meal}`} ownerId={ownerId} people={people} day={day} meal={meal} recent={recentFoods} copies={copiesFor(meal)}>{heading}</MealAdd>
               ) : (
                 <div className="mb-1 flex items-baseline justify-between">{heading}</div>
               );
@@ -230,18 +234,21 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
         );
       })}
 
+      {entries.length || Object.keys(supp).length ? (
+        <Card>
+          <details open={labLinks.size > 0}>
+            <summary className="cursor-pointer text-sm font-semibold">{t("Vitamins & minerals")} {labLinks.size ? <span className="text-xs font-normal text-danger">· {t("linked to your blood work")}</span> : null}</summary>
+            <div className="mt-3">
+              <MicroPanel totals={dayNutrients} targets={targets} labLinks={labLinks} coverage={{ withData, total: entries.length }} supplements={supp} />
+            </div>
+          </details>
+        </Card>
+      ) : null}
+
       {canWrite && favourites.length ? (
         <Card>
           <h2 className="mb-2 text-sm font-semibold">{t("Have it again")}</h2>
-          <div className="flex flex-wrap gap-1.5">
-            {favourites.map((f) => (
-              <form key={f.id} action={repeatFood.bind(null, f.id, ownerId, f.meal, eatenAtFor(day, f.meal))}>
-                <button className="rounded-full border border-border px-3 py-1 text-sm hover:bg-surface-2">
-                  + {f.description} <span className="text-fg-muted">{f.calories ?? ""}</span>
-                </button>
-              </form>
-            ))}
-          </div>
+          <AgainChips ownerId={ownerId} day={day} foods={favourites.map((f) => ({ id: f.id, description: f.description, quantity: f.quantity, calories: f.calories, meal: f.meal }))} />
         </Card>
       ) : null}
     </div>

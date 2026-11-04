@@ -9,7 +9,7 @@ import type { Meal } from "@/lib/types";
 import { MEAL_META, eatenAtFor, mealForHour, type LogDay } from "@/modules/food/meta";
 import type { Nutrients } from "@/modules/nutrition/nutrients";
 import { FoodAmountLogger } from "./food-logger";
-import { repeatFood } from "./actions";
+import { repeatFood, undoFoodEntries } from "./actions";
 
 export type RecentFood = { id: string; description: string; quantity: string | null; calories: number | null; meal: Meal };
 
@@ -53,8 +53,9 @@ export function FoodQuickSearch({ ownerId, people, day, meal, recent, compact }:
 
   const again = (r: RecentFood) =>
     start(async () => {
-      await repeatFood(r.id, ownerId, targetMeal, eatenAtFor(day, targetMeal));
-      toast(`${r.description} added to ${MEAL_META[targetMeal].label}`);
+      const res = await repeatFood(r.id, ownerId, targetMeal, eatenAtFor(day, targetMeal));
+      if (res.error) return toast(res.error, { tone: "error" });
+      toast(`${r.description} added to ${MEAL_META[targetMeal].label}${r.calories != null ? ` · ${r.calories} kcal` : ""}`, { kind: "food", undo: res.id ? () => undoFoodEntries([res.id!], ownerId) : undefined });
       setQ("");
     });
 
@@ -126,6 +127,33 @@ export function FoodQuickSearch({ ownerId, people, day, meal, recent, compact }:
       ) : query.length >= 2 && !loading ? (
         <p className="text-xs text-fg-muted">Nothing found. Describe it in the box below and AI will work it out.</p>
       ) : null}
+    </div>
+  );
+}
+
+/** "Have it again": your most-logged foods, one tap each (into the meal they're usually had at), with Undo. */
+export function AgainChips({ ownerId, day, foods }: { ownerId: string; day: LogDay; foods: RecentFood[] }) {
+  const { toast } = useToast();
+  const [pending, start] = useTransition();
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {foods.map((f) => (
+        <button
+          key={f.id}
+          type="button"
+          disabled={pending}
+          onClick={() =>
+            start(async () => {
+              const res = await repeatFood(f.id, ownerId, f.meal, eatenAtFor(day, f.meal));
+              if (res.error) return toast(res.error, { tone: "error" });
+              toast(`${f.description} added to ${MEAL_META[f.meal].label}${f.calories != null ? ` · ${f.calories} kcal` : ""}`, { kind: "food", undo: res.id ? () => undoFoodEntries([res.id!], ownerId) : undefined });
+            })
+          }
+          className="pressable rounded-full border border-border px-3 py-1 text-sm hover:border-accent hover:text-accent"
+        >
+          + {f.description} <span className="text-fg-muted">{f.calories ?? ""}</span>
+        </button>
+      ))}
     </div>
   );
 }

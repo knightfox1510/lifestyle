@@ -86,12 +86,17 @@ export async function addManualFood(_: ActionResult | null, form: FormData): Pro
   return { ok: true, message: "Added." };
 }
 
-/** Logs a previous entry again, now. */
-export async function repeatFood(entryId: string, ownerId: string, meal: (typeof MEALS)[number], eatenAt?: string) {
-  const session = await requireWrite(MODULE, ownerId);
+/** Logs a previous entry again (now, or at `eatenAt`). Returns the new entry's id, for Undo. */
+export async function repeatFood(entryId: string, ownerId: string, meal: (typeof MEALS)[number], eatenAt?: string): Promise<ActionResult> {
+  let session;
+  try {
+    session = await requireWrite(MODULE, ownerId);
+  } catch (e) {
+    return { error: errorMessage(e) };
+  }
   const { data } = await session.supabase.from("food_entries").select("*").eq("id", entryId).single();
-  if (!data || !MEALS.includes(meal) || !when.safeParse(eatenAt).success) return;
-  await session.supabase.from("food_entries").insert({
+  if (!data || !MEALS.includes(meal) || !when.safeParse(eatenAt).success) return { error: "That food couldn't be found." };
+  const { data: row, error } = await session.supabase.from("food_entries").insert({
     owner_id: ownerId,
     created_by: session.userId,
     household_id: session.household.id,
@@ -110,8 +115,86 @@ export async function repeatFood(entryId: string, ownerId: string, meal: (typeof
     accuracy: data.accuracy ?? "estimated",
     irritants: data.irritants ?? [],
     ...(eatenAt ? { eaten_at: eatenAt } : {}),
-  });
+  }).select("id").single();
+  if (error || !row) return { error: "Couldn't add it." };
   refreshModule("/food");
+  return { ok: true, id: row.id, message: `${data.description} added to ${meal}${data.calories != null ? ` (${Math.round(Number(data.calories))} kcal)` : ""}.` };
+}
+
+const copySchema = z.object({
+  entryIds: z.array(z.uuid()).min(1).max(30),
+  toOwner: z.uuid(),
+  meal: z.enum(MEALS),
+  toDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  factor: z.number().min(0.25).max(3),
+});
+
+/**
+ * Copies logged foods into a meal: a partner's lunch you shared, or the same
+ * meal on another day. Each item can be scaled (½× … 2×): calories, macros,
+ * vitamins and grams all follow. Times keep their clock time on the new day.
+ * Reading the originals goes through the database's sharing rules.
+ */
+export async function copyEntries(input: unknown): Promise<ActionResult & { ids?: string[] }> {
+  const parsed = copySchema.safeParse(input);
+  if (!parsed.success) return { error: "Pick what to copy." };
+  const { entryIds, toOwner, meal, toDate, factor } = parsed.data;
+  try {
+    const session = await requireWrite(MODULE, toOwner);
+    const tz = session.profile.timezone;
+    const { data } = await session.supabase.from("food_entries").select("*").in("id", entryIds);
+    const rows = (data ?? []) as Record<string, unknown>[];
+    if (!rows.length) return { error: "Those foods couldn't be found (or aren't shared with you)." };
+    const now = Date.now();
+    const at = (iso: string) => {
+      const t = zonedIso(toDate, localTime(iso, tz), tz);
+      return Date.parse(t) > now ? new Date(now).toISOString() : t;
+    };
+    const k = (v: unknown, cap = 100000) => (v == null ? null : Math.min(cap, Math.round(Number(v) * factor * 10) / 10));
+    const micros = (m: unknown) => Object.fromEntries(Object.entries((m ?? {}) as Record<string, number>).map(([key, v]) => [key, Math.round(Number(v) * factor * 100) / 100]));
+    const portion = factor === 1 ? "" : `${Math.round(factor * 100)}% portion`;
+    const { data: inserted, error } = await session.supabase
+      .from("food_entries")
+      .insert(
+        rows.map((e) => ({
+          owner_id: toOwner,
+          created_by: session.userId,
+          household_id: session.household.id,
+          meal,
+          eaten_at: at(String(e.eaten_at)),
+          description: e.description,
+          quantity: portion ? `${e.quantity ? `${e.quantity}, ` : ""}${portion}`.slice(0, 60) : e.quantity,
+          calories: e.calories == null ? null : Math.min(5000, Math.round(Number(e.calories) * factor)),
+          protein_g: k(e.protein_g),
+          carbs_g: k(e.carbs_g),
+          fat_g: k(e.fat_g),
+          fiber_g: k(e.fiber_g),
+          grams: k(e.grams),
+          micros: micros(e.micros),
+          recipe_id: e.recipe_id,
+          dish_id: e.dish_id ?? null,
+          source: e.source,
+          accuracy: e.accuracy ?? "estimated",
+          irritants: e.irritants ?? [],
+        })),
+      )
+      .select("id, calories");
+    if (error || !inserted) return { error: "Couldn't copy those foods." };
+    refreshModule("/food");
+    const kcal = inserted.reduce((a, r) => a + Number(r.calories ?? 0), 0);
+    return { ok: true, ids: inserted.map((r) => r.id as string), message: `Added ${inserted.length} item${inserted.length === 1 ? "" : "s"} to ${meal} (${Math.round(kcal)} kcal).` };
+  } catch (e) {
+    return { error: errorMessage(e) };
+  }
+}
+
+/** Undo for a copy: removes the entries it added (only ones you added). */
+export async function undoFoodEntries(ids: string[], ownerId: string): Promise<ActionResult> {
+  if (!z.array(z.uuid()).min(1).max(30).safeParse(ids).success) return { error: "Nothing to undo." };
+  const session = await getSession();
+  await session.supabase.from("food_entries").delete().in("id", ids).eq("owner_id", ownerId).eq("created_by", session.userId);
+  refreshModule("/food");
+  return { ok: true };
 }
 
 /**

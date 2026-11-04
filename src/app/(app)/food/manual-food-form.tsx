@@ -8,9 +8,9 @@ import type { Meal } from "@/lib/types";
 import { useT } from "@/lib/i18n/client";
 import { addManualFood } from "./actions";
 
-export function ManualFoodForm({ ownerId, day, meal: preset }: { ownerId: string; day?: LogDay; meal?: Meal }) {
+export function ManualFoodForm({ ownerId, day, meal: preset, defaultOpen = false }: { ownerId: string; day?: LogDay; meal?: Meal; defaultOpen?: boolean }) {
   const t = useT();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [meal, setMeal] = useState<Meal>(preset ?? mealForHour(new Date().getHours()));
   const [state, action] = useActionState(addManualFood, null);
   if (!open) {
