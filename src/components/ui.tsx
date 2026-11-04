@@ -178,7 +178,7 @@ export function StatTile({ label, value, icon, tint = "var(--accent)", hint }: {
   return (
     <div className="rounded-[20px] bg-surface p-3.5 shadow-[0_0_0_1px_var(--border)]">
       <div className="flex items-center gap-2">
-        {icon ? <span className="grid size-7 place-items-center rounded-lg [&_svg]:size-4" style={{ background: `color-mix(in oklab, ${tint} 16%, var(--surface))`, color: tint }} aria-hidden>{icon}</span> : null}
+        {icon ? <span className="grid size-7 place-items-center rounded-lg [&_svg]:size-4" style={{ background: `color-mix(in oklab, ${tint} 16%, var(--surface))`, color: `color-mix(in oklab, ${tint} 78%, var(--fg))` }} aria-hidden>{icon}</span> : null}
         <p className="min-w-0 text-xs leading-tight text-fg-muted">{label}</p>
       </div>
       <p className="mt-1.5 text-2xl font-semibold tabular-nums tracking-tight">{value}</p>

@@ -7,6 +7,9 @@ import { refLabel, valueLabel } from "@/modules/medical/labs";
 import { CATEGORY_META } from "@/modules/medical/meta";
 import { PrintButton } from "@/app/(app)/bladder/report/print-button";
 import { AiVisitSummary } from "./ai-summary";
+import { PillIcon } from "@/components/pill-icon";
+import { ColumnChart, LineChart } from "@/components/charts";
+import { addDays, lastNDays, localDate, shortDate, startOfLocalDayIso, todayIn } from "@/lib/dates";
 
 export const metadata = { title: "Doctor visit summary" };
 
@@ -17,7 +20,40 @@ export default async function VisitSummaryPage({ searchParams }: PageProps<"/med
   const days = VISIT_PERIODS.includes(Number(sp.days) as (typeof VISIT_PERIODS)[number]) ? Number(sp.days) : 90;
   const reason = typeof sp.reason === "string" ? sp.reason.slice(0, 200) : "";
   const subject = session.subject;
-  const v = await loadVisitData(session, subject.user_id, days);
+  // Which sections to include (all unless some are unticked).
+  type VisitSection = "medicines" | "labs" | "vitals" | "bladder" | "food" | "wellbeing";
+  const picked = typeof sp.inc === "string" ? sp.inc.split(",") : Array.isArray(sp.inc) ? sp.inc : null;
+  const inc = (k: VisitSection) => !picked || picked.includes(k);
+  const tz = session.profile.timezone;
+  const today = todayIn(tz);
+  const from = addDays(today, -(days - 1));
+  const can = (m: string) => session.isModuleEnabled(m) && session.accessTo(m, subject.user_id) !== "none";
+  const [v, weightRows, leakRows, foodRows] = await Promise.all([
+    loadVisitData(session, subject.user_id, days),
+    inc("vitals") && can("body_recomp") ? session.supabase.from("body_metrics").select("measured_at, weight_kg").eq("owner_id", subject.user_id).not("weight_kg", "is", null).gte("measured_at", startOfLocalDayIso(from)).order("measured_at") : Promise.resolve({ data: [] }),
+    inc("bladder") && can("bladder_diary") ? session.supabase.from("bladder_events").select("occurred_at, kind").eq("owner_id", subject.user_id).gte("occurred_at", startOfLocalDayIso(from)) : Promise.resolve({ data: [] }),
+    inc("food") && can("food_diary") ? session.supabase.from("food_entries").select("eaten_at, calories, protein_g, fiber_g").eq("owner_id", subject.user_id).gte("eaten_at", startOfLocalDayIso(from)).limit(5000) : Promise.resolve({ data: [] }),
+  ]);
+  const weights = [...new Map(((weightRows.data ?? []) as { measured_at: string; weight_kg: number }[]).map((w) => [localDate(w.measured_at, tz), Number(w.weight_kg)])).entries()].map(([d, kg]) => ({ date: d, value: kg, label: shortDate(d) }));
+  const leakDays = lastNDays(today, Math.min(days, 60));
+  const leaksBy = new Map<string, number>();
+  const loggedBladder = new Set<string>();
+  for (const e of (leakRows.data ?? []) as { occurred_at: string; kind: string }[]) {
+    const d = localDate(e.occurred_at, tz);
+    loggedBladder.add(d);
+    if (e.kind === "leak") leaksBy.set(d, (leaksBy.get(d) ?? 0) + 1);
+  }
+  const foodBy = new Map<string, { kcal: number; protein: number; fiber: number }>();
+  for (const f of (foodRows.data ?? []) as { eaten_at: string; calories: number | null; protein_g: number | null; fiber_g: number | null }[]) {
+    const d = localDate(f.eaten_at, tz);
+    const x = foodBy.get(d) ?? { kcal: 0, protein: 0, fiber: 0 };
+    x.kcal += Number(f.calories ?? 0);
+    x.protein += Number(f.protein_g ?? 0);
+    x.fiber += Number(f.fiber_g ?? 0);
+    foodBy.set(d, x);
+  }
+  const fullFood = [...foodBy.values()].filter((x) => x.kcal >= 800);
+  const avgOf = (k: "kcal" | "protein" | "fiber") => (fullFood.length ? Math.round(fullFood.reduce((a, x) => a + x[k], 0) / fullFood.length) : null);
   const locale = `${session.profile.language ?? "en"}-IN`;
   const date = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString(locale, { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 
@@ -34,6 +70,16 @@ export default async function VisitSummaryPage({ searchParams }: PageProps<"/med
         <Field label={t("Reason for the visit (optional)")} className="min-w-48 flex-1">
           <Input name="reason" defaultValue={reason} placeholder={t("e.g. follow-up for thyroid, frequent urination")} maxLength={200} />
         </Field>
+        <fieldset className="w-full">
+          <legend className="mb-1 text-xs font-medium text-fg-muted">{t("Include")}</legend>
+          <div className="flex flex-wrap gap-x-4 gap-y-1">
+            {([["medicines", t("Medicines")], ["labs", t("Blood work & tests")], ["vitals", t("Vitals & weight")], ["bladder", t("Bladder diary")], ["food", t("Food & nutrition")], ["wellbeing", t("Sleep, mood & activity")]] as const).map(([k, label]) => (
+              <label key={k} className="flex items-center gap-1.5 text-sm">
+                <input type="checkbox" name="inc" value={k} defaultChecked={inc(k)} className="size-4 accent-[var(--accent)]" /> {label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
         <button className="h-10 rounded-xl border border-border px-3 text-sm hover:bg-surface-2">{t("Update")}</button>
         <PrintButton />
       </form>
@@ -64,7 +110,7 @@ export default async function VisitSummaryPage({ searchParams }: PageProps<"/med
           </Section>
         ) : null}
 
-        <Section title={`💊 ${t("Current medicines")}`}>
+        {inc("medicines") ? <Section title={`💊 ${t("Current medicines")}`}>
           {v.medicines.length || v.supplements.length ? (
             <table className="w-full text-sm">
               <thead className="text-left text-xs text-fg-muted">
@@ -78,7 +124,7 @@ export default async function VisitSummaryPage({ searchParams }: PageProps<"/med
               <tbody className="divide-y divide-border">
                 {v.medicines.map(({ m, label, adherence }) => (
                   <tr key={m.id}>
-                    <td className="py-1 pr-2 font-medium">{m.name} {m.strength}</td>
+                    <td className="py-1 pr-2 font-medium"><span className="inline-flex items-center gap-1.5"><PillIcon shape={(m as { pill_shape?: string | null }).pill_shape} color={(m as { pill_color?: string | null }).pill_color} size={20} />{m.name} {m.strength}</span></td>
                     <td className="py-1 pr-2">{label}{m.times.length ? ` · ${m.times.join(", ")}` : ""}</td>
                     <td className="py-1 pr-2">{m.reason ?? "—"}{m.prescribed_by ? ` (${m.prescribed_by})` : ""}</td>
                     <td className={cx("py-1", adherence != null && adherence < 80 && "text-danger")}>{adherence != null ? `${adherence}%` : "—"}</td>
@@ -107,7 +153,7 @@ export default async function VisitSummaryPage({ searchParams }: PageProps<"/med
               </ul>
             </div>
           ) : null}
-        </Section>
+        </Section> : null}
 
         {v.timeline.length ? (
           <Section title={`🩺 ${t("Health events in this period")}`}>
@@ -123,7 +169,7 @@ export default async function VisitSummaryPage({ searchParams }: PageProps<"/med
           </Section>
         ) : null}
 
-        {v.labsInPeriod.length || v.olderAbnormal.length ? (
+        {inc("labs") && (v.labsInPeriod.length || v.olderAbnormal.length) ? (
           <Section title={`🧪 ${t("Blood work & tests")}`}>
             <table className="w-full text-sm">
               <tbody className="divide-y divide-border">
@@ -143,7 +189,7 @@ export default async function VisitSummaryPage({ searchParams }: PageProps<"/med
           </Section>
         ) : null}
 
-        {v.vitals.weight || v.vitals.bpLatest || v.vitals.glucoseLatest ? (
+        {inc("vitals") && (v.vitals.weight || v.vitals.bpLatest || v.vitals.glucoseLatest) ? (
           <Section title={`📈 ${t("Vitals")}`}>
             <ul className="grid gap-1 text-sm sm:grid-cols-2">
               {v.vitals.weight ? <li>{t("Weight")}: <strong>{v.vitals.weight} kg</strong>{v.vitals.weightChange != null ? ` (${v.vitals.weightChange > 0 ? "+" : ""}${v.vitals.weightChange} kg)` : ""}{v.vitals.bmi ? ` · BMI ${v.vitals.bmi}` : ""}</li> : null}
@@ -151,20 +197,34 @@ export default async function VisitSummaryPage({ searchParams }: PageProps<"/med
               {v.vitals.glucoseLatest ? <li>{t("Blood glucose")}: <strong>{v.vitals.glucoseLatest} mg/dL</strong></li> : null}
               {v.vitals.restingHr ? <li>{t("Resting heart rate")}: {v.vitals.restingHr}</li> : null}
             </ul>
+            {weights.length >= 3 ? <div className="pt-2"><LineChart title={t("Weight")} points={weights} unit=" kg" height={120} /></div> : null}
           </Section>
         ) : null}
 
-        {v.bladder ? (
+        {inc("bladder") && v.bladder ? (
           <Section title={`💧 ${t("Bladder diary")}`}>
             <p className="text-sm">
               {t("Per day over {n} logged days:", { n: v.bladder.days })} <strong>{v.bladder.voids}</strong> {t("bathroom visits")} ({v.bladder.nightVoids} {t("at night")}), <strong>{v.bladder.leaks}</strong> {t("leaks")}, <strong>{v.bladder.urges}</strong> {t("urgency episodes")}, {v.bladder.fluidMl} ml {t("fluids")}.
             </p>
             {v.bladder.triggers.length ? <p className="text-sm text-fg-muted">{t("Common leak triggers")}: {v.bladder.triggers.map((x) => `${t(x.label)} ×${x.value}`).join(", ")}</p> : null}
+            {loggedBladder.size >= 5 ? (
+              <div className="pt-2">
+                <ColumnChart title={t("Leaks per day")} subtitle={t("Last {n} days", { n: leakDays.length })} height={90} data={leakDays.map((d) => ({ key: d, label: shortDate(d), value: leaksBy.get(d) ?? 0, tooltip: `${shortDate(d)}: ${loggedBladder.has(d) ? `${leaksBy.get(d) ?? 0} leaks` : "not logged"}` }))} />
+              </div>
+            ) : null}
             <Link href="/bladder/report" className="text-xs text-accent underline print:hidden">{t("Full bladder diary report")}</Link>
           </Section>
         ) : null}
 
-        {v.wellbeing.sleepHours || v.wellbeing.mood || v.wellbeing.steps ? (
+        {inc("food") && fullFood.length >= 3 ? (
+          <Section title={`🍽️ ${t("Food & nutrition")}`}>
+            <p className="text-sm">
+              {t("Average over {n} fully logged days:", { n: fullFood.length })} <strong>{avgOf("kcal")?.toLocaleString(locale)} kcal</strong> · {t("Protein")} {avgOf("protein")} g · {t("Fibre")} {avgOf("fiber")} g
+            </p>
+          </Section>
+        ) : null}
+
+        {inc("wellbeing") && (v.wellbeing.sleepHours || v.wellbeing.mood || v.wellbeing.steps) ? (
           <Section title={`🌙 ${t("Sleep, mood & activity")}`}>
             <p className="text-sm">
               {[v.wellbeing.sleepHours ? `${t("Sleep")} ${v.wellbeing.sleepHours} h` : null, v.wellbeing.mood ? `${t("Mood")} ${v.wellbeing.mood}/5` : null, v.wellbeing.energy ? `${t("Energy")} ${v.wellbeing.energy}/5` : null, v.wellbeing.stress ? `${t("Stress")} ${v.wellbeing.stress}/5` : null, v.wellbeing.steps ? `${v.wellbeing.steps.toLocaleString(locale)} ${t("steps/day")}` : null].filter(Boolean).join(" · ")}

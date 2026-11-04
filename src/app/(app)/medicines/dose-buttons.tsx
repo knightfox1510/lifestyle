@@ -1,6 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
+import { runOrQueue } from "@/lib/offline-queue";
 import { Button } from "@/components/ui";
 import { logDose, undoDose } from "./actions";
 import { useT } from "@/lib/i18n/client";
@@ -24,8 +25,9 @@ export function DoseButtons({
   const { toast } = useToast();
   const log = (status: "taken" | "skipped") =>
     start(async () => {
-      const r = await logDose(medicineId, ownerId, date, time, status);
-      if (r.error) toast(r.error, { tone: "error" });
+      const r = await runOrQueue({ kind: "dose", label: status === "taken" ? "Dose taken" : "Dose skipped", args: { medicineId, ownerId, date, time, status } }, () => logDose(medicineId, ownerId, date, time, status));
+      if ("queued" in r) toast(`${status === "taken" ? t("Dose taken") : t("Dose skipped")} · saved offline`, { kind: "dose" });
+      else if (r.error) toast(r.error, { tone: "error" });
       else toast(status === "taken" ? t("Dose taken") : t("Dose skipped"), { undo: r.id ? () => undoDose(r.id!, ownerId) : undefined });
     });
   if (doseId) {

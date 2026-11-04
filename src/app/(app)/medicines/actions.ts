@@ -173,6 +173,8 @@ export async function logDose(
   date: string,
   time: string | null,
   status: "taken" | "skipped",
+  /** When it was actually taken (a tap saved offline and sent later); within the last 3 days. */
+  takenAtIso?: string,
 ): Promise<ActionResult> {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || (time !== null && !/^\d{2}:\d{2}$/.test(time))) return { error: "Invalid slot" };
   try {
@@ -180,7 +182,8 @@ export async function logDose(
     const tz = session.profile.timezone;
     const today = todayIn(tz);
     if (date > today) return { error: "You can't log a dose for a future day." };
-    const takenAt = date < today ? zonedIso(date, time ?? "12:00", tz) : new Date().toISOString();
+    const queued = takenAtIso && Date.parse(takenAtIso) <= Date.now() && Date.parse(takenAtIso) > Date.now() - 3 * 864e5 ? new Date(takenAtIso).toISOString() : null;
+    const takenAt = queued ?? (date < today ? zonedIso(date, time ?? "12:00", tz) : new Date().toISOString());
     if (date < today) {
       const { data: med } = await session.supabase.from("medicines").select("start_date").eq("id", medicineId).maybeSingle();
       if (med && date < med.start_date && med.start_date <= today) await session.supabase.from("medicines").update({ start_date: date }).eq("id", medicineId);

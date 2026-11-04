@@ -73,7 +73,8 @@ export async function addSupplement(_: ActionResult | null, form: FormData): Pro
 }
 
 /** Tick or untick a supplement for a day; adjusts stock if tracked. */
-export async function toggleSupplement(supplementId: string, ownerId: string, date: string, taken: boolean): Promise<ActionResult> {
+export async function toggleSupplement(supplementId: string, ownerId: string, date: string, taken: boolean, takenAtIso?: string): Promise<ActionResult> {
+  const queued = takenAtIso && Date.parse(takenAtIso) <= Date.now() && Date.parse(takenAtIso) > Date.now() - 3 * 864e5 ? new Date(takenAtIso).toISOString() : null;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: "Invalid date" };
   try {
     const session = await requireWrite(MODULE, ownerId);
@@ -81,7 +82,7 @@ export async function toggleSupplement(supplementId: string, ownerId: string, da
     if (taken) {
       const { error } = await session.supabase
         .from("supplement_logs")
-        .upsert({ supplement_id: supplementId, owner_id: ownerId, log_date: date }, { onConflict: "supplement_id,log_date", ignoreDuplicates: true });
+        .upsert({ supplement_id: supplementId, owner_id: ownerId, log_date: date, ...(queued ? { taken_at: queued } : {}) }, { onConflict: "supplement_id,log_date", ignoreDuplicates: true });
       if (error) return { error: "Couldn't save." };
       if (sup?.stock_count != null) {
         await session.supabase.from("supplements").update({ stock_count: Math.max(0, sup.stock_count - 1) }).eq("id", supplementId);

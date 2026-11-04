@@ -5,6 +5,8 @@ import type { AppSession } from "@/lib/session";
 import { AiError, assertQuota, generate, recordUsage } from "@/lib/ai/gemini";
 import { SAFETY_INSTRUCTIONS, buildAiContext } from "@/lib/ai/context";
 import { addDays, dayOfWeek, todayIn } from "@/lib/dates";
+import { loadDays, waterSettings } from "@/lib/today";
+import { dayScore } from "@/modules/engagement/rings";
 
 export function weekStart(today: string) {
   return addDays(today, -((dayOfWeek(today) + 6) % 7));
@@ -42,10 +44,20 @@ export async function generateDigest(session: AppSession): Promise<{ content: st
   const today = todayIn(session.profile.timezone);
   const ws = weekStart(today);
   await assertQuota(session);
-  const [ctx, upcoming] = await Promise.all([
+  const shown = (m: string) => session.isShown(m);
+  const water = await waterSettings(session.supabase, session.userId);
+  const [ctx, upcoming, days] = await Promise.all([
     buildAiContext(session, { subjectId: session.userId, useMedicalHistory: session.profile.ai_use_medical_history }),
     householdUpcoming(session, today),
+    loadDays(session.supabase, session.userId, { tz: session.profile.timezone, today, days: 14, enabled: { medicines: shown("medicines"), food: shown("food_diary"), checkin: shown("checkin"), supplements: shown("supplements") }, waterTarget: water.target, supplementTimes: session.profile.supplement_times }),
   ]);
+  // The same score as the Health page, so the text and the screen agree.
+  const scores = (list: typeof days.statuses) => list.filter((d) => d.rings.length).map((d) => ({ date: d.date, score: dayScore(d.rings) }));
+  const thisWeek = scores(days.statuses.slice(-7));
+  const lastWeek = scores(days.statuses.slice(-14, -7));
+  const avg = (xs: { score: number }[]) => (xs.length ? Math.round(xs.reduce((a, x) => a + x.score, 0) / xs.length) : null);
+  const best = [...thisWeek].sort((a, b) => b.score - a.score)[0];
+  const scoreLine = avg(thisWeek) != null ? `Health score this week: ${avg(thisWeek)}/100${avg(lastWeek) != null ? ` (last week ${avg(lastWeek)})` : ""}; days with every goal done: ${days.statuses.slice(-7).filter((d) => d.closed).length}/7${best ? `; best day ${best.date} (${best.score}%)` : ""}.` : "";
   const res = await generate(session, {
     contents: `Write ${session.me.display_name}'s weekly summary for the week starting ${ws}. Use only the data provided.
 Format (plain text, no markdown headings, max ~180 words):
@@ -54,6 +66,9 @@ Format (plain text, no markdown headings, max ~180 words):
 📅 Coming up: household items due in the next two weeks.
 💡 One small, specific suggestion for next week.
 If there is little data, say so briefly and suggest one thing to start tracking.
+
+Start the first line with the health score if given (e.g. "Score 68, up 7 on last week").
+${scoreLine}
 
 Household items:
 ${upcoming || "(none)"}`,

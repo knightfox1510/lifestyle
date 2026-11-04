@@ -9,6 +9,9 @@ import { NUTRIENT_KEYS, scale, splitMacros, type Nutrients } from "@/modules/nut
 import { cleanIrritants } from "@/modules/nutrition/irritants";
 import { addDays, localDate, localTime, todayIn, zonedIso } from "@/lib/dates";
 import { mealTimeOn } from "@/modules/food/meta";
+import { removePhotoIfUnused } from "@/lib/photo-cleanup";
+import { inPantry } from "@/modules/pantry/match";
+import { addToGroceryList } from "@/app/(app)/recipes/actions";
 import { dishKey } from "@/modules/food/plan";
 
 const MODULE = "food_diary";
@@ -283,8 +286,9 @@ export async function undoFoodEntries(ids: string[]): Promise<ActionResult> {
 export async function deleteFood(id: string, ownerId: string): Promise<ActionResult> {
   try {
     const session = await requireWrite(MODULE, ownerId);
-    const { data, error } = await session.supabase.from("food_entries").delete().eq("id", id).eq("owner_id", ownerId).select("id");
+    const { data, error } = await session.supabase.from("food_entries").delete().eq("id", id).eq("owner_id", ownerId).select("id, photo_path");
     if (error || !data?.length) return { error: "Only the person it belongs to, or whoever logged it, can delete this." };
+    await removePhotoIfUnused(session.supabase, (data[0] as { photo_path?: string | null }).photo_path).catch(() => undefined);
   } catch (e) {
     return { error: errorMessage(e) };
   }
@@ -605,4 +609,37 @@ export async function forgetFood(nameKey: string): Promise<ActionResult> {
   if (error) return { error: "Couldn't remove it." };
   refreshModule("/food");
   return { ok: true, message: "Forgotten. It will be matched afresh next time." };
+}
+
+/**
+ * Puts what's needed for a saved meal on the grocery list: a saved recipe's
+ * ingredients, otherwise the food itself ("Greek yogurt", "Bananas"). Things
+ * already in the pantry, or already on the list, are skipped.
+ */
+export async function templateToGroceries(templateId: string, itemIndexes: number[]): Promise<ActionResult> {
+  if (!z.uuid().safeParse(templateId).success || !z.array(z.number().int().min(0).max(29)).min(1).safeParse(itemIndexes).success) return { error: "Pick what to add." };
+  const session = await getSession();
+  if (!session.isModuleEnabled("groceries")) return { error: "The grocery list is turned off." };
+  const { data: tpl } = await session.supabase.from("meal_templates").select("items").eq("id", templateId).eq("household_id", session.household.id).maybeSingle();
+  if (!tpl) return { error: "That saved meal is gone." };
+  const chosen = itemIndexes.map((i) => (tpl.items as FoodLike[])[i]).filter(Boolean);
+  const recipeIds = [...new Set(chosen.map((c) => c.recipe_id).filter((x): x is string => typeof x === "string"))];
+  const [{ data: recipes }, { data: pantry }] = await Promise.all([
+    recipeIds.length ? session.supabase.from("recipes").select("id, ingredients").in("id", recipeIds) : Promise.resolve({ data: [] }),
+    session.isModuleEnabled("pantry") ? session.supabase.from("pantry_items").select("name, used_up_at").eq("household_id", session.household.id).is("used_up_at", null).limit(500) : Promise.resolve({ data: [] }),
+  ]);
+  const byRecipe = new Map(((recipes ?? []) as { id: string; ingredients: { name: string; quantity?: string | null }[] }[]).map((r) => [r.id, r.ingredients]));
+  const wanted = chosen.flatMap((c) => {
+    const ing = typeof c.recipe_id === "string" ? byRecipe.get(c.recipe_id) : undefined;
+    if (ing?.length) return ing.map((i) => ({ name: String(i.name).slice(0, 120), quantity: i.quantity ? String(i.quantity).slice(0, 40) : null }));
+    // A plain food: its name without amounts ("2 rotis with ghee" → "rotis with ghee").
+    const name = String(c.description ?? "").replace(/\(.*?\)/g, "").replace(/^\s*[\d½¼¾.]+\s*(x|×)?\s*/i, "").trim();
+    return name ? [{ name: name.slice(0, 120), quantity: null }] : [];
+  });
+  const pantryRows = (pantry ?? []) as { name: string; used_up_at: string | null }[];
+  const toBuy = wanted.filter((w) => !inPantry(w.name, pantryRows));
+  const inStock = wanted.length - toBuy.length;
+  if (!toBuy.length) return { ok: true, message: wanted.length ? `All ${wanted.length} already in the pantry.` : "Nothing to add." };
+  const r = await addToGroceryList(toBuy.slice(0, 100));
+  return r.error ? r : { ...r, message: `${r.message}${inStock ? ` ${inStock} already in the pantry.` : ""}` };
 }

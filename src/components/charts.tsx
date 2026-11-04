@@ -130,7 +130,7 @@ export function ColumnChart({
             ))}
             <div className="absolute inset-0 flex items-end">
               {data.map((d, i) => (
-                <div key={d.key} className="group relative flex h-full flex-1 cursor-pointer items-end justify-center px-px" tabIndex={0} aria-label={d.tooltip ?? `${d.label}: ${d.value}${unit}`} onClick={() => setPin(pin === i ? null : i)}>
+                <div key={d.key} className="group relative flex h-full flex-1 cursor-pointer items-end justify-center px-px" tabIndex={0} aria-label={d.tooltip ?? `${d.label}: ${d.value}${unit}`} aria-pressed={pin === i} role="button" onClick={() => setPin(pin === i ? null : i)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setPin(pin === i ? null : i); } }}>
                   {i === bestIndex ? <span aria-hidden className="pointer-events-none absolute z-[1] text-[12px] leading-none text-sun drop-shadow-sm" style={{ bottom: `calc(${(d.value / max) * 100}% + 3px)` }}>★</span> : null}
                   <div
                     className={cx("w-full max-w-6 origin-bottom rounded-t transition-opacity group-hover:opacity-80", pin !== null && pin !== i && "opacity-50")}
@@ -335,7 +335,10 @@ export function LineChart({
               aria-label={p.tooltip ?? `${p.label}: ${p.value}${unit}`}
               className="group absolute size-6 -translate-x-1/2 -translate-y-1/2 cursor-pointer"
               style={{ left: `${x(p.date)}%`, top: `${y(p.value)}%` }}
+              role="button"
+              aria-pressed={pin === i}
               onClick={() => setPin(pin === i ? null : i)}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setPin(pin === i ? null : i); } }}
             >
               <span className={cx("absolute rounded-full bg-series-1 ring-2 ring-surface transition-transform", pin === i ? "inset-1 scale-125" : "inset-[7px]")} />
               <span className={cx("pointer-events-none absolute bottom-full z-10 mb-1 whitespace-nowrap rounded-lg bg-fg px-2 py-1 text-xs text-bg shadow group-hover:block group-focus:block", pin === i ? "block" : "hidden", x(p.date) < 20 ? "left-0" : x(p.date) > 80 ? "right-0" : "left-1/2 -translate-x-1/2")}>

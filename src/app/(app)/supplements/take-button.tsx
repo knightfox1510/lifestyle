@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { runOrQueue } from "@/lib/offline-queue";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/toaster";
 import { useT } from "@/lib/i18n/client";
@@ -15,8 +16,11 @@ export function SupplementTakeButton({ supplementId, ownerId, date, name, taken 
   const set = (value: boolean) =>
     start(async () => {
       setDone(value);
-      const r = await toggleSupplement(supplementId, ownerId, date, value);
-      if (r.error) {
+      const r = value
+        ? await runOrQueue({ kind: "supplement", label: `${name} taken`, args: { supplementId, ownerId, date } }, () => toggleSupplement(supplementId, ownerId, date, true))
+        : await toggleSupplement(supplementId, ownerId, date, false);
+      if ("queued" in r) toast(`${t("{name} taken", { name })} · saved offline`, { kind: "dose" });
+      else if (r.error) {
         setDone(!value);
         toast(r.error, { tone: "error" });
       } else if (value) toast(t("{name} taken", { name }), { undo: () => toggleSupplement(supplementId, ownerId, date, false) });

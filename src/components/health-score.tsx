@@ -55,6 +55,7 @@ export function HealthScoreCard({ statuses, t }: { statuses: DayStatus[]; t: T }
               <span className="size-2.5 shrink-0 rounded-full" style={{ background: RING_META[k].color }} />
               <span className="min-w-0 flex-1 truncate text-[14px]">{t(RING_META[k].label)}</span>
               <Sparkline values={vals} color={RING_META[k].color} />
+              <span className="sr-only">{t("Last 14 days: from {a}% to {b}%", { a: Math.round((vals.find((v) => v != null) ?? 0) * 100), b: Math.round(([...vals].reverse().find((v) => v != null) ?? 0) * 100) })}</span>
               <span className="w-10 text-right text-[13px] font-medium tabular-nums">{wk == null ? "–" : `${Math.round(wk * 100)}%`}</span>
             </li>
           );

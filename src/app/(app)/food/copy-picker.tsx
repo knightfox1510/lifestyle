@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Bookmark, Copy, Trash2 } from "lucide-react";
+import { Bookmark, Copy, ShoppingCart, Trash2 } from "lucide-react";
 import { Button, Input, cx } from "@/components/ui";
 import { useToast } from "@/components/toaster";
 import type { Meal } from "@/lib/types";
-import { copyEntries, deleteMealTemplate, logMealTemplate, saveMealTemplate, undoFoodEntries } from "./actions";
+import { copyEntries, deleteMealTemplate, logMealTemplate, saveMealTemplate, templateToGroceries, undoFoodEntries } from "./actions";
 
 export type CopySource = {
   key: string;
@@ -122,6 +122,7 @@ export function CopyPicker({ source, ownerId, people, meal, date, onDone }: { so
           ))}
         </div>
       ) : null}
+      <div className="flex flex-wrap items-center gap-2">
       <Button
         size="sm"
         pending={pending}
@@ -142,6 +143,22 @@ export function CopyPicker({ source, ownerId, people, meal, date, onDone }: { so
       >
         Add {picked.length} item{picked.length === 1 ? "" : "s"} · {kcal.toLocaleString("en-IN")} kcal{targets.length > 1 ? ` + ${others.filter((p) => also[p.id] != null).map((p) => p.name).join(", ")}` : ""}
       </Button>
+      {source.kind === "template" && source.templateId ? (
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={pending || !picked.length}
+          onClick={() =>
+            start(async () => {
+              const r = await templateToGroceries(source.templateId!, picked.map(Number));
+              toast(r.error ?? r.message ?? "Added.", r.error ? { tone: "error" } : { kind: "cart" });
+            })
+          }
+        >
+          <ShoppingCart className="size-4" aria-hidden /> Add to groceries
+        </Button>
+      ) : null}
+      </div>
     </div>
   );
 }

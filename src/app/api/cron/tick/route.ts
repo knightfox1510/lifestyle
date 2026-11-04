@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { runReminders } from "@/lib/reminders";
+import { cleanupFoodPhotos } from "@/lib/photo-cleanup";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const maxDuration = 60;
 
@@ -19,8 +21,12 @@ function authorised(request: NextRequest) {
  */
 async function handle(request: NextRequest) {
   if (!authorised(request)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const summary = await runReminders();
-  return NextResponse.json({ ok: true, ...summary });
+  const now = new Date();
+  const summary = await runReminders(now);
+  // Once a night (around 03:00–03:35 UTC, which the daily Vercel cron and the 5-minute job both hit): tidy unused meal photos.
+  let photosRemoved = 0;
+  if (now.getUTCHours() === 3 && now.getUTCMinutes() < 35) photosRemoved = await cleanupFoodPhotos(createAdminClient(), now).catch(() => 0);
+  return NextResponse.json({ ok: true, ...summary, photosRemoved });
 }
 
 export const GET = handle;

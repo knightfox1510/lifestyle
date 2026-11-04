@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { OfflineSync } from "@/components/offline-sync";
 import { Search } from "lucide-react";
 import { getSession } from "@/lib/session";
 import { MODULES } from "@/modules/registry";
@@ -72,6 +73,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         <main className="mx-auto w-full max-w-4xl px-4 py-6 md:px-8"><PageTransition>{children}</PageTransition></main>
       </div>
       <AppLockGate />
+      <OfflineSync />
     </div>
     </ToastProvider>
     </I18nProvider>

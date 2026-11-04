@@ -5,6 +5,7 @@ import type { BladderEvent, Medicine, MedicineDose, Supplement } from "@/lib/typ
 import { addDays, lastNDays, localDate, localTime, startOfLocalDayIso, todayIn } from "@/lib/dates";
 import { buildMedicalContext } from "@/lib/ai/context";
 import { COACH_SOURCES, coachFacts, factLines, type CoachFacts, type CoachSource } from "@/modules/coach/facts";
+import { coachCheckin, type CheckinPlan } from "@/modules/coach/checkin";
 import { adherence, doseLabel } from "@/modules/medicines/logic";
 import { TIMING_LABEL } from "@/modules/supplements/meta";
 import { PHASE_LABEL, cycleStats, cycleStatus, periodsFrom, type CycleDay } from "@/modules/cycle/logic";
@@ -122,3 +123,40 @@ export async function loadCoachData(session: AppSession, ownerId: string, wanted
 
 type CoachMetric = { weight_kg: number | null; waist_cm: number | null; body_fat_pct: number | null; bp_systolic: number | null; bp_diastolic: number | null; blood_glucose_mgdl: number | null; glucose_context: string | null };
 type CoachCheckin = { sleep_hours: number | null; sleep_quality: number | null; mood: number | null; energy: number | null; stress: number | null };
+
+/**
+ * Today's coach check-in for you, if your latest plan's review date has
+ * come: how the days since compare with the plan. Null otherwise.
+ */
+export async function loadCoachCheckin(session: AppSession) {
+  if (!session.isShown("body_recomp")) return null;
+  const db = session.supabase;
+  const { data: rep } = await db.from("coach_reports").select("id, created_at, result").eq("owner_id", session.userId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+  if (!rep) return null;
+  const tz = session.profile.timezone;
+  const today = todayIn(tz);
+  const since = localDate(rep.created_at, tz);
+  const plan = (rep.result as { plan?: CheckinPlan }).plan;
+  if (!plan?.review_in_days || addDays(since, plan.review_in_days) > today) return null;
+  const sinceIso = startOfLocalDayIso(addDays(since, 1));
+  const [{ data: food }, { data: wear }, { data: weights }] = await Promise.all([
+    session.isModuleEnabled("food_diary") ? db.from("food_entries").select("eaten_at, calories, protein_g").eq("owner_id", session.userId).gte("eaten_at", sinceIso).limit(3000) : Promise.resolve({ data: [] }),
+    session.isModuleEnabled("wearables") ? db.from("wearable_daily").select("day, steps").eq("owner_id", session.userId).gt("day", since) : Promise.resolve({ data: [] }),
+    db.from("body_metrics").select("measured_at, weight_kg").eq("owner_id", session.userId).not("weight_kg", "is", null).gte("measured_at", startOfLocalDayIso(since)),
+  ]);
+  const byDay = new Map<string, { kcal: number; protein: number }>();
+  for (const f of (food ?? []) as { eaten_at: string; calories: number | null; protein_g: number | null }[]) {
+    const d = localDate(f.eaten_at, tz);
+    if (d >= today) continue; // today isn't finished
+    const x = byDay.get(d) ?? { kcal: 0, protein: 0 };
+    x.kcal += Number(f.calories ?? 0);
+    x.protein += Number(f.protein_g ?? 0);
+    byDay.set(d, x);
+  }
+  const facts = coachCheckin(plan, since, today, {
+    foodByDay: [...byDay.values()],
+    steps: ((wear ?? []) as { steps: number | null }[]).map((w) => Number(w.steps ?? 0)),
+    weights: ((weights ?? []) as { measured_at: string; weight_kg: number }[]).map((w) => ({ day: localDate(w.measured_at, tz), kg: Number(w.weight_kg) })),
+  });
+  return facts.due ? { reportId: rep.id as string, facts } : null;
+}

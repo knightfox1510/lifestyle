@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PullToRefresh } from "@/components/pull-to-refresh";
 import { ChevronLeft, ChevronRight, Flame } from "lucide-react";
 import { getSession } from "@/lib/session";
 import { DEFAULT_WIDGETS, WIDGET_BY_KEY } from "@/modules/widgets";
@@ -13,6 +14,8 @@ import { loadDays, waterSettings } from "@/lib/today";
 import { waterAccess } from "@/lib/water";
 import { WaterButtons } from "@/components/water-buttons";
 import { finishWelcome } from "./welcome/actions";
+import { loadCoachCheckin } from "@/lib/coach";
+import { CoachCheckinCard } from "@/components/today/coach-checkin";
 import { activityFor, checkMilestones, recentCheers } from "@/lib/engagement";
 import { dayScore, missedOn, nextUp } from "@/modules/engagement/rings";
 import { DayArc, DayBars, DayTiles, WeekStrip } from "@/components/today/day-views";
@@ -38,7 +41,7 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
 
   const water = await waterSettings(session.supabase, subject.user_id);
   const waterAcc = isSelf ? "write" : waterAccess(session, subject.user_id);
-  const [day, me, partner, widgetsRes] = await Promise.all([
+  const [day, me, partner, widgetsRes, { data: photoRows }] = await Promise.all([
     loadDays(session.supabase, subject.user_id, {
       tz,
       today: viewDate,
@@ -50,13 +53,16 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
     activityFor(session, subject.user_id, today),
     isSelf && session.partner && !past ? activityFor(session, session.partner.user_id, today) : Promise.resolve(null),
     session.supabase.from("user_widgets").select("*").eq("user_id", session.userId).order("position"),
+    // Meal photos of the day shown, as a strip under the day view.
+    can("food_diary")
+      ? session.supabase.from("food_entries").select("photo_path, eaten_at, description").eq("owner_id", subject.user_id).not("photo_path", "is", null).gte("eaten_at", startOfLocalDayIso(viewDate)).lt("eaten_at", startOfLocalDayIso(addDays(viewDate, 2))).order("eaten_at").limit(30)
+      : Promise.resolve({ data: [] }),
   ]);
-  const [fresh, cheers] = isSelf && !past ? await Promise.all([checkMilestones(session, day, me.streak, today), recentCheers(session)]) : [[], []];
+  const [[fresh, cheers], checkin] = await Promise.all([
+    isSelf && !past ? Promise.all([checkMilestones(session, day, me.streak, today), recentCheers(session)]) : Promise.resolve([[], []] as [Awaited<ReturnType<typeof checkMilestones>>, Awaited<ReturnType<typeof recentCheers>>]),
+    isSelf && !past ? loadCoachCheckin(session).catch(() => null) : Promise.resolve(null),
+  ]);
 
-  // Meal photos of the day shown, as a strip under the day view.
-  const { data: photoRows } = can("food_diary")
-    ? await session.supabase.from("food_entries").select("photo_path, eaten_at, description").eq("owner_id", subject.user_id).not("photo_path", "is", null).gte("eaten_at", startOfLocalDayIso(viewDate)).lt("eaten_at", startOfLocalDayIso(addDays(viewDate, 2))).order("eaten_at").limit(30)
-    : { data: [] };
   const dayPhotos = [...new Map(((photoRows ?? []) as { photo_path: string; eaten_at: string; description: string }[]).filter((p) => localDate(p.eaten_at, tz) === viewDate).map((p) => [p.photo_path, p])).values()].slice(0, 8);
   const photoLinks = dayPhotos.length ? ((await session.supabase.storage.from("food-photos").createSignedUrls(dayPhotos.map((p) => p.photo_path), 3600)).data ?? []) : [];
   const plates = dayPhotos.map((p) => ({ ...p, url: photoLinks.find((l) => l.path === p.photo_path)?.signedUrl ?? null })).filter((p) => p.url);
@@ -89,6 +95,7 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
   );
 
   return (
+    <PullToRefresh>
     <div className="space-y-5">
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -195,6 +202,8 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
         </section>
       ) : null}
 
+      {checkin ? <CoachCheckinCard facts={checkin.facts} t={t} /> : null}
+
       {isSelf && !past && left > 0 && Number(now.slice(0, 2)) >= 18 ? (
         <Link href="/close" className="pressable flex items-center justify-between rounded-[20px] bg-fg px-5 py-4 text-bg">
           <span className="text-[15px] font-medium">{t("Close your day")}</span>
@@ -220,6 +229,7 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
         </div>
       </section> : null}
     </div>
+    </PullToRefresh>
   );
 }
 

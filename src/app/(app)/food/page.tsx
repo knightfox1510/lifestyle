@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PullToRefresh } from "@/components/pull-to-refresh";
 import { WaterButtons } from "@/components/water-buttons";
 import { getT } from "@/lib/i18n/server";
 import { getSession } from "@/lib/session";
@@ -46,7 +47,9 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
   const others = session.members.filter((m) => m.user_id !== ownerId && session.isModuleEnabled("food_diary") && session.accessTo("food_diary", m.user_id) !== "none");
 
   const diningOn = session.isModuleEnabled("dining");
-  const [{ data: e }, { data: g }, { data: recent }, fl, rp, rd] = await Promise.all([
+  const medicalOn = session.isModuleEnabled("medical_records") && session.accessTo("medical_records", ownerId) !== "none";
+  // Everything that doesn't depend on another query runs at once.
+  const [{ data: e }, { data: g }, { data: recent }, fl, rp, rd, { data: tplRows }, { data: otherRows }, { data: mp }, { data: labRows }, suppByDay] = await Promise.all([
     session.supabase.from("food_entries").select("*").eq("owner_id", ownerId).gte("eaten_at", startOfLocalDayIso(addDays(date, -1))).lt("eaten_at", startOfLocalDayIso(addDays(date, 3))).order("eaten_at"),
     session.supabase.from("nutrition_goals").select("*").eq("owner_id", ownerId).maybeSingle(),
     session.supabase.from("food_entries").select("*").eq("owner_id", ownerId).order("eaten_at", { ascending: false }).limit(200),
@@ -55,18 +58,16 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
       : Promise.resolve({ data: [] }),
     diningOn ? session.supabase.from("dining_places").select("id, name").eq("household_id", session.household.id).order("favorite", { ascending: false }).order("name") : Promise.resolve({ data: [] }),
     diningOn ? session.supabase.from("dining_dishes").select("id, name, place_id, calories, section").eq("household_id", session.household.id).order("name") : Promise.resolve({ data: [] }),
-  ]);
-  const { data: tplRows } = canWrite ? await session.supabase.from("meal_templates").select("id, name, meal, items, last_used_at").eq("household_id", session.household.id).order("last_used_at", { ascending: false, nullsFirst: false }).limit(30) : { data: [] };
-  const templates = (tplRows ?? []) as { id: string; name: string; meal: Meal | null; items: { description: string; quantity: string | null; calories: number | null }[] }[];
-  const { data: otherRows } = canWrite && others.length
-    ? await session.supabase.from("food_entries").select("id, owner_id, eaten_at, meal, description, quantity, calories").in("owner_id", others.map((m) => m.user_id)).gte("eaten_at", startOfLocalDayIso(date)).lt("eaten_at", startOfLocalDayIso(addDays(date, 2))).order("eaten_at")
-    : { data: [] };
-  const otherEntries = ((otherRows ?? []) as Pick<FoodEntry, "id" | "owner_id" | "eaten_at" | "meal" | "description" | "quantity" | "calories">[]).filter((x) => localDate(x.eaten_at, tz) === date);
-  const medicalOn = session.isModuleEnabled("medical_records") && session.accessTo("medical_records", ownerId) !== "none";
-  const [{ data: mp }, { data: labRows }] = await Promise.all([
+    canWrite ? session.supabase.from("meal_templates").select("id, name, meal, items, last_used_at").eq("household_id", session.household.id).order("last_used_at", { ascending: false, nullsFirst: false }).limit(30) : Promise.resolve({ data: [] }),
+    canWrite && others.length
+      ? session.supabase.from("food_entries").select("id, owner_id, eaten_at, meal, description, quantity, calories").in("owner_id", others.map((m) => m.user_id)).gte("eaten_at", startOfLocalDayIso(date)).lt("eaten_at", startOfLocalDayIso(addDays(date, 2))).order("eaten_at")
+      : Promise.resolve({ data: [] }),
     medicalOn ? session.supabase.from("medical_profiles").select("sex").eq("owner_id", ownerId).maybeSingle() : Promise.resolve({ data: null }),
     medicalOn ? session.supabase.from("lab_results").select("marker, value, unit, flag, test_date").eq("owner_id", ownerId).neq("flag", "normal").order("test_date", { ascending: false }).limit(200) : Promise.resolve({ data: [] }),
+    supplementNutrientsByDay(session, ownerId, date, date),
   ]);
+  const templates = (tplRows ?? []) as { id: string; name: string; meal: Meal | null; items: { description: string; quantity: string | null; calories: number | null }[] }[];
+  const otherEntries = ((otherRows ?? []) as Pick<FoodEntry, "id" | "owner_id" | "eaten_at" | "meal" | "description" | "quantity" | "calories">[]).filter((x) => localDate(x.eaten_at, tz) === date);
   const restaurantPlaces = (rp.data ?? []) as { id: string; name: string }[];
   const restaurantDishes = (rd.data ?? []) as { id: string; name: string; place_id: string; calories: number | null; section: string | null }[];
   const entries = ((e ?? []) as FoodEntry[]).filter((x) => localDate(x.eaten_at, tz) === date);
@@ -77,7 +78,7 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
   const photoShownOn = new Map<string, string>();
   for (const x of entries) if (x.photo_path && !photoShownOn.has(x.photo_path)) photoShownOn.set(x.photo_path, x.id);
   const goals = g as NutritionGoals | null;
-  const supp = (await supplementNutrientsByDay(session, ownerId, date, date))[date] ?? {};
+  const supp = suppByDay[date] ?? {};
   const foodTot = totals(entries);
   // Protein/calories from supplements (e.g. whey) count towards the day too.
   const tot = { ...foodTot, calories: foodTot.calories + Math.round(supp.calories ?? 0), protein_g: Math.round((foodTot.protein_g + (supp.protein_g ?? 0)) * 10) / 10 };
@@ -143,6 +144,7 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
   ];
 
   return (
+    <PullToRefresh>
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <Link href={`/food?date=${addDays(date, -1)}`} className={buttonClass("ghost", "sm")}>← {shortDate(addDays(date, -1))}</Link>
@@ -256,6 +258,8 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
                     key={x.id}
                     entry={{ id: x.id, description: x.description, quantity: x.quantity, meal: x.meal, time: localTime(x.eaten_at, tz), calories: x.calories, createdAt: (x as { created_at?: string }).created_at, emoji: foodEmoji(x.description), photoUrl: x.photo_path && photoShownOn.get(x.photo_path) === x.id ? (photoUrl.get(x.photo_path) ?? null) : null }}
                     ownerId={ownerId}
+                    date={date}
+                    copyTo={people.filter((p) => p.id !== ownerId).map((p) => ({ id: p.id, name: p.name }))}
                     canEdit={canWrite}
                     canDelete={canWrite && (isOwner || x.created_by === session.userId)}
                     meta={[
@@ -301,5 +305,6 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
         </Card>
       ) : null}
     </div>
+    </PullToRefresh>
   );
 }

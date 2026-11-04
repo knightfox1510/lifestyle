@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { usualMealTimes } from "@/modules/food/usual-times";
 import { notifyUser } from "@/lib/push";
 import { addDays, dayOfWeek, localDate, localTime, startOfLocalDayIso } from "@/lib/dates";
 import { isScheduledOn } from "@/modules/medicines/logic";
@@ -106,6 +107,13 @@ async function remindUser(
     for (const { m, t } of due) {
       await send("medicine", `med:${m.id}:${today}:${t}`, `💊 ${tr("Time for {name}", { name: m.name })}`, `${m.dose_amount} ${m.dose_unit}${m.instructions ? ` · ${m.instructions}` : ""} (${t})`, "/medicines");
     }
+    // One follow-up 30 minutes later if it still isn't logged.
+    const late = ((meds ?? []) as Medicine[]).flatMap((m) =>
+      isScheduledOn(m, today) ? m.times.filter((t) => inWindow(time, toMinutes(t) + 30) && !(doses ?? []).some((d: { medicine_id: string; scheduled_time: string | null }) => d.medicine_id === m.id && d.scheduled_time === t)).map((t) => ({ m, t })) : [],
+    );
+    for (const { m, t } of late) {
+      await send("medicine", `medlate:${m.id}:${today}:${t}`, `⏰ ${tr("Still to take: {name}", { name: m.name })}`, tr("It was due at {time}. Tap to log it.", { time: t }), "/medicines");
+    }
   }
 
   if (quiet) return result;
@@ -174,6 +182,19 @@ async function remindUser(
     }
   }
 
+  // Meals: a nudge ~45 minutes after the time this person usually logs a meal, if it isn't logged yet today.
+  if (prefs.close_day && on("food_diary")) {
+    const { data: recent } = await admin.from("food_entries").select("eaten_at, meal").eq("owner_id", profile.id).gte("eaten_at", new Date(now.getTime() - 22 * 864e5).toISOString()).limit(800);
+    const rows = (recent ?? []) as { eaten_at: string; meal: string }[];
+    const usual = usualMealTimes(rows.filter((r) => localDate(r.eaten_at, tz) !== today).map((r) => ({ day: localDate(r.eaten_at, tz), meal: r.meal, minutes: toMinutes(localTime(r.eaten_at, tz)) })));
+    for (const [meal, at] of Object.entries(usual) as ["breakfast" | "lunch" | "dinner", number][]) {
+      if (!inWindow(time, at + 45)) continue;
+      if (rows.some((r) => r.meal === meal && localDate(r.eaten_at, tz) === today)) continue;
+      const label = tr(meal === "breakfast" ? "Breakfast" : meal === "lunch" ? "Lunch" : "Dinner");
+      await send("meal", `meal:${meal}:${today}`, `🍛 ${tr("{meal} not logged yet", { meal: label })}`, tr("Say it or snap it: it takes a few seconds."), `/food?meal=${meal}`);
+    }
+  }
+
   // Evening "close your day": one nudge, only if goals are left.
   if (prefs.close_day && inWindow(time, toMinutes(prefs.close_day_time.slice(0, 5)))) {
     const water = await waterSettings(admin, profile.id);
@@ -193,6 +214,15 @@ async function remindUser(
 
   // Daily digest of due things, at the person's chosen hour.
   const dailyNow = inWindow(time, prefs.daily_hour * 60, WINDOW_MINUTES);
+
+  // AI coach: once a plan's review date arrives, one nudge (at the daily hour) to see how it went.
+  if (dailyNow && on("body_recomp")) {
+    const { data: rep } = await admin.from("coach_reports").select("id, created_at, result").eq("owner_id", profile.id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    const review = (rep?.result as { plan?: { review_in_days?: number } } | undefined)?.plan?.review_in_days;
+    if (rep && review && addDays(localDate(rep.created_at, tz), review) <= today) {
+      await send("coach", `coach:${rep.id}`, `🧭 ${tr("Coach check-in")}`, tr("{n} days on your plan: see how it went and get the next one.", { n: review }), "/");
+    }
+  }
   if (dailyNow) {
     if (prefs.expiries && on("pantry")) {
       const { data } = await admin.from("pantry_items").select("name, expires_on").eq("household_id", hid).is("used_up_at", null).lte("expires_on", addDays(today, 1)).gte("expires_on", today);

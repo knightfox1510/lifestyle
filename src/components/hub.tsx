@@ -28,7 +28,7 @@ export function HubGrid({ title, items }: { title?: string; items: HubItem[] }) 
             className="pressable group flex min-h-[112px] flex-col justify-between rounded-[20px] bg-surface p-4 shadow-[0_0_0_1px_var(--border)] hover:bg-surface-2/50"
           >
             <div className="flex items-start justify-between">
-              <span className="relative grid size-10 place-items-center rounded-2xl" style={{ background: `color-mix(in oklab, ${TINT[i.iconKey] ?? "var(--fg-muted)"} 16%, var(--surface))`, color: TINT[i.iconKey] ?? "var(--fg)" }}>
+              <span className="relative grid size-10 place-items-center rounded-2xl" style={{ background: `color-mix(in oklab, ${TINT[i.iconKey] ?? "var(--fg-muted)"} 16%, var(--surface))`, color: `color-mix(in oklab, ${TINT[i.iconKey] ?? "var(--fg)"} 78%, var(--fg))` }}>
                 <ModuleIcon moduleKey={i.iconKey} />
                 {i.count ? (
                   <span className={cx("absolute -right-1.5 -top-1.5 grid h-5 min-w-5 place-items-center rounded-full px-1 text-[11px] font-semibold tabular-nums ring-2 ring-surface [animation:pop_.4s_ease-out]", i.alert ? "bg-danger text-white" : "bg-fg text-bg")}>
@@ -58,7 +58,7 @@ export function HubList({ title, items }: { title?: string; items: { href: strin
         {items.map((i) => (
           <Link key={i.href} href={i.href} className="pressable flex items-center justify-between gap-3 px-4 py-3.5 hover:bg-surface-2/50">
             {i.icon ? (
-              <span className="grid size-9 shrink-0 place-items-center rounded-xl [&_svg]:size-[18px]" style={{ background: `color-mix(in oklab, ${i.tint ?? "var(--accent)"} 16%, var(--surface))`, color: i.tint ?? "var(--accent)" }} aria-hidden>
+              <span className="grid size-9 shrink-0 place-items-center rounded-xl [&_svg]:size-[18px]" style={{ background: `color-mix(in oklab, ${i.tint ?? "var(--accent)"} 16%, var(--surface))`, color: `color-mix(in oklab, ${i.tint ?? "var(--accent)"} 78%, var(--fg))` }} aria-hidden>
                 {i.icon}
               </span>
             ) : null}
