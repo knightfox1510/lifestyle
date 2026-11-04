@@ -20,6 +20,7 @@ import { FoodAddPanel } from "./food-add-panel";
 import { SaveMealButton } from "./copy-picker";
 import { KcalRing } from "@/components/kcal-ring";
 import { mealBudgets } from "@/modules/food/meal-budget";
+import { foodEmoji } from "@/modules/food/emoji";
 import { RestaurantPicker } from "./restaurant-picker";
 import { FoodEntryRow } from "./entry-row";
 
@@ -69,6 +70,12 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
   const restaurantPlaces = (rp.data ?? []) as { id: string; name: string }[];
   const restaurantDishes = (rd.data ?? []) as { id: string; name: string; place_id: string; calories: number | null; section: string | null }[];
   const entries = ((e ?? []) as FoodEntry[]).filter((x) => localDate(x.eaten_at, tz) === date);
+  // Meal photos: short-lived links, each photo shown once (on the first item logged from it).
+  const photoPaths = [...new Set(entries.map((x) => x.photo_path).filter((p): p is string => Boolean(p)))];
+  const signed = photoPaths.length ? ((await session.supabase.storage.from("food-photos").createSignedUrls(photoPaths, 3600)).data ?? []) : [];
+  const photoUrl = new Map(signed.filter((x) => x.signedUrl && x.path).map((x) => [x.path!, x.signedUrl]));
+  const photoShownOn = new Map<string, string>();
+  for (const x of entries) if (x.photo_path && !photoShownOn.has(x.photo_path)) photoShownOn.set(x.photo_path, x.id);
   const goals = g as NutritionGoals | null;
   const supp = (await supplementNutrientsByDay(session, ownerId, date, date))[date] ?? {};
   const foodTot = totals(entries);
@@ -237,7 +244,7 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
                 </div>
               );
               return canWrite ? (
-                <MealAdd key={`${date}-${meal}`} ownerId={ownerId} people={people} day={day} meal={meal} recent={recentFoods} copies={copiesFor(meal)}>{heading}</MealAdd>
+                <MealAdd key={`${date}-${meal}`} ownerId={ownerId} people={people} day={day} meal={meal} recent={recentFoods} copies={copiesFor(meal)} emptyLabel={list.length ? undefined : t("Log {meal}", { meal: t(MEAL_META[meal].label).toLowerCase() })}>{heading}</MealAdd>
               ) : (
                 <div className="mb-1 flex items-baseline justify-between">{heading}</div>
               );
@@ -247,7 +254,7 @@ export default async function FoodDiaryPage({ searchParams }: PageProps<"/food">
                 {list.map((x) => (
                   <FoodEntryRow
                     key={x.id}
-                    entry={{ id: x.id, description: x.description, quantity: x.quantity, meal: x.meal, time: localTime(x.eaten_at, tz), calories: x.calories, createdAt: (x as { created_at?: string }).created_at }}
+                    entry={{ id: x.id, description: x.description, quantity: x.quantity, meal: x.meal, time: localTime(x.eaten_at, tz), calories: x.calories, createdAt: (x as { created_at?: string }).created_at, emoji: foodEmoji(x.description), photoUrl: x.photo_path && photoShownOn.get(x.photo_path) === x.id ? (photoUrl.get(x.photo_path) ?? null) : null }}
                     ownerId={ownerId}
                     canEdit={canWrite}
                     canDelete={canWrite && (isOwner || x.created_by === session.userId)}

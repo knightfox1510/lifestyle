@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { ComponentProps, ReactNode } from "react";
 
 export function cx(...parts: (string | false | null | undefined)[]) {
@@ -131,12 +132,57 @@ export function Notice({ children, tone = "neutral" }: { children: ReactNode; to
   return <div className={cx("rounded-2xl px-4 py-3 text-sm", tones[tone])}>{children}</div>;
 }
 
-export function EmptyState({ title, children, icon }: { title: string; children?: ReactNode; icon?: ReactNode }) {
+/** A soft illustration for empty screens: layered rings around a sparkle, in the theme's colours. */
+function EmptyArt() {
   return (
-    <div className="flex flex-col items-center gap-2 rounded-[20px] bg-surface-2/60 px-6 py-10 text-center">
-      {icon ? <div className="mb-1 grid size-12 place-items-center rounded-2xl bg-surface text-fg-muted shadow-[0_0_0_1px_var(--border)]">{icon}</div> : null}
+    <svg width="96" height="72" viewBox="0 0 96 72" fill="none" aria-hidden className="mb-1">
+      <ellipse cx="48" cy="62" rx="30" ry="5" fill="var(--fg)" opacity=".06" />
+      <circle cx="48" cy="34" r="26" fill="var(--accent-soft)" style={{ animation: "pop .5s ease-out both" }} />
+      <circle cx="48" cy="34" r="17" fill="var(--surface)" stroke="var(--accent)" strokeOpacity=".35" strokeWidth="1.5" strokeDasharray="3 4" />
+      <path d="M48 24v20M38 34h20" stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="round" style={{ animation: "fx-twinkle .7s .15s ease-out both", transformOrigin: "48px 34px" }} />
+      <circle cx="76" cy="14" r="3" fill="var(--sun)" style={{ animation: "fx-twinkle .6s .3s ease-out both", transformOrigin: "76px 14px" }} />
+      <circle cx="20" cy="20" r="2" fill="var(--cat-water)" style={{ animation: "fx-twinkle .6s .4s ease-out both", transformOrigin: "20px 20px" }} />
+      <circle cx="80" cy="46" r="2" fill="var(--cat-food)" style={{ animation: "fx-twinkle .6s .5s ease-out both", transformOrigin: "80px 46px" }} />
+    </svg>
+  );
+}
+
+export function EmptyState({ title, children, icon, action }: { title: string; children?: ReactNode; icon?: ReactNode; /** One clear next step, e.g. { href: "/food", label: "Log breakfast" }. */ action?: { href: string; label: string } }) {
+  return (
+    <div className="flex flex-col items-center gap-2 rounded-[20px] bg-surface-2/60 px-6 py-9 text-center [animation:fade-in_.3s_ease-out]">
+      {icon ? <div className="mb-1 grid size-12 place-items-center rounded-2xl bg-surface text-fg-muted shadow-[0_0_0_1px_var(--border)]">{icon}</div> : <EmptyArt />}
       <p className="text-[17px] font-semibold tracking-tight">{title}</p>
       {children ? <div className="max-w-sm text-sm text-fg-muted">{children}</div> : null}
+      {action ? (
+        <Link href={action.href} className={cx(buttonClass("primary", "sm"), "mt-2")}>{action.label}</Link>
+      ) : null}
+    </div>
+  );
+}
+
+/** A titled group on a page, styled like Today's sections: small caps title, optional link on the right. */
+export function Section({ title, action, children, className }: { title: string; action?: { href: string; label: string }; children: ReactNode; className?: string }) {
+  return (
+    <section className={cx("space-y-2.5", className)}>
+      <div className="flex items-baseline justify-between px-1">
+        <h2 className="text-[13px] font-medium uppercase tracking-[0.08em] text-fg-muted">{title}</h2>
+        {action ? <Link href={action.href} className="text-[13px] text-fg-muted hover:text-fg">{action.label}</Link> : null}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/** A number tile with a tinted icon badge (Wearables, Body…). */
+export function StatTile({ label, value, icon, tint = "var(--accent)", hint }: { label: string; value: ReactNode; icon?: ReactNode; tint?: string; hint?: ReactNode }) {
+  return (
+    <div className="rounded-[20px] bg-surface p-3.5 shadow-[0_0_0_1px_var(--border)]">
+      <div className="flex items-center gap-2">
+        {icon ? <span className="grid size-7 place-items-center rounded-lg [&_svg]:size-4" style={{ background: `color-mix(in oklab, ${tint} 16%, var(--surface))`, color: tint }} aria-hidden>{icon}</span> : null}
+        <p className="min-w-0 text-xs leading-tight text-fg-muted">{label}</p>
+      </div>
+      <p className="mt-1.5 text-2xl font-semibold tabular-nums tracking-tight">{value}</p>
+      {hint ? <p className="text-[11px] text-fg-muted">{hint}</p> : null}
     </div>
   );
 }

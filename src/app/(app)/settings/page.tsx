@@ -5,6 +5,7 @@ import { InstallPrompt } from "@/components/install-prompt";
 import { HubList } from "@/components/hub";
 import { ProfileSettingsForm } from "./profile-settings-form";
 import { getT } from "@/lib/i18n/server";
+import { Bell, Clock, Home, LayoutGrid, Lock, SlidersHorizontal, Sparkles, Users } from "lucide-react";
 
 export const metadata = { title: "Settings" };
 
@@ -20,15 +21,21 @@ export default async function SettingsPage() {
           <ProfileSettingsForm profile={session.profile} />
         </Card>
         <HubList
+          title={t("Household & sharing")}
           items={[
-            { href: "/settings/household", name: t("Household"), hint: t("Members, invites, features on/off, AI key and limits.") },
-            { href: "/settings/times", name: t("Supplement times"), hint: t("What morning, with a meal, bedtime… mean for you") },
-            { href: "/settings/features", name: t("My features"), hint: t("Hide what you don't use from your own menus and Today.") },
-            { href: "/settings/sharing", name: t("Sharing"), hint: t("Choose what your partner can see or edit, and who viewed it.") },
-            { href: "/settings/notifications", name: t("Notifications"), hint: t("Turn on push for this device; choose reminders and quiet hours.") },
-            { href: "/digest", name: t("Weekly summary"), hint: t("AI recap of your week, every Sunday evening.") },
-            { href: "/settings/privacy", name: t("Privacy & data"), hint: t("App lock, download your data, delete your account.") },
-            { href: "/customize", name: t("Home widgets"), hint: t("Pick and arrange the quick-log widgets on Home.") },
+            { href: "/settings/household", name: t("Household"), hint: t("Members, invites, features on/off, AI key and limits."), icon: <Home />, tint: "var(--accent)" },
+            { href: "/settings/sharing", name: t("Sharing"), hint: t("Choose what your partner can see or edit, and who viewed it."), icon: <Users />, tint: "var(--cat-water)" },
+          ]}
+        />
+        <HubList
+          title={t("Your app")}
+          items={[
+            { href: "/settings/features", name: t("My features"), hint: t("Hide what you don't use from your own menus and Today."), icon: <SlidersHorizontal />, tint: "var(--cat-check)" },
+            { href: "/settings/times", name: t("Supplement times"), hint: t("What morning, with a meal, bedtime… mean for you"), icon: <Clock />, tint: "var(--cat-meds)" },
+            { href: "/settings/notifications", name: t("Notifications"), hint: t("Turn on push for this device; choose reminders and quiet hours."), icon: <Bell />, tint: "var(--sun)" },
+            { href: "/digest", name: t("Weekly summary"), hint: t("AI recap of your week, every Sunday evening."), icon: <Sparkles />, tint: "var(--accent)" },
+            { href: "/customize", name: t("Home widgets"), hint: t("Pick and arrange the quick-log widgets on Home."), icon: <LayoutGrid />, tint: "var(--cat-food)" },
+            { href: "/settings/privacy", name: t("Privacy & data"), hint: t("App lock, download your data, delete your account."), icon: <Lock />, tint: "var(--fg-muted)" },
           ]}
         />
         <InstallPrompt />

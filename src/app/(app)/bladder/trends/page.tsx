@@ -22,6 +22,11 @@ export default async function BladderTrendsPage({ searchParams }: PageProps<"/bl
   const [d, health, tr] = await Promise.all([loadDiary(session, ownerId, period), loadDiaryEvents(session, ownerId, "1900-01-01"), getT(session)]);
 
   const stats = dailyStats(d.days, d.events, d.fluids, d.tz, d.sessions, d.workouts, d.foods);
+  // The period before, for the dashed "previous" line (days with nothing logged are skipped).
+  const before = await loadDiary(session, ownerId, period * 2);
+  const prevStats = dailyStats(before.days.slice(0, period), before.events, before.fluids, before.tz, before.sessions, before.workouts, before.foods);
+  const prevLeaks = prevStats.map((s) => (s.leaks + s.urges + s.voids + s.fluidMl === 0 ? null : s.leaks));
+  const hasPrev = prevLeaks.filter((v) => v != null).length >= 3;
   const loggedDays = stats.filter((s) => s.leaks + s.urges + s.voids + s.fluidMl > 0).length;
   if (loggedDays === 0) {
     return <EmptyState title="No diary entries in this period">Log leaks, urges, bathroom visits and drinks for a few days to see patterns.</EmptyState>;
@@ -179,6 +184,8 @@ export default async function BladderTrendsPage({ searchParams }: PageProps<"/bl
           line={loggedRollingAverage(stats)}
           barLabel="Leaks"
           lineLabel="7-day average"
+          compare={hasPrev ? prevLeaks : undefined}
+          compareLabel={`Previous ${period} days`}
         />
       </Card>
 

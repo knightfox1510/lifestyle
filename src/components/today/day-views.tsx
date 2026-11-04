@@ -54,15 +54,20 @@ export function DayArc({ events, now, score, rings, t, past = false }: { events:
     <div>
       <svg viewBox="0 0 340 176" className="w-full" role="img" aria-label={t("Your day: {n} logs so far, {score}% of today's goals", { n: events.length, score })}>
         <path d={`M ${cx0 - r} ${cy0} A ${r} ${r} 0 0 1 ${cx0 + r} ${cy0}`} fill="none" stroke="var(--arc-track)" strokeWidth="14" strokeLinecap="round" />
-        {elapsed ? <path d={`M ${sx} ${sy} A ${r} ${r} 0 0 1 ${nx} ${ny}`} fill="none" stroke="var(--sun)" strokeOpacity=".25" strokeWidth="14" strokeLinecap="round" /> : null}
+        {elapsed ? <path d={`M ${sx} ${sy} A ${r} ${r} 0 0 1 ${nx} ${ny}`} pathLength={1} fill="none" stroke="var(--sun)" strokeOpacity=".25" strokeWidth="14" strokeLinecap="round" style={{ strokeDasharray: 1, animation: "line-draw 1.1s cubic-bezier(.3,.8,.3,1) both" }} /> : null}
         {label(START, t("6 am"))}
         {label(12 * 60, t("noon"))}
         {label(18 * 60, t("6 pm"))}
         {label(END, t("10 pm"))}
-        {placed.map((b) => (
-          <circle key={b.key} cx={b.x} cy={b.y} r="5.5" fill={RING_META[b.kind].color} stroke="var(--bg)" strokeWidth="2" />
+        {placed.map((b, i) => (
+          <circle key={b.key} cx={b.x} cy={b.y} r="5.5" fill={RING_META[b.kind].color} stroke="var(--bg)" strokeWidth="2" style={{ transformOrigin: `${b.x}px ${b.y}px`, transformBox: "view-box", animation: `pop .4s ${(0.5 + i * 0.05).toFixed(2)}s ease-out both` }} />
         ))}
-        {nowMin >= START && nowMin <= END ? <circle cx={nx} cy={ny} r="10" fill="var(--sun)" stroke="var(--bg)" strokeWidth="3" /> : null}
+        {nowMin >= START && nowMin <= END && !past ? (
+          <>
+            <circle cx={nx} cy={ny} r="10" fill="var(--sun)" opacity=".35" className="motion-reduce:hidden" style={{ transformOrigin: `${nx}px ${ny}px`, transformBox: "view-box", animation: "sun-pulse 2.6s ease-out infinite" }} />
+            <circle cx={nx} cy={ny} r="10" fill="var(--sun)" stroke="var(--bg)" strokeWidth="3" />
+          </>
+        ) : null}
         <text x={cx0} y={cy0 - 40} textAnchor="middle" fontSize="38" fontWeight="650" fill="var(--fg)" style={{ fontVariantNumeric: "tabular-nums", letterSpacing: "-0.03em" }}>{score}%</text>
         <text x={cx0} y={cy0 - 18} textAnchor="middle" fontSize="12" fill="var(--fg-muted)">{past ? t("of the day's goals") : t("of today's goals")}</text>
       </svg>
@@ -71,7 +76,7 @@ export function DayArc({ events, now, score, rings, t, past = false }: { events:
           <div key={ring.key} className="flex items-center gap-2 text-[13px]">
             <span className="size-2.5 shrink-0 rounded-full" style={{ background: RING_META[ring.key].color }} />
             <span className="text-fg-muted">{t(RING_META[ring.key].label)}</span>
-            <span className="ml-auto font-medium tabular">{ring.pct >= 1 ? "✓" : ringValue(ring, t, past)}</span>
+            <span className="ml-auto whitespace-nowrap font-medium tabular">{ring.pct >= 1 ? "✓" : ringValue(ring, t, past)}</span>
           </div>
         ))}
       </div>
@@ -93,7 +98,7 @@ export function DayBars({ rings, t, past = false }: { rings: Ring[]; t: T; past?
             </div>
             <div className="grid h-1.5 gap-[3px]" style={{ gridTemplateColumns: `repeat(${n}, 1fr)` }}>
               {Array.from({ length: n }, (_, i) => (
-                <i key={i} className="rounded-[2px] transition-colors duration-300" style={{ background: i < on ? "var(--fg)" : "var(--border)" }} />
+                <i key={i} className="rounded-[2px] transition-colors duration-300" style={{ background: i < on ? "var(--fg)" : "var(--border)", animation: i < on ? `fade-in .3s ${(i * 0.04).toFixed(2)}s ease-out both` : undefined }} />
               ))}
             </div>
           </div>
@@ -113,7 +118,7 @@ export function DayTiles({ rings, t, past = false }: { rings: Ring[]; t: T; past
           <div>
             <p className="text-[24px] font-semibold leading-none tracking-[-0.03em] tabular">{ringValue(ring, t, past)}</p>
             <div className="mt-2 h-1.5 overflow-hidden rounded-full" style={{ background: `color-mix(in oklab, ${RING_META[ring.key].color} 20%, transparent)` }}>
-              <i className="block h-full rounded-full transition-[width] duration-500" style={{ width: `${ring.pct * 100}%`, background: RING_META[ring.key].color }} />
+              <i className="block h-full origin-left rounded-full transition-[width] duration-500" style={{ width: `${ring.pct * 100}%`, background: RING_META[ring.key].color, animation: "grow-x .7s cubic-bezier(.3,.8,.3,1) both" }} />
             </div>
           </div>
         </div>

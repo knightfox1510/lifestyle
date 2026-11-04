@@ -22,6 +22,7 @@ export function MealAdd({
   meal,
   recent,
   copies,
+  emptyLabel,
   children,
 }: {
   ownerId: string;
@@ -31,6 +32,8 @@ export function MealAdd({
   recent: RecentFood[];
   /** Partner's same meal that day, and this meal yesterday: tick items, pick a portion, add. */
   copies: CopySource[];
+  /** Shown as a big "＋ Log breakfast" button while the meal is empty. */
+  emptyLabel?: string;
   children: React.ReactNode;
 }) {
   const t = useT();
@@ -44,6 +47,12 @@ export function MealAdd({
           {!open && copies.some((c) => c.who) ? <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-accent" aria-hidden /> : null}
         </button>
       </div>
+      {!open && emptyLabel ? (
+        <button type="button" onClick={() => setOpen(true)} className="pressable mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border py-2.5 text-sm text-fg-muted hover:border-accent hover:text-accent">
+          ＋ {emptyLabel}
+          {copies.some((c) => c.who) ? <span className="text-xs">· {t("or copy")} {copies.find((c) => c.who)!.who}</span> : null}
+        </button>
+      ) : null}
       {open ? (
         <div className="mb-3 space-y-2.5 [animation:toast-in_.2s_ease-out]">
           {copies.length ? (

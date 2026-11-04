@@ -36,14 +36,19 @@ export function HubGrid({ title, items }: { title?: string; items: HubItem[] }) 
 }
 
 /** Plain list rows for settings-style links. */
-export function HubList({ title, items }: { title?: string; items: { href: string; name: string; hint?: string }[] }) {
+export function HubList({ title, items }: { title?: string; items: { href: string; name: string; hint?: string; /** A small tinted icon badge, e.g. <Bell />. */ icon?: React.ReactNode; tint?: string }[] }) {
   return (
     <section className="space-y-2.5">
       {title ? <h2 className="px-1 text-[13px] font-medium uppercase tracking-[0.08em] text-fg-muted">{title}</h2> : null}
       <div className="divide-y divide-border overflow-hidden rounded-[20px] bg-surface shadow-[0_0_0_1px_var(--border)]">
         {items.map((i) => (
           <Link key={i.href} href={i.href} className="pressable flex items-center justify-between gap-3 px-4 py-3.5 hover:bg-surface-2/50">
-            <span className="min-w-0">
+            {i.icon ? (
+              <span className="grid size-9 shrink-0 place-items-center rounded-xl [&_svg]:size-[18px]" style={{ background: `color-mix(in oklab, ${i.tint ?? "var(--accent)"} 16%, var(--surface))`, color: i.tint ?? "var(--accent)" }} aria-hidden>
+                {i.icon}
+              </span>
+            ) : null}
+            <span className="min-w-0 flex-1">
               <span className="block text-[15px] font-medium">{i.name}</span>
               {i.hint ? <span className="block truncate text-[13px] text-fg-muted">{i.hint}</span> : null}
             </span>

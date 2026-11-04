@@ -160,6 +160,7 @@ function scaledRows(items: FoodLike[], targets: { ownerId: string; factor: numbe
       accuracy: e.accuracy ?? "estimated",
       irritants: e.irritants ?? [],
       group_id: groupId,
+      ...(e.photo_path ? { photo_path: e.photo_path } : {}),
     }));
   });
 }
@@ -210,7 +211,7 @@ export async function copyEntries(input: unknown): Promise<ActionResult & { ids?
 
 // ------------------------------------------------------------ saved meals --
 
-const templateItemKeys = ["description", "quantity", "calories", "protein_g", "carbs_g", "fat_g", "fiber_g", "grams", "micros", "accuracy", "irritants", "source", "recipe_id", "dish_id"] as const;
+const templateItemKeys = ["description", "quantity", "calories", "protein_g", "carbs_g", "fat_g", "fiber_g", "grams", "micros", "accuracy", "irritants", "source", "recipe_id", "dish_id", "photo_path"] as const;
 
 /** Saves the foods in a meal as a named meal ("Our usual breakfast") for the household. */
 export async function saveMealTemplate(input: unknown): Promise<ActionResult> {
@@ -409,7 +410,8 @@ const peopleSchema = z.array(z.object({ ownerId: z.uuid(), factor: z.number().mi
  * Logs items (with micronutrients) for one or more people, each with their
  * own portion factor. One cooked meal → one row per person, linked by group_id.
  */
-export async function logFoodForPeople(people: unknown, meal: (typeof MEALS)[number], items: unknown, eatenAt?: string): Promise<ActionResult> {
+export async function logFoodForPeople(people: unknown, meal: (typeof MEALS)[number], items: unknown, eatenAt?: string, photoPath?: string | null): Promise<ActionResult> {
+  const photo = photoPath && /^[0-9a-f-]{36}\/[0-9a-f-]{36}\.jpg$/.test(photoPath) ? photoPath : null;
   const p = peopleSchema.safeParse(people);
   const it = z.array(detailedItemSchema).min(1).max(20).safeParse(items);
   if (!p.success || !it.success || !MEALS.includes(meal) || !when.safeParse(eatenAt).success) return { error: "Some items are invalid." };
@@ -445,6 +447,7 @@ export async function logFoodForPeople(people: unknown, meal: (typeof MEALS)[num
         dish_id: i.dish_id ?? null,
         source: i.source,
         group_id: groupId,
+        ...(photo ? { photo_path: photo } : {}),
       };
     }),
   );

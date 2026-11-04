@@ -8,6 +8,7 @@ import { Button, Card, Input, Notice, Select, Textarea } from "@/components/ui";
 import { VoiceButton } from "@/components/voice-input";
 import { AccuracyBadge, FoodSearch, PeoplePortions, type FoodHit, type PersonPortion } from "@/components/nutrition-ui";
 import { compressImage } from "@/lib/compress-image";
+import { createClient } from "@/lib/supabase/client";
 import type { Meal } from "@/lib/types";
 import { MEAL_DEFAULT_TIME, MEAL_META, MEAL_ORDER, eatenAtFor, mealForHour, type LogDay } from "@/modules/food/meta";
 import { computeItem, disagreement, type CalcItem } from "@/modules/nutrition/compute";
@@ -83,7 +84,23 @@ export function FoodAiAdd({ ownerId, people, day, meal: preset }: { ownerId: str
             source: photo ? ("photo" as const) : i.recipe && i.recipe.kind !== "dish" ? ("recipe" as const) : ("ai_estimate" as const),
           };
         });
-      const res = await logFoodForPeople(chosen, meal, payload, eatenAtFor(day, meal));
+      // Keep a small copy of the photo to show next to the entry (logging still works if this fails).
+      let photoPath: string | null = null;
+      if (photo) {
+        try {
+          const db = createClient();
+          const { data: u } = await db.auth.getUser();
+          if (u.user) {
+            const small = await compressImage(photo, 720, 0.78);
+            const path = `${u.user.id}/${crypto.randomUUID()}.jpg`;
+            const { error } = await db.storage.from("food-photos").upload(path, small, { contentType: "image/jpeg" });
+            if (!error) photoPath = path;
+          }
+        } catch {
+          /* no photo kept */
+        }
+      }
+      const res = await logFoodForPeople(chosen, meal, payload, eatenAtFor(day, meal), photoPath);
       if (res.error) setMsg({ tone: "danger", text: res.error });
       else {
         setMsg({ tone: "accent", text: res.message ?? "Added." });

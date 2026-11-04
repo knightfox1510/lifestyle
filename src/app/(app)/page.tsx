@@ -6,7 +6,7 @@ import type { UserWidget, WidgetSize } from "@/lib/types";
 import { Widget } from "@/components/widgets";
 import { InstallPrompt } from "@/components/install-prompt";
 import { getT } from "@/lib/i18n/server";
-import { addDays, localTime, todayIn } from "@/lib/dates";
+import { addDays, localDate, localTime, startOfLocalDayIso, todayIn } from "@/lib/dates";
 import { DateJump } from "@/components/date-jump";
 import { buttonClass, cx } from "@/components/ui";
 import { loadDays, waterSettings } from "@/lib/today";
@@ -51,6 +51,14 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
     session.supabase.from("user_widgets").select("*").eq("user_id", session.userId).order("position"),
   ]);
   const [fresh, cheers] = isSelf && !past ? await Promise.all([checkMilestones(session, day, me.streak, today), recentCheers(session)]) : [[], []];
+
+  // Meal photos of the day shown, as a strip under the day view.
+  const { data: photoRows } = can("food_diary")
+    ? await session.supabase.from("food_entries").select("photo_path, eaten_at, description").eq("owner_id", subject.user_id).not("photo_path", "is", null).gte("eaten_at", startOfLocalDayIso(viewDate)).lt("eaten_at", startOfLocalDayIso(addDays(viewDate, 2))).order("eaten_at").limit(30)
+    : { data: [] };
+  const dayPhotos = [...new Map(((photoRows ?? []) as { photo_path: string; eaten_at: string; description: string }[]).filter((p) => localDate(p.eaten_at, tz) === viewDate).map((p) => [p.photo_path, p])).values()].slice(0, 8);
+  const photoLinks = dayPhotos.length ? ((await session.supabase.storage.from("food-photos").createSignedUrls(dayPhotos.map((p) => p.photo_path), 3600)).data ?? []) : [];
+  const plates = dayPhotos.map((p) => ({ ...p, url: photoLinks.find((l) => l.path === p.photo_path)?.signedUrl ?? null })).filter((p) => p.url);
 
   const rs = day.today.rings;
   const score = dayScore(rs);
@@ -133,6 +141,20 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
         ) : null}
         {!isSelf && waterAcc === "none" ? (
           <p className="text-[12px] text-fg-muted">{t("{name} hasn't shared water with you, so it isn't shown. They can turn it on in Settings → Sharing → Water intake.", { name: subject.display_name })}</p>
+        ) : null}
+        {plates.length ? (
+          <Link href={viewDate === today ? "/food" : `/food?date=${viewDate}`} className="block">
+            <p className="mb-1.5 text-[12px] text-fg-muted">{past ? t("Plates that day") : t("Plates today")}</p>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {plates.map((p, i) => (
+                <span key={p.photo_path} className="relative shrink-0" style={{ animation: `pop .4s ${(i * 0.06).toFixed(2)}s ease-out both` }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={p.url!} alt={p.description} className="size-16 rounded-2xl object-cover shadow-[0_0_0_1px_var(--border)]" loading="lazy" />
+                  <span className="absolute bottom-1 left-1 rounded-full bg-black/55 px-1.5 text-[10px] font-medium text-white">{localTime(p.eaten_at, tz)}</span>
+                </span>
+              ))}
+            </div>
+          </Link>
         ) : null}
         <WeekStrip week={day.week} today={today} selected={viewDate} t={t} locale={locale} />
       </section>

@@ -1,7 +1,8 @@
+import { Footprints, HeartPulse, Moon, RefreshCw } from "lucide-react";
 import { headers } from "next/headers";
 import { getSession } from "@/lib/session";
 import { addDays, lastNDays, shortDate, todayIn } from "@/lib/dates";
-import { Card, EmptyState, buttonClass } from "@/components/ui";
+import { Card, EmptyState, buttonClass, Section, StatTile } from "@/components/ui";
 import { ColumnChart, LineChart } from "@/components/charts";
 import type { WearableDay } from "@/lib/types";
 import { CsvImport, ManualDayForm, TokenCreator } from "./client";
@@ -31,37 +32,42 @@ export default async function WearablesPage() {
   };
   const origin = process.env.NEXT_PUBLIC_SITE_URL || `https://${h.get("host") ?? "your-app"}`;
   const sleepAvg = avg("sleep_minutes");
+  // The same 30 days, a month earlier: the dashed line, if there's data then.
+  const prev30 = (k: "steps" | "sleep_minutes") => {
+    const vals = days30.map((d) => byDay.get(addDays(d, -30))?.[k] ?? null);
+    return vals.filter((v) => v != null).length >= 5 ? vals : undefined;
+  };
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-3">
-        <Card className="!p-3.5"><p className="text-xs text-fg-muted">Steps · 7-day avg</p><p className="text-2xl font-semibold tabular-nums">{avg("steps")?.toLocaleString("en-IN") ?? "–"}</p></Card>
-        <Card className="!p-3.5"><p className="text-xs text-fg-muted">Sleep · 7-day avg</p><p className="text-2xl font-semibold tabular-nums">{sleepAvg ? `${Math.floor(sleepAvg / 60)}h ${sleepAvg % 60}m` : "–"}</p></Card>
-        <Card className="!p-3.5"><p className="text-xs text-fg-muted">Resting HR · 7-day avg</p><p className="text-2xl font-semibold tabular-nums">{avg("resting_hr") ?? "–"}</p></Card>
+      <div className="grid grid-cols-3 gap-2.5">
+        <StatTile label="Steps" hint="7-day average" value={avg("steps")?.toLocaleString("en-IN") ?? "–"} icon={<Footprints />} tint="var(--cat-food)" />
+        <StatTile label="Sleep" hint="7-day average" value={sleepAvg ? `${Math.floor(sleepAvg / 60)}h ${sleepAvg % 60}m` : "–"} icon={<Moon />} tint="var(--cat-water)" />
+        <StatTile label="Resting HR" hint="7-day average" value={avg("resting_hr") ?? "–"} icon={<HeartPulse />} tint="var(--danger)" />
       </div>
 
       {rows.length === 0 ? (
         <EmptyState title="No wearable data yet">Import your Zepp export below or set up an automatic sync.</EmptyState>
       ) : (
-        <>
+        <Section title="Last 30 days">
           <Card>
-            <ColumnChart title="Steps" data={days30.map((d) => ({ key: d, label: shortDate(d), value: byDay.get(d)?.steps ?? 0, tooltip: `${shortDate(d)}: ${byDay.get(d)?.steps?.toLocaleString("en-IN") ?? "no data"} steps` }))} height={120} />
+            <ColumnChart title="Steps" data={days30.map((d) => ({ key: d, label: shortDate(d), value: byDay.get(d)?.steps ?? 0, tooltip: `${shortDate(d)}: ${byDay.get(d)?.steps?.toLocaleString("en-IN") ?? "no data"} steps${byDay.get(addDays(d, -30))?.steps ? ` (30 days before: ${byDay.get(addDays(d, -30))!.steps!.toLocaleString("en-IN")})` : ""}` }))} compare={prev30("steps")} compareLabel="Previous 30 days" height={120} />
           </Card>
           <Card>
-            <ColumnChart title="Sleep (hours)" data={days30.map((d) => ({ key: d, label: shortDate(d), value: Math.round(((byDay.get(d)?.sleep_minutes ?? 0) / 60) * 10) / 10, tooltip: `${shortDate(d)}: ${byDay.get(d)?.sleep_minutes ? `${Math.round((byDay.get(d)!.sleep_minutes! / 60) * 10) / 10} h` : "no data"}${byDay.get(d)?.deep_sleep_minutes ? ` (deep ${byDay.get(d)!.deep_sleep_minutes} min)` : ""}` }))} unit=" h" height={120} />
+            <ColumnChart title="Sleep (hours)" compare={prev30("sleep_minutes")?.map((v) => (v == null ? null : Math.round((v / 60) * 10) / 10))} compareLabel="Previous 30 days" data={days30.map((d) => ({ key: d, label: shortDate(d), value: Math.round(((byDay.get(d)?.sleep_minutes ?? 0) / 60) * 10) / 10, tooltip: `${shortDate(d)}: ${byDay.get(d)?.sleep_minutes ? `${Math.round((byDay.get(d)!.sleep_minutes! / 60) * 10) / 10} h` : "no data"}${byDay.get(d)?.deep_sleep_minutes ? ` (deep ${byDay.get(d)!.deep_sleep_minutes} min)` : ""}` }))} unit=" h" height={120} />
           </Card>
           {rows.some((r) => r.resting_hr) ? (
             <Card>
               <LineChart title="Resting heart rate" points={rows.filter((r) => r.resting_hr).map((r) => ({ date: r.day, value: r.resting_hr!, label: shortDate(r.day), tooltip: `${shortDate(r.day)}: ${r.resting_hr} bpm` }))} unit=" bpm" height={140} />
             </Card>
           ) : null}
-        </>
+        </Section>
       )}
 
       {isSelf ? (
-        <>
+        <Section title="Import & sync">
           <Card className="space-y-3">
-            <h2 className="font-semibold">Health Connect (Android)</h2>
+            <h2 className="flex items-center gap-2 font-semibold"><span className="grid size-7 place-items-center rounded-lg bg-accent-soft text-accent" aria-hidden><RefreshCw className="size-4" /></span> Health Connect (Android)</h2>
             <HealthConnectSync origin={origin} status={(hc.data ?? null) as SyncStatus} tz={session.profile.timezone} />
           </Card>
           <Card className="space-y-2">
@@ -86,7 +92,7 @@ export default async function WearablesPage() {
               </ul>
             ) : null}
           </Card>
-        </>
+        </Section>
       ) : null}
     </div>
   );

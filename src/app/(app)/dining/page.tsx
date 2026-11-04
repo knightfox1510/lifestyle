@@ -1,5 +1,6 @@
 import { getSession } from "@/lib/session";
-import { Card, EmptyState, buttonClass } from "@/components/ui";
+import { Card, EmptyState, Section, buttonClass } from "@/components/ui";
+import { foodEmoji } from "@/modules/food/emoji";
 import type { DiningDish, DiningOrder, DiningPlace } from "@/lib/types";
 import { formatDate } from "@/modules/medical/meta";
 import { AddDishForm, AddPlaceForm, LogOrderForm, WhatToOrder } from "./client";
@@ -37,6 +38,7 @@ export default async function DiningPage() {
       {places.length === 0 ? (
         <EmptyState title="No places yet">The quickest start: screenshots of your Swiggy or Zomato order history above. Then open any place → Import menu → Find menu online.</EmptyState>
       ) : (
+        <Section title={`Your places · ${places.length}`}>
         <ul className="space-y-3">
           {places.map((pl) => {
             const list = dishes.filter((x) => x.place_id === pl.id);
@@ -44,10 +46,14 @@ export default async function DiningPage() {
               <li key={pl.id}>
                 <Card className="space-y-3">
                   <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div>
-                      <p className="font-medium">{pl.favorite ? "★ " : ""}{pl.name}</p>
+                    <div className="flex min-w-0 items-start gap-3">
+                      <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-surface-2 text-[22px]" aria-hidden>{foodEmoji(`${pl.cuisine ?? ""} ${pl.name}`)}</span>
+                      <div className="min-w-0">
+                      <p className="font-medium">{pl.favorite ? <span className="text-sun">★ </span> : ""}{pl.name}</p>
                       <p className="text-xs text-fg-muted">{[pl.cuisine, pl.area, pl.mode.replace("_", "-"), pl.order_via].filter(Boolean).join(" · ")}</p>
                       {pl.notes ? <p className="text-xs text-fg-muted">{pl.notes}</p> : null}
+                      <p className="text-[11px] text-fg-muted">{list.length ? `${list.length} dish${list.length === 1 ? "" : "es"} saved` : "No menu yet"}</p>
+                      </div>
                     </div>
                     <div className="flex flex-wrap justify-end gap-1">
                       <EditRecord
@@ -86,11 +92,12 @@ export default async function DiningPage() {
             );
           })}
         </ul>
+        </Section>
       )}
 
       {places.length ? (
+        <Section title="Orders">
         <Card className="space-y-3">
-          <h2 className="font-semibold">Orders</h2>
           <LogOrderForm places={places.map((x) => ({ id: x.id, name: x.name }))} />
           {orders.length ? (
             <ul className="divide-y divide-border text-sm">
@@ -117,6 +124,7 @@ export default async function DiningPage() {
             </ul>
           ) : null}
         </Card>
+        </Section>
       ) : null}
     </div>
   );

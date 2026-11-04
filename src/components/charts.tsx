@@ -16,6 +16,13 @@ function niceMax(v: number) {
   return step * pow;
 }
 
+/** A stable id for SVG gradients (server components can't use useId). */
+function gid(seed: string) {
+  let h = 7;
+  for (const c of seed) h = (h * 31 + c.charCodeAt(0)) % 1_000_003;
+  return `g${h}`;
+}
+
 function fmt(n: number) {
   return n >= 10000 ? `${Math.round(n / 1000)}K` : n.toLocaleString("en-IN", { maximumFractionDigits: 1 });
 }
@@ -31,6 +38,8 @@ export function ColumnChart({
   height = 160,
   labelEvery,
   markers,
+  compare,
+  compareLabel,
 }: {
   title: string;
   subtitle?: ReactNode;
@@ -43,8 +52,11 @@ export function ColumnChart({
   labelEvery?: number;
   /** Dashed rules on given columns, e.g. "Surgery" on that day. */
   markers?: { key: string; label: string }[];
+  /** The previous period's value for each column (e.g. same weekday last week): a dashed line, and "vs last week" above the chart. */
+  compare?: (number | null)[];
+  compareLabel?: string;
 }) {
-  const max = niceMax(Math.max(...data.map((d) => d.value), ...(line ?? []).map((v) => v ?? 0)));
+  const max = niceMax(Math.max(...data.map((d) => d.value), ...(line ?? []).map((v) => v ?? 0), ...(compare ?? []).map((v) => v ?? 0)));
   const ticks = [0, max / 2, max];
   // About 5 date labels whatever the width, so they never get cut off.
   const every = labelEvery ?? Math.max(1, Math.ceil(data.length / 5));
@@ -60,10 +72,20 @@ export function ColumnChart({
     } else markerGroups.push({ key: m.key, index, labels: [m.label] });
   }
   markerGroups.sort((a, b) => a.index - b.index);
-  const points = line
-    ?.map((v, i) => (v === null ? null : `${((i + 0.5) / n) * 100},${100 - (v / max) * 100}`))
-    .filter(Boolean)
-    .join(" ");
+  const toPoints = (vals?: (number | null)[]) =>
+    vals
+      ?.map((v, i) => (v === null ? null : `${((i + 0.5) / n) * 100},${100 - (v / max) * 100}`))
+      .filter(Boolean)
+      .join(" ");
+  const points = toPoints(line);
+  const comparePoints = toPoints(compare);
+  const avg = (vals: (number | null)[]) => {
+    const v = vals.filter((x): x is number => x != null);
+    return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
+  };
+  const nowAvg = avg(data.map((d) => d.value));
+  const thenAvg = compare ? avg(compare) : null;
+  const change = nowAvg != null && thenAvg ? Math.round(((nowAvg - thenAvg) / thenAvg) * 100) : null;
 
   return (
     <figure className="space-y-2">
@@ -71,10 +93,16 @@ export function ColumnChart({
         <p className="text-sm font-semibold">{title}</p>
         {subtitle ? <p className="text-xs text-fg-muted">{subtitle}</p> : null}
       </figcaption>
-      {line && barLabel && lineLabel ? (
-        <div className="flex gap-4 text-xs text-fg-muted" aria-hidden>
-          <span className="flex items-center gap-1.5"><span className="inline-block size-2.5 rounded-sm bg-series-1" />{barLabel}</span>
-          <span className="flex items-center gap-1.5"><span className="inline-block h-0.5 w-4 rounded bg-series-2" />{lineLabel}</span>
+      {(line && barLabel && lineLabel) || compare ? (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-fg-muted">
+          {barLabel ? <span className="flex items-center gap-1.5" aria-hidden><span className="inline-block size-2.5 rounded-sm bg-series-1" />{barLabel}</span> : null}
+          {line && lineLabel ? <span className="flex items-center gap-1.5" aria-hidden><span className="inline-block h-0.5 w-4 rounded bg-series-2" />{lineLabel}</span> : null}
+          {compare ? <span className="flex items-center gap-1.5" aria-hidden><span className="inline-block w-4 border-t-2 border-dashed border-fg-muted/70" />{compareLabel ?? "Last week"}</span> : null}
+          {change != null && thenAvg != null && nowAvg != null ? (
+            <span className="ml-auto rounded-full bg-surface-2 px-2 py-0.5 tabular-nums text-fg">
+              avg {fmt(nowAvg >= 100 ? Math.round(nowAvg) : Math.round(nowAvg * 10) / 10)}{unit} vs {fmt(thenAvg >= 100 ? Math.round(thenAvg) : Math.round(thenAvg * 10) / 10)}{unit} <span className={change === 0 ? "text-fg-muted" : "font-semibold"}>({change > 0 ? "+" : ""}{change}%)</span>
+            </span>
+          ) : null}
         </div>
       ) : null}
       <div className="flex gap-2">
@@ -94,8 +122,8 @@ export function ColumnChart({
               {data.map((d) => (
                 <div key={d.key} className="group relative flex h-full flex-1 items-end justify-center px-px" tabIndex={0} aria-label={d.tooltip ?? `${d.label}: ${d.value}${unit}`}>
                   <div
-                    className="w-full max-w-6 rounded-t bg-series-1 transition-opacity group-hover:opacity-80"
-                    style={{ height: `${(d.value / max) * 100}%`, minHeight: d.value > 0 ? 2 : 0 }}
+                    className="w-full max-w-6 origin-bottom rounded-t transition-opacity group-hover:opacity-80"
+                    style={{ height: `${(d.value / max) * 100}%`, minHeight: d.value > 0 ? 2 : 0, background: "linear-gradient(to top, color-mix(in oklab, var(--series-1) 55%, transparent), var(--series-1))", animation: `bar-grow .55s ${Math.min(0.4, data.indexOf(d) * 0.015).toFixed(3)}s cubic-bezier(.3,.8,.3,1) both` }}
                   />
                   <div className="pointer-events-none absolute bottom-full z-10 mb-1 hidden whitespace-nowrap rounded-lg bg-fg px-2 py-1 text-xs text-bg shadow group-hover:block group-focus:block">
                     {d.tooltip ?? `${d.label}: ${fmt(d.value)}${unit}`}
@@ -103,9 +131,10 @@ export function ColumnChart({
                 </div>
               ))}
             </div>
-            {points ? (
+            {points || comparePoints ? (
               <svg className="pointer-events-none absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
-                <polyline points={points} fill="none" stroke="var(--series-2)" strokeWidth={2} vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
+                {comparePoints ? <polyline points={comparePoints} fill="none" stroke="var(--fg-muted)" strokeOpacity={0.7} strokeWidth={1.75} strokeDasharray="4 4" vectorEffect="non-scaling-stroke" strokeLinejoin="round" /> : null}
+                {points ? <polyline points={points} fill="none" stroke="var(--series-2)" strokeWidth={2} vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" /> : null}
               </svg>
             ) : null}
             {markerGroups.map((g, gi) => (
@@ -237,6 +266,7 @@ export function LineChart({
   const y = (v: number) => 100 - ((v - min) / (max - min)) * 100;
   const ticks = [min + pad, (min + max) / 2, max - pad];
   const fmtV = (n: number) => (Math.abs(n) >= 100 ? Math.round(n).toString() : (Math.round(n * 10) / 10).toString());
+  const area = gid(`${title}-${sorted.length}-area`);
 
   return (
     <figure className="space-y-2">
@@ -268,7 +298,22 @@ export function LineChart({
           ) : null}
           {target != null ? <div className="absolute inset-x-0 h-0.5 bg-series-2" style={{ top: `${y(target)}%` }} /> : null}
           <svg className="pointer-events-none absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
+            <defs>
+              <linearGradient id={area} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="var(--series-1)" stopOpacity="0.28" />
+                <stop offset="100%" stopColor="var(--series-1)" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            {sorted.length > 1 ? (
+              <polygon
+                points={`${x(sorted[0].date)},100 ${sorted.map((p) => `${x(p.date)},${y(p.value)}`).join(" ")} ${x(sorted[sorted.length - 1].date)},100`}
+                fill={`url(#${area})`}
+                style={{ animation: "fade-in .8s ease-out both" }}
+              />
+            ) : null}
             <polyline
+              pathLength={1}
+              style={{ strokeDasharray: 1, strokeDashoffset: 0, animation: "line-draw 1s cubic-bezier(.3,.8,.3,1) both" }}
               points={sorted.map((p) => `${x(p.date)},${y(p.value)}`).join(" ")}
               fill="none"
               stroke="var(--series-1)"

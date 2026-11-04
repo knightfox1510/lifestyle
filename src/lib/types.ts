@@ -396,6 +396,8 @@ export type FoodEntry = {
   accuracy?: "calculated" | "label" | "estimated";
   irritants?: string[];
   group_id?: string | null;
+  /** A small copy of the photo it was logged from (food-photos bucket). */
+  photo_path?: string | null;
 };
 
 export type BodyMetric = {

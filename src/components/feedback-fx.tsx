@@ -36,8 +36,10 @@ export function FxBadge({ kind, error = false, size = 30 }: { kind: FeedbackKind
   const color = error ? "var(--danger)" : KIND_META[kind].color;
   const { Icon, motion } = FX[kind];
   const icon = Math.round(size * 0.52);
+  // Light badges (mint in dark mode, the yellow sun) need a dark icon to stay readable.
+  const ink = error ? "white" : color === "var(--sun)" ? "#2a1f00" : color === "var(--accent)" || color === "var(--cat-check)" ? "var(--accent-fg)" : "white";
   return (
-    <span className="relative grid shrink-0 place-items-center rounded-full text-white" style={{ width: size, height: size, background: color }} aria-hidden>
+    <span className="relative grid shrink-0 place-items-center rounded-full" style={{ width: size, height: size, background: color, color: ink }} aria-hidden>
       {!error ? <span className="absolute inset-0 rounded-full motion-reduce:hidden" style={{ background: color, animation: "fx-ring .7s ease-out forwards" }} /> : null}
       <span className="relative grid place-items-center" style={{ animation: error ? "fx-shake .45s ease-in-out" : motion || undefined }}>
         {error ? <X size={icon} strokeWidth={2.6} /> : Icon ? <Icon size={icon} strokeWidth={2.4} /> : <DrawnCheck size={icon + 2} />}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition, type ReactNode } from "react";
+import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 import { Button, Field, Input, cx } from "@/components/ui";
 import { useToast } from "@/components/toaster";
@@ -17,7 +17,7 @@ const PORTIONS: [number, string][] = [
   [2, "2×"],
 ];
 
-export type EntrySummary = { id: string; description: string; quantity: string | null; meal: Meal; time: string; calories: number | null; createdAt?: string };
+export type EntrySummary = { id: string; description: string; quantity: string | null; meal: Meal; time: string; calories: number | null; createdAt?: string; /** Signed URL of the meal photo, or an emoji for the food. */ photoUrl?: string | null; emoji?: string };
 
 /** A logged food: tap it to rename, change the amount, move it to another meal or time, or delete it. */
 export function FoodEntryRow({ entry, ownerId, meta, canEdit, canDelete, children }: { entry: EntrySummary; ownerId: string; meta: string; canEdit: boolean; canDelete: boolean; children?: ReactNode }) {
@@ -39,6 +39,47 @@ export function FoodEntryRow({ entry, ownerId, meta, canEdit, canDelete, childre
     const t = window.setTimeout(() => setFresh(Date.now() - Date.parse(entry.createdAt!) < 30_000), 0);
     return () => window.clearTimeout(t);
   }, [entry.createdAt]);
+  // Phones: swipe left to show Delete, swipe right to edit.
+  const [dx, setDx] = useState(0);
+  const [revealed, setRevealed] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const touch = useRef<{ x: number; y: number; dragging: boolean } | null>(null);
+  const swiped = useRef(false);
+  const onDown = (e: React.PointerEvent) => {
+    if (e.pointerType !== "touch" || open || !canEdit) return;
+    touch.current = { x: e.clientX, y: e.clientY, dragging: false };
+  };
+  const onMove = (e: React.PointerEvent) => {
+    const t0 = touch.current;
+    if (!t0) return;
+    const ddx = e.clientX - t0.x;
+    const ddy = e.clientY - t0.y;
+    if (!t0.dragging && Math.abs(ddx) > 10 && Math.abs(ddx) > Math.abs(ddy) * 1.4) {
+      t0.dragging = true;
+      setDragging(true);
+    }
+    if (t0.dragging) setDx(Math.max(canDelete ? -110 : 0, Math.min(110, ddx + (revealed ? -88 : 0))));
+  };
+  const onUp = () => {
+    const t0 = touch.current;
+    touch.current = null;
+    setDragging(false);
+    if (!t0?.dragging) return;
+    swiped.current = true;
+    window.setTimeout(() => (swiped.current = false), 50);
+    if (dx > 70) {
+      setDx(0);
+      setRevealed(false);
+      reset();
+      setOpen(true);
+    } else if (dx < -60 && canDelete) {
+      setDx(-88);
+      setRevealed(true);
+    } else {
+      setDx(0);
+      setRevealed(false);
+    }
+  };
   const f = custom ? Number(custom) || 1 : factor;
   const newKcal = entry.calories == null ? null : Math.round(entry.calories * f);
 
@@ -64,12 +105,41 @@ export function FoodEntryRow({ entry, ownerId, meta, canEdit, canDelete, childre
   }
 
   return (
-    <li className={cx("py-2 text-sm", fresh && "fx-fresh -mx-2 px-2")}>
-      <div className="flex items-center justify-between gap-2">
+    <li className={cx("relative overflow-hidden text-sm", fresh && "fx-fresh -mx-2 px-2")}>
+      {dx !== 0 ? (
+        <div className="absolute inset-0 flex items-center justify-between rounded-lg px-4 text-xs font-medium" aria-hidden={!revealed}>
+          <span className={cx("flex items-center gap-1 text-accent transition-opacity", dx > 30 ? "opacity-100" : "opacity-0")}><Pencil className="size-4" aria-hidden /> {t("Edit")}</span>
+          {canDelete ? (
+            <button
+              type="button"
+              tabIndex={revealed ? 0 : -1}
+              disabled={pending}
+              onClick={() => start(async () => { const r = await deleteFood(entry.id, ownerId); if (r.error) { toast(r.error, { tone: "error" }); setDx(0); setRevealed(false); } else toast(t("Deleted.")); })}
+              className={cx("-mr-4 flex h-full items-center gap-1 bg-danger px-5 text-white transition-opacity", dx < -30 ? "opacity-100" : "opacity-0")}
+            >
+              <Trash2 className="size-4" aria-hidden /> {t("Delete")}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      <div
+        className="relative flex touch-pan-y items-center justify-between gap-2 bg-surface py-2"
+        style={{ transform: dx ? `translateX(${dx}px)` : undefined, transition: dragging ? "none" : "transform .22s cubic-bezier(.3,1.2,.5,1)" }}
+        onPointerDown={onDown}
+        onPointerMove={onMove}
+        onPointerUp={onUp}
+        onPointerCancel={onUp}
+      >
+        {entry.photoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={entry.photoUrl} alt="" className="size-10 shrink-0 rounded-xl object-cover shadow-[0_0_0_1px_var(--border)]" loading="lazy" />
+        ) : entry.emoji ? (
+          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-surface-2 text-[20px]" aria-hidden>{entry.emoji}</span>
+        ) : null}
         <button
           type="button"
           disabled={!canEdit}
-          onClick={() => { if (open) reset(); setOpen(!open); }}
+          onClick={() => { if (swiped.current) return; if (revealed) { setDx(0); setRevealed(false); return; } if (open) reset(); setOpen(!open); }}
           className={cx("min-w-0 flex-1 text-left", canEdit && "rounded-lg hover:bg-surface-2/60")}
           aria-expanded={open}
           aria-label={canEdit ? t("Edit {name}", { name: entry.description }) : undefined}
