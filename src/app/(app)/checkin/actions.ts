@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { revalidatePath } from "next/cache";
 import { errorMessage, refreshModule, requireWrite } from "@/lib/guards";
 import type { ActionResult } from "@/lib/types";
 
@@ -19,17 +20,22 @@ const valueFor: Record<CheckinField, z.ZodType> = {
 /** Saves one field of a day's check-in (each tap saves). */
 export async function saveCheckinField(ownerId: string, date: string, field: CheckinField, value: number | string | null): Promise<ActionResult> {
   if (!FIELDS.includes(field) || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: "Invalid input" };
-  const parsed = valueFor[field].safeParse(value === "" ? null : value);
+  const parsed = valueFor[field].safeParse(value === "" ? null : field === "sleep_hours" && typeof value === "number" ? Math.round(value * 10) / 10 : value);
   if (!parsed.success) return { error: "Invalid value" };
   try {
     const session = await requireWrite("checkin", ownerId);
     const { error } = await session.supabase
       .from("daily_checkins")
       .upsert({ owner_id: ownerId, household_id: session.household.id, checkin_date: date, [field]: parsed.data }, { onConflict: "owner_id,checkin_date" });
-    if (error) return { error: "Couldn't save." };
+    if (error) {
+      console.error("check-in not saved", field, error.message);
+      return { error: `Couldn't save the check-in (${error.message}).` };
+    }
   } catch (e) {
     return { error: errorMessage(e) };
   }
   refreshModule("/checkin");
+  // The check-in ring on Today and the Close your day list change too.
+  revalidatePath("/close");
   return { ok: true };
 }
