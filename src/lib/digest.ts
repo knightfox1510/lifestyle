@@ -57,7 +57,8 @@ export async function generateDigest(session: AppSession): Promise<{ content: st
   const lastWeek = scores(days.statuses.slice(-14, -7));
   const avg = (xs: { score: number }[]) => (xs.length ? Math.round(xs.reduce((a, x) => a + x.score, 0) / xs.length) : null);
   const best = [...thisWeek].sort((a, b) => b.score - a.score)[0];
-  const scoreLine = avg(thisWeek) != null ? `Health score this week: ${avg(thisWeek)}/100${avg(lastWeek) != null ? ` (last week ${avg(lastWeek)})` : ""}; days with every goal done: ${days.statuses.slice(-7).filter((d) => d.closed).length}/7${best ? `; best day ${best.date} (${best.score}%)` : ""}.` : "";
+  const notes = days.statuses.slice(-7).filter((d) => d.note).map((d) => `${d.date}: ${d.note}`);
+  const scoreLine = (notes.length ? `Day notes (context for low or unusual days): ${notes.join("; ")}.\n` : "") + (avg(thisWeek) != null ? `Health score this week: ${avg(thisWeek)}/100${avg(lastWeek) != null ? ` (last week ${avg(lastWeek)})` : ""}; days with every goal done: ${days.statuses.slice(-7).filter((d) => d.closed).length}/7${best ? `; best day ${best.date} (${best.score}%)` : ""}.` : "");
   const res = await generate(session, {
     contents: `Write ${session.me.display_name}'s weekly summary for the week starting ${ws}. Use only the data provided.
 Format (plain text, no markdown headings, max ~180 words):

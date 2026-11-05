@@ -1,4 +1,5 @@
 import { Footprints, HeartPulse, Moon, RefreshCw } from "lucide-react";
+import { dayNotes } from "@/lib/day-notes";
 import { headers } from "next/headers";
 import { getSession } from "@/lib/session";
 import { addDays, lastNDays, shortDate, todayIn } from "@/lib/dates";
@@ -25,6 +26,7 @@ export default async function WearablesPage() {
   const rows = (data ?? []) as WearableDay[];
   const byDay = new Map(rows.map((r) => [r.day, r]));
   const days30 = lastNDays(today, 30);
+  const notes = (await dayNotes(session, ownerId, days30[0])).map((n) => ({ key: n.key, label: `📝 ${n.label}` }));
   const last7 = lastNDays(today, 7).map((d) => byDay.get(d)).filter(Boolean) as WearableDay[];
   const avg = (k: keyof WearableDay) => {
     const v = last7.map((r) => r[k]).filter((x): x is number => typeof x === "number");
@@ -51,10 +53,10 @@ export default async function WearablesPage() {
       ) : (
         <Section title="Last 30 days">
           <Card>
-            <ColumnChart title="Steps" data={days30.map((d) => ({ key: d, label: shortDate(d), value: byDay.get(d)?.steps ?? 0, tooltip: `${shortDate(d)}: ${byDay.get(d)?.steps?.toLocaleString("en-IN") ?? "no data"} steps${byDay.get(addDays(d, -30))?.steps ? ` (30 days before: ${byDay.get(addDays(d, -30))!.steps!.toLocaleString("en-IN")})` : ""}` }))} compare={prev30("steps")} compareLabel="Previous 30 days" best="max" height={120} />
+            <ColumnChart title="Steps" data={days30.map((d) => ({ key: d, label: shortDate(d), value: byDay.get(d)?.steps ?? 0, tooltip: `${shortDate(d)}: ${byDay.get(d)?.steps?.toLocaleString("en-IN") ?? "no data"} steps${byDay.get(addDays(d, -30))?.steps ? ` (30 days before: ${byDay.get(addDays(d, -30))!.steps!.toLocaleString("en-IN")})` : ""}` }))} compare={prev30("steps")} compareLabel="Previous 30 days" best="max" markers={notes} height={120} />
           </Card>
           <Card>
-            <ColumnChart title="Sleep (hours)" best="max" compare={prev30("sleep_minutes")?.map((v) => (v == null ? null : Math.round((v / 60) * 10) / 10))} compareLabel="Previous 30 days" data={days30.map((d) => ({ key: d, label: shortDate(d), value: Math.round(((byDay.get(d)?.sleep_minutes ?? 0) / 60) * 10) / 10, tooltip: `${shortDate(d)}: ${byDay.get(d)?.sleep_minutes ? `${Math.round((byDay.get(d)!.sleep_minutes! / 60) * 10) / 10} h` : "no data"}${byDay.get(d)?.deep_sleep_minutes ? ` (deep ${byDay.get(d)!.deep_sleep_minutes} min)` : ""}` }))} unit=" h" height={120} />
+            <ColumnChart title="Sleep (hours)" best="max" markers={notes} compare={prev30("sleep_minutes")?.map((v) => (v == null ? null : Math.round((v / 60) * 10) / 10))} compareLabel="Previous 30 days" data={days30.map((d) => ({ key: d, label: shortDate(d), value: Math.round(((byDay.get(d)?.sleep_minutes ?? 0) / 60) * 10) / 10, tooltip: `${shortDate(d)}: ${byDay.get(d)?.sleep_minutes ? `${Math.round((byDay.get(d)!.sleep_minutes! / 60) * 10) / 10} h` : "no data"}${byDay.get(d)?.deep_sleep_minutes ? ` (deep ${byDay.get(d)!.deep_sleep_minutes} min)` : ""}` }))} unit=" h" height={120} />
           </Card>
           {rows.some((r) => r.resting_hr) ? (
             <Card>

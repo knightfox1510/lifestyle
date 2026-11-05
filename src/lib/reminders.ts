@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { usualMealTimes } from "@/modules/food/usual-times";
+import { skipKey } from "@/modules/engagement/day-goals";
 import { notifyUser } from "@/lib/push";
 import { addDays, dayOfWeek, localDate, localTime, startOfLocalDayIso } from "@/lib/dates";
 import { isScheduledOn } from "@/modules/medicines/logic";
@@ -96,6 +97,11 @@ async function remindUser(
   };
 
   // Medicine doses: always (even in quiet hours: they're time-critical).
+  // A day closed with "Close my day": its evening nudges stop, and anything skipped on purpose isn't chased.
+  const { data: closeRow } = await admin.from("day_closes").select("closed_at, skipped").eq("owner_id", profile.id).eq("day", today).maybeSingle();
+  const closedToday = Boolean(closeRow?.closed_at);
+  const skippedToday = new Set<string>((closeRow?.skipped as string[] | null) ?? []);
+
   if (prefs.medicines && on("medicines")) {
     const [{ data: meds }, { data: doses }] = await Promise.all([
       admin.from("medicines").select("*").eq("owner_id", profile.id).eq("active", true),
@@ -104,14 +110,14 @@ async function remindUser(
     const due = ((meds ?? []) as Medicine[]).flatMap((m) =>
       isScheduledOn(m, today) ? m.times.filter((t) => inWindow(time, toMinutes(t)) && !(doses ?? []).some((d: { medicine_id: string; scheduled_time: string | null }) => d.medicine_id === m.id && d.scheduled_time === t)).map((t) => ({ m, t })) : [],
     );
-    for (const { m, t } of due) {
+    for (const { m, t } of due.filter(({ m, t }) => !skippedToday.has(skipKey.dose(m.id, t)))) {
       await send("medicine", `med:${m.id}:${today}:${t}`, `💊 ${tr("Time for {name}", { name: m.name })}`, `${m.dose_amount} ${m.dose_unit}${m.instructions ? ` · ${m.instructions}` : ""} (${t})`, "/medicines");
     }
     // One follow-up 30 minutes later if it still isn't logged.
     const late = ((meds ?? []) as Medicine[]).flatMap((m) =>
       isScheduledOn(m, today) ? m.times.filter((t) => inWindow(time, toMinutes(t) + 30) && !(doses ?? []).some((d: { medicine_id: string; scheduled_time: string | null }) => d.medicine_id === m.id && d.scheduled_time === t)).map((t) => ({ m, t })) : [],
     );
-    for (const { m, t } of late) {
+    for (const { m, t } of late.filter(({ m, t }) => !skippedToday.has(skipKey.dose(m.id, t)))) {
       await send("medicine", `medlate:${m.id}:${today}:${t}`, `⏰ ${tr("Still to take: {name}", { name: m.name })}`, tr("It was due at {time}. Tap to log it.", { time: t }), "/medicines");
     }
   }
@@ -119,7 +125,7 @@ async function remindUser(
   if (quiet) return result;
 
   // Supplements: one nudge per time of day ("Morning supplements: D3, B12"), at the person's own times.
-  if (prefs.medicines && on("supplements")) {
+  if (prefs.medicines && on("supplements") && !closedToday) {
     const [{ data: sups }, { data: logs }] = await Promise.all([
       admin.from("supplements").select("*").eq("owner_id", profile.id).eq("active", true),
       admin.from("supplement_logs").select("supplement_id").eq("owner_id", profile.id).eq("log_date", today),
@@ -151,7 +157,7 @@ async function remindUser(
   }
 
   // Water: at each slot between start and end, only if behind pace.
-  if (prefs.water) {
+  if (prefs.water && !closedToday && !skippedToday.has(skipKey.water)) {
     const [{ data: drinks }, { data: goal }] = await Promise.all([
       admin.from("fluid_intake").select("volume_ml, occurred_at, drink").eq("owner_id", profile.id).gte("occurred_at", startOfLocalDayIso(today)),
       prefs.water_target_ml ? Promise.resolve({ data: null }) : admin.from("nutrition_goals").select("water_ml").eq("owner_id", profile.id).maybeSingle(),
@@ -183,7 +189,7 @@ async function remindUser(
   }
 
   // Meals: a nudge ~45 minutes after the time this person usually logs a meal, if it isn't logged yet today.
-  if (prefs.close_day && on("food_diary")) {
+  if (prefs.close_day && on("food_diary") && !closedToday) {
     const { data: recent } = await admin.from("food_entries").select("eaten_at, meal").eq("owner_id", profile.id).gte("eaten_at", new Date(now.getTime() - 22 * 864e5).toISOString()).limit(800);
     const rows = (recent ?? []) as { eaten_at: string; meal: string }[];
     const usual = usualMealTimes(rows.filter((r) => localDate(r.eaten_at, tz) !== today).map((r) => ({ day: localDate(r.eaten_at, tz), meal: r.meal, minutes: toMinutes(localTime(r.eaten_at, tz)) })));
@@ -196,7 +202,7 @@ async function remindUser(
   }
 
   // Evening "close your day": one nudge, only if goals are left.
-  if (prefs.close_day && inWindow(time, toMinutes(prefs.close_day_time.slice(0, 5)))) {
+  if (prefs.close_day && !closedToday && inWindow(time, toMinutes(prefs.close_day_time.slice(0, 5)))) {
     const water = await waterSettings(admin, profile.id);
     const day = await loadDays(admin, profile.id, {
       tz,

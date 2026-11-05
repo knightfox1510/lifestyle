@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { dayNotes } from "@/lib/day-notes";
 import { getSession } from "@/lib/session";
 import { shortDate } from "@/lib/dates";
 import { Card, EmptyState, cx } from "@/components/ui";
@@ -56,7 +57,9 @@ export default async function BladderTrendsPage({ searchParams }: PageProps<"/bl
   const avgVoids = Math.round((stats.reduce((a, s) => a + s.voids, 0) / Math.max(loggedDays, 1)) * 10) / 10;
   const dayLabel = (date: string) => shortDate(date);
   const inRange = health.filter((h) => h.start_date >= d.days[0]);
-  const markers = inRange.map((h) => ({ key: h.start_date, label: h.title }));
+  // Health events, plus the day notes from closing a day ("travelled", "felt unwell").
+  const notes = await dayNotes(session, ownerId, d.days[0]);
+  const markers = [...inRange.map((h) => ({ key: h.start_date, label: h.title })), ...notes.map((n) => ({ key: n.key, label: `📝 ${n.label}` }))];
   const surgery = health.find((h) => h.category === "surgery");
   // Before vs after the latest event that has a week of diary on both sides (or the latest one).
   const logged = stats.map((s) => ({ date: s.date, leaks: s.leaks, logged: s.leaks + s.urges + s.voids + s.fluidMl > 0 }));

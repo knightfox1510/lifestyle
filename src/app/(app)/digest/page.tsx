@@ -44,6 +44,16 @@ export default async function DigestPage() {
             <StatTile label={t("Days closed")} value={`${closed}/7`} hint={t("every goal done")} icon={<CheckCircle2 />} tint="var(--accent)" />
             <StatTile label={t("Best day")} value={best ? shortDay(best.date) : "–"} hint={best ? `${dayScore(best.rings)}%` : undefined} icon={<Trophy />} tint="var(--cat-food)" />
           </div>
+          {week.some((d) => d.note) ? (
+            <Card>
+              <p className="mb-1.5 text-sm font-semibold">{t("Notes this week")}</p>
+              <ul className="space-y-1 text-sm">
+                {week.filter((d) => d.note).map((d) => (
+                  <li key={d.date}><span className="text-fg-muted">{shortDay(d.date)}:</span> {d.note}</li>
+                ))}
+              </ul>
+            </Card>
+          ) : null}
           {photos.length ? (
             <Card>
               <p className="mb-2 text-sm font-semibold">{t("Your plates this week")}</p>

@@ -16,6 +16,9 @@ import { WaterButtons } from "@/components/water-buttons";
 import { finishWelcome } from "./welcome/actions";
 import { loadCoachCheckin } from "@/lib/coach";
 import { CoachCheckinCard } from "@/components/today/coach-checkin";
+import { DayNote, ReopenDayButton } from "@/components/today/day-close";
+import { PillIcon } from "@/components/pill-icon";
+import { MEAL_META } from "@/modules/food/meta";
 import { activityFor, checkMilestones, recentCheers } from "@/lib/engagement";
 import { dayScore, missedOn, nextUp } from "@/modules/engagement/rings";
 import { DayArc, DayBars, DayTiles, WeekStrip } from "@/components/today/day-views";
@@ -77,6 +80,15 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
     mealsLogged: can("food_diary") ? day.mealsToday : null,
     checkinDone: can("checkin") ? day.checkinToday : null,
   };
+  // Closed today: Today turns to tomorrow (no more "Next up" for today).
+  const closedToday = isSelf && !past && Boolean(day.close?.closed_at);
+  const dayStatus = day.today;
+  const { data: planRows } = closedToday && can("food_diary")
+    ? await session.supabase.from("meal_plan").select("id, meal, title, for_user").eq("household_id", session.household.id).eq("plan_date", day.tomorrow.date).not("title", "is", null)
+    : { data: [] };
+  const tomorrowMeals = ((planRows ?? []) as { id: string; meal: "breakfast" | "lunch" | "dinner" | "snack"; title: string; for_user: string | null }[])
+    .filter((m) => !m.for_user || m.for_user === session.userId)
+    .sort((a, b) => ["breakfast", "lunch", "snack", "dinner"].indexOf(a.meal) - ["breakfast", "lunch", "snack", "dinner"].indexOf(b.meal));
   const items = !isSelf ? [] : past ? missedOn(missed) : nextUp({
         now,
         dueDoses: day.dueDoses,
@@ -181,7 +193,61 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
         <WeekStrip week={day.week} today={today} selected={viewDate} t={t} locale={locale} />
       </section>
 
-      {isSelf ? <NextUp items={items} ownerId={session.userId} date={viewDate} past={past} /> : null}
+      {closedToday ? (
+        <section className="space-y-3 rounded-[22px] bg-surface p-4 shadow-[0_0_0_1px_var(--border)] [animation:toast-in_.3s_ease-out]">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <span className="grid size-10 place-items-center rounded-2xl bg-accent text-accent-fg" aria-hidden>✓</span>
+              <div>
+                <p className="font-semibold">{t("Day closed")}</p>
+                <p className="text-[13px] text-fg-muted">
+                  {t("at {time}", { time: localTime(day.close!.closed_at!, tz) })} · {t("{n}% of the day's goals", { n: score })}
+                  {(day.close?.skipped ?? []).length ? ` · ${t("{n} skipped on purpose", { n: day.close!.skipped.length })}` : ""}
+                </p>
+              </div>
+            </div>
+            <ReopenDayButton date={today} />
+          </div>
+          <DayNote date={today} note={day.close?.note ?? null} canEdit />
+        </section>
+      ) : null}
+
+      {closedToday ? (
+        <section className="space-y-2">
+          <h2 className="px-1 text-[13px] font-medium uppercase tracking-[0.08em] text-fg-muted">{t("Tomorrow")}</h2>
+          <ul className="divide-y divide-border rounded-[20px] bg-surface px-4 shadow-[0_0_0_1px_var(--border)]">
+            {[...day.tomorrow.doses.map((d) => ({ key: `d-${d.name}-${d.time}`, time: d.time, label: d.name, look: d })), ...day.tomorrow.supplements.map((x) => ({ key: `s-${x.name}`, time: x.time ?? "", label: x.name, look: x }))]
+              .sort((a, b) => (a.time || "99").localeCompare(b.time || "99"))
+              .slice(0, 5)
+              .map((x) => (
+                <li key={x.key} className="flex items-center gap-3 py-3">
+                  <PillIcon shape={x.look.pillShape} color={x.look.pillColor} size={26} />
+                  <span className="min-w-0 flex-1 truncate text-[15px]">{x.label}</span>
+                  <span className="font-mono text-[13px] text-fg-muted">{x.time || t("any time")}</span>
+                </li>
+              ))}
+            {tomorrowMeals.map((m) => (
+              <li key={m.id} className="flex items-center gap-3 py-3">
+                <span className="grid size-[26px] place-items-center text-lg" aria-hidden>{MEAL_META[m.meal]?.icon ?? "🍽️"}</span>
+                <span className="min-w-0 flex-1 truncate text-[15px]">{m.title}</span>
+                <span className="text-[13px] text-fg-muted">{t(MEAL_META[m.meal]?.label ?? "Meal")}</span>
+              </li>
+            ))}
+            {!day.tomorrow.doses.length && !day.tomorrow.supplements.length && !tomorrowMeals.length ? (
+              <li className="py-3 text-[14px] text-fg-muted">{t("Nothing scheduled yet. Plan meals in Food → Week plan.")}</li>
+            ) : null}
+          </ul>
+        </section>
+      ) : null}
+
+      {isSelf && !closedToday ? <NextUp items={items} ownerId={session.userId} date={viewDate} past={past} /> : null}
+
+      {past && (isSelf || dayStatus?.note) ? (
+        <section className="space-y-1 rounded-[20px] bg-surface px-3 py-2 shadow-[0_0_0_1px_var(--border)]">
+          {dayStatus?.closedAt ? <p className="px-1 text-[12px] text-fg-muted">✓ {t("Closed at {time}", { time: localTime(dayStatus.closedAt, tz) })}</p> : null}
+          <DayNote date={viewDate} note={dayStatus?.note ?? null} canEdit={isSelf} />
+        </section>
+      ) : null}
 
       {past ? (
         <section className="space-y-2">
@@ -204,10 +270,10 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
 
       {checkin ? <CoachCheckinCard facts={checkin.facts} t={t} /> : null}
 
-      {isSelf && !past && left > 0 && Number(now.slice(0, 2)) >= 18 ? (
+      {isSelf && !past && !closedToday && Number(now.slice(0, 2)) >= 18 ? (
         <Link href="/close" className="pressable flex items-center justify-between rounded-[20px] bg-fg px-5 py-4 text-bg">
           <span className="text-[15px] font-medium">{t("Close your day")}</span>
-          <span className="text-[13px] opacity-75">{t("{n} left · 30 seconds", { n: left })}</span>
+          <span className="text-[13px] opacity-75">{left ? t("{n} left · 30 seconds", { n: left }) : t("All done · 10 seconds")}</span>
         </Link>
       ) : null}
 

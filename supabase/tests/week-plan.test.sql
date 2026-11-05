@@ -135,5 +135,23 @@ do $$ begin
 exception when check_violation then null;
 end $$;
 reset role;
+-- Closed days: only the owner writes; a partner reads only with a check-in share.
+set role authenticated;
+select set_config('request.jwt.claim.sub', :p, false);
+insert into public.day_closes (household_id, day, closed_at, note, skipped) values (:'hid', '2026-11-04', now(), 'Travelled', '{meal:lunch}');
+select set_config('request.jwt.claim.sub', :q, false);
+do $$ begin
+  assert (select count(*) from public.day_closes) = 0, 'partner without a check-in share sees no closed days';
+  insert into public.day_closes (owner_id, household_id, day) values ('4d4d4d4d-0000-0000-0000-000000000051', current_setting('test.hid')::uuid, '2026-11-03');
+  raise exception 'SHOULD_FAIL: closing someone else''s day';
+exception when insufficient_privilege then null;
+end $$;
+select set_config('request.jwt.claim.sub', :p, false);
+insert into public.module_shares (owner_id, grantee_id, module_key, level) values (:p, :q, 'checkin', 'read');
+select set_config('request.jwt.claim.sub', :q, false);
+do $$ begin
+  assert (select note from public.day_closes) = 'Travelled', 'with a check-in share the partner sees the note';
+end $$;
+reset role;
 \o
 \echo 'ALL WEEK PLAN TESTS PASSED'

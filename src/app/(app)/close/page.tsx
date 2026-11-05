@@ -66,7 +66,19 @@ export default async function CloseDayPage() {
         </section>
       ))}
 
-      <CloseDayButton allDone={left.length === 0} streak={act.streak} />
+      <CloseDayButton
+        date={today}
+        streak={act.streak}
+        note={day.close?.note ?? null}
+        skipped={day.close?.skipped ?? []}
+        left={[
+          ...(left.some((r) => r.key === "water") ? [{ key: "water", icon: "💧", label: `${t("Water")} (${day.waterMl.toLocaleString("en-IN")} / ${water.target.toLocaleString("en-IN")} ml)` }] : []),
+          ...(on("food_diary") ? (["breakfast", "lunch", "dinner"] as const).filter((m) => !day.mealsToday.includes(m)).map((m) => ({ key: `meal:${m}`, icon: "🍽️", label: t(m === "breakfast" ? "Breakfast" : m === "lunch" ? "Lunch" : "Dinner") })) : []),
+          ...day.dueDoses.map((d) => ({ key: `dose:${d.medicineId}:${d.time}`, icon: "💊", label: `${d.time} · ${d.name}` })),
+          ...day.dueSupplements.map((x) => ({ key: `supp:${x.supplementId}`, icon: "🌿", label: x.name })),
+          ...(on("checkin") && !day.checkinToday ? [{ key: "check", icon: "🌙", label: t("Check-in") }] : []),
+        ]}
+      />
     </div>
   );
 }

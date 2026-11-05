@@ -138,10 +138,13 @@ export function WeekStrip({ week, today, selected = today, t, locale }: { week: 
             {new Date(`${d.date}T12:00:00Z`).toLocaleDateString(locale, { weekday: "narrow", timeZone: "UTC" })}
           </span>
           <span
-            className={cx("mx-auto block h-7 rounded-[9px]", d.date === selected && "ring-2 ring-accent/30 ring-offset-2 ring-offset-surface")}
-            title={d.closed ? t("Day closed") : d.any ? t("Something logged") : t("Nothing logged")}
-            style={{ background: d.closed ? "var(--accent)" : d.any ? "linear-gradient(to top, var(--accent) 45%, var(--surface-2) 45%)" : "var(--surface-2)" }}
-          />
+            className={cx("relative mx-auto grid h-7 place-items-center rounded-[9px] text-[11px] font-bold text-accent-fg", d.date === selected && "ring-2 ring-accent/30 ring-offset-2 ring-offset-surface")}
+            title={d.closed ? t("Day closed") : d.closedAt ? t("Closed, with some things not done") : d.any ? t("Something logged") : t("Nothing logged")}
+            style={{ background: d.closed ? "var(--accent)" : d.any || d.closedAt ? "linear-gradient(to top, var(--accent) 45%, var(--surface-2) 45%)" : "var(--surface-2)" }}
+          >
+            {d.closedAt && !d.closed ? <span aria-hidden className="absolute inset-x-0 top-0 text-center text-[10px] font-bold leading-[14px] text-accent">✓</span> : null}
+            {d.note ? <span aria-hidden className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-sun ring-2 ring-surface" title={d.note} /> : null}
+          </span>
         </Link>
       ))}
     </div>
