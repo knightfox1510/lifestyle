@@ -38,7 +38,7 @@ export function CheckinForm({
   const [notes, setNotes] = useState(checkin?.notes ?? "");
   const [savedField, setSavedField] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [started, setStarted] = useState(Boolean(checkin && (checkin.sleep_quality ?? checkin.mood ?? checkin.energy ?? checkin.stress ?? checkin.sleep_hours) != null));
+  const [started, setStarted] = useState(Boolean(checkin && checkin.sleep_quality != null && checkin.mood != null && checkin.energy != null && checkin.stress != null));
 
   function tap(field: ScaleField, n: number) {
     const before = values[field];
@@ -52,10 +52,11 @@ export function CheckinForm({
         return;
       }
       setSavedField(field);
-      // The first answer of the day gets the full confirmation; later taps a quiet "Saved".
-      if (!started && next !== null) {
+      // Each tap saves; the full confirmation comes when all four are answered (that's when it counts as done).
+      const after = { ...values, [field]: next };
+      if (!started && SCALES.every((x) => after[x.field] != null)) {
         setStarted(true);
-        toast("Check-in saved", { kind: "checkin" });
+        toast("Check-in done", { kind: "checkin" });
       }
     });
   }
@@ -64,8 +65,10 @@ export function CheckinForm({
     return <p className="text-sm text-fg-muted">You can see this check-in but not fill it in. They can allow it in Settings → Sharing → Daily check-in (Can edit).</p>;
   }
 
+  const answered = SCALES.filter((x) => values[x.field] != null).length;
   return (
     <div className="space-y-3">
+      {canWrite && answered > 0 && answered < SCALES.length ? <p className="text-xs text-fg-muted">{answered} of {SCALES.length} answered · saved as you go; it counts as done when all {SCALES.length} are in.</p> : null}
       {!canWrite ? <p className="text-xs text-fg-muted">View only: they haven&apos;t let you edit their check-in.</p> : null}
       {SCALES.map((s) => (
         <div key={s.field} className="flex items-center gap-2">

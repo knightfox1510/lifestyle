@@ -10,6 +10,9 @@ export const ready = Boolean(process.env.E2E_BASE_URL && process.env.NEXT_PUBLIC
  */
 export async function signIn(page: Page) {
   const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } });
+  // First run: make the test account (confirmed, no email sent). Later runs: it already exists.
+  const created = await admin.auth.admin.createUser({ email: process.env.E2E_EMAIL!, email_confirm: true, user_metadata: { e2e: true } });
+  if (created.error && !/already|registered|exists/i.test(created.error.message)) throw new Error(`Couldn't create the test account: ${created.error.message}`);
   const { data, error } = await admin.auth.admin.generateLink({ type: "magiclink", email: process.env.E2E_EMAIL! });
   if (error || !data.properties?.hashed_token) throw new Error(`Couldn't make a sign-in link: ${error?.message}`);
   await page.goto(`/auth/confirm?token_hash=${encodeURIComponent(data.properties.hashed_token)}&type=magiclink`);

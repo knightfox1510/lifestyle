@@ -24,7 +24,7 @@ export async function hubStatuses(session: AppSession, t: T): Promise<Record<str
     can("bladder_diary") ? session.supabase.from("bladder_events").select("kind, occurred_at").eq("owner_id", me).gte("occurred_at", startOfLocalDayIso(today)) : none,
     session.isModuleEnabled("groceries") ? session.supabase.from("grocery_items").select("id", { count: "exact", head: true }).eq("household_id", hid).eq("checked", false) : none,
     session.isModuleEnabled("pantry") ? session.supabase.from("pantry_items").select("id", { count: "exact", head: true }).eq("household_id", hid).is("used_up_at", null).lte("expires_on", addDays(today, 3)) : none,
-    can("checkin") ? session.supabase.from("daily_checkins").select("owner_id", { count: "exact", head: true }).eq("owner_id", me).eq("checkin_date", today) : none,
+    can("checkin") ? session.supabase.from("daily_checkins").select("owner_id", { count: "exact", head: true }).eq("owner_id", me).eq("checkin_date", today).not("sleep_quality", "is", null).not("mood", "is", null).not("energy", "is", null).not("stress", "is", null) : none,
     can("medical_records") ? session.supabase.from("lab_results").select("id, marker, test_date, flag, value, value_text, unit, panel").eq("owner_id", me).gte("test_date", addDays(today, -730)).limit(2000) : none,
   ]);
   const out: Record<string, { text: string; alert?: boolean; count?: number }> = {};

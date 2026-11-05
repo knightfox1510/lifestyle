@@ -36,7 +36,7 @@ export async function loadDays(
     enabled.food ? db.from("food_entries").select("eaten_at, meal").eq("owner_id", ownerId).gte("eaten_at", from).limit(3000) : none,
     enabled.medicines ? db.from("medicines").select("*").eq("owner_id", ownerId).eq("active", true) : none,
     enabled.medicines ? db.from("medicine_doses").select("*").eq("owner_id", ownerId).gte("scheduled_date", dayList[0]) : none,
-    enabled.checkin ? db.from("daily_checkins").select("checkin_date, updated_at").eq("owner_id", ownerId).gte("checkin_date", dayList[0]) : none,
+    enabled.checkin ? db.from("daily_checkins").select("checkin_date, updated_at, sleep_quality, mood, energy, stress").eq("owner_id", ownerId).gte("checkin_date", dayList[0]) : none,
     enabled.supplements ? db.from("supplements").select("*").eq("owner_id", ownerId).eq("active", true) : none,
     enabled.supplements ? db.from("supplement_logs").select("supplement_id, log_date, taken_at").eq("owner_id", ownerId).gte("log_date", dayList[0]) : none,
     // Closed days: what was skipped on purpose, the day's note.
@@ -53,7 +53,10 @@ export async function loadDays(
   const foods = (fd.data ?? []) as { eaten_at: string; meal: string }[];
   const meds = (md.data ?? []) as Medicine[];
   const doses = (ds.data ?? []) as MedicineDose[];
-  const checkins = (ci.data ?? []) as { checkin_date: string; updated_at: string }[];
+  // A check-in counts once all four scales are answered (each tap saves on its own, so a half-done one isn't "done").
+  const checkins = ((ci.data ?? []) as { checkin_date: string; updated_at: string; sleep_quality: number | null; mood: number | null; energy: number | null; stress: number | null }[]).filter(
+    (c) => c.sleep_quality != null && c.mood != null && c.energy != null && c.stress != null,
+  );
 
   const statuses: DayStatus[] = dayList.map((date) => {
     const water = fluids.filter((f) => f.drink !== "alcohol" && localDate(f.occurred_at, tz) === date).reduce((a, f) => a + f.volume_ml, 0);
