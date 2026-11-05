@@ -8,11 +8,13 @@ import { COACH_SOURCES, coachFacts, factLines, type CoachFacts, type CoachSource
 import { coachCheckin, type CheckinPlan } from "@/modules/coach/checkin";
 import { adherence, doseLabel } from "@/modules/medicines/logic";
 import { TIMING_LABEL } from "@/modules/supplements/meta";
+import { drinksOf } from "@/modules/private-log/meta";
 import { PHASE_LABEL, cycleStats, cycleStatus, periodsFrom, type CycleDay } from "@/modules/cycle/logic";
 
 /** The sources this person's data can be included from (feature on, shared with the asker, not hidden). */
 export function coachSourcesFor(session: AppSession, ownerId: string): CoachSource[] {
-  return COACH_SOURCES.filter((s) => session.isModuleEnabled(s.module) && session.isShown(s.module) && session.accessTo(s.module, ownerId) !== "none").map((s) => s.key);
+  const drinksOk = ownerId === session.userId && Boolean((session.profile as { ai_include_alcohol?: boolean }).ai_include_alcohol);
+  return COACH_SOURCES.filter((s) => session.isModuleEnabled(s.module) && session.isShown(s.module) && session.accessTo(s.module, ownerId) !== "none" && (s.key !== "alcohol" || drinksOk)).map((s) => s.key);
 }
 
 const ageFrom = (dob: string | null | undefined, today: string) => {
@@ -37,7 +39,7 @@ export async function loadCoachData(session: AppSession, ownerId: string, wanted
   const db = session.supabase;
   const q = <T,>(on: boolean, p: () => PromiseLike<{ data: T | null }>) => (on ? p() : Promise.resolve({ data: null as T | null }));
 
-  const [profile, ngoals, food, metrics, bgoals, wear, workouts, checkins, meds, doses, sups, cycle, bladder] = await Promise.all([
+  const [profile, ngoals, food, metrics, bgoals, wear, workouts, checkins, meds, doses, sups, cycle, bladder, drinks] = await Promise.all([
     q(session.isModuleEnabled("medical_records") && session.accessTo("medical_records", ownerId) !== "none", () => db.from("medical_profiles").select("height_cm, sex, date_of_birth").eq("owner_id", ownerId).maybeSingle()),
     q(allowed.has("food"), () => db.from("nutrition_goals").select("calories, protein_g, carbs_g, fat_g, fiber_g, goal, diet_type, activity_level").eq("owner_id", ownerId).maybeSingle()),
     q(inc.has("food"), () => db.from("food_entries").select("eaten_at, description, calories, protein_g, carbs_g, fat_g, fiber_g").eq("owner_id", ownerId).gte("eaten_at", fromIso).limit(5000)),
@@ -51,6 +53,8 @@ export async function loadCoachData(session: AppSession, ownerId: string, wanted
     q(inc.has("supplements"), () => db.from("supplements").select("*").eq("owner_id", ownerId).eq("active", true).eq("include_in_ai", true)),
     q(inc.has("cycle"), () => db.from("cycle_days").select("day, flow, symptoms").eq("owner_id", ownerId).gte("day", addDays(today, -200))),
     q(inc.has("bladder"), () => db.from("bladder_events").select("occurred_at, kind").eq("owner_id", ownerId).gte("occurred_at", fromIso)),
+    // Drinks only: nothing else from the private log is ever read for AI.
+    q(inc.has("alcohol"), () => db.from("private_logs").select("kind, detail, amount, occurred_on").eq("owner_id", ownerId).eq("kind", "alcohol").gte("occurred_on", from)),
   ]);
 
   type P = { height_cm: number | null; sex: "female" | "male" | "other" | null; date_of_birth: string | null } | null;
@@ -108,6 +112,12 @@ export async function loadCoachData(session: AppSession, ownerId: string, wanted
     const leaks = ev.filter((e) => e.kind === "leak").length;
     const loggedDays = new Set(ev.map((e) => localDate(e.occurred_at, tz))).size;
     if (loggedDays) sections.push(`Bladder diary (urinary incontinence): ${(leaks / loggedDays).toFixed(1)} leaks/day over ${loggedDays} logged days. Prefer pelvic-floor-friendly training (avoid lots of jumping/heavy straining at first, breathe out on effort), keep caffeine/fizzy drinks low, and don't cut fluids to lose weight.`);
+  }
+  if (inc.has("alcohol")) {
+    const rows = (drinks.data ?? []) as { kind: "alcohol"; detail: string | null; amount: number | null; occurred_on: string }[];
+    const total = rows.reduce((a, r) => a + drinksOf(r), 0);
+    const days = new Set(rows.map((r) => r.occurred_on)).size;
+    sections.push(`Alcohol: ${((total / periodDays) * 7).toFixed(1)} standard drinks a week on average (1 standard drink ≈ 10 g alcohol ≈ 70 kcal from the alcohol alone), drinking on ${days} of ${periodDays} days. Factor in the calories, appetite the next day, sleep quality and recovery; be matter-of-fact, not preachy.`);
   }
   let usedMedical = false;
   if (inc.has("medical")) {

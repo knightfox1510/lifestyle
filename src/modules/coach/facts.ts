@@ -29,6 +29,8 @@ export const COACH_SOURCES = [
   { key: "medical", module: "medical_records", label: "Medical history & blood tests" },
   { key: "cycle", module: "cycle", label: "Cycle" },
   { key: "bladder", module: "bladder_diary", label: "Bladder diary" },
+  // Only offered when the person allows it on the private log page, and only for their own data.
+  { key: "alcohol", module: "private_log", label: "Drinks (from the private log)" },
 ] as const;
 export type CoachSource = (typeof COACH_SOURCES)[number]["key"];
 

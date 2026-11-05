@@ -6,6 +6,8 @@ import { AddWatchForm } from "./add-form";
 import { ProgressControls, Stars } from "./progress-controls";
 import { deleteWatchItem, setMyPosition, setWatchStatus, updateWatchItem } from "./actions";
 import { EditRecord } from "@/components/edit-record";
+import { InfoLine } from "./info-line";
+import { LookupAll, LookupButton, WatchSuggest } from "./watch-ai";
 
 export const metadata = { title: "Watchlist" };
 
@@ -33,7 +35,10 @@ export default async function WatchlistPage({ searchParams }: PageProps<"/watchl
 
   return (
     <div className="space-y-4">
-      <AddWatchForm />
+      <div className="grid gap-2 sm:grid-cols-2">
+        <WatchSuggest />
+        <AddWatchForm />
+      </div>
       <div className="flex gap-1.5">
         {TABS.map((x) => (
           <Link key={x.key} href={`/watchlist?tab=${x.key}`} className={cx("rounded-full border px-3 py-1 text-sm", x.key === tab.key ? "border-accent bg-accent-soft font-medium text-accent" : "border-border text-fg-muted")}>
@@ -41,6 +46,7 @@ export default async function WatchlistPage({ searchParams }: PageProps<"/watchl
           </Link>
         ))}
       </div>
+      {items.filter((x) => x.info_checked_at === null).length > 1 ? <LookupAll ids={items.filter((x) => x.info_checked_at === null && x.status !== "dropped").map((x) => x.id)} /> : null}
       {shown.length === 0 ? (
         <EmptyState title="Nothing here yet" />
       ) : (
@@ -60,7 +66,15 @@ export default async function WatchlistPage({ searchParams }: PageProps<"/watchl
                         {it.kind}{it.platform ? ` · ${it.platform}` : ""}{it.total_seasons ? ` · ${it.total_seasons} seasons` : ""}{it.together ? " · together" : ""}
                         {it.added_by ? ` · added by ${names[it.added_by] ?? ""}` : ""}
                       </p>
+                      <InfoLine year={it.year ?? null} rating={it.imdb_rating ?? null} genres={it.genres ?? null} runtime={it.runtime_minutes ?? null} kind={it.kind} episodes={it.total_episodes ?? null} />
                       {it.notes ? <p className="text-xs text-fg-muted">{it.notes}</p> : null}
+                      {it.overview ? (
+                        <details className="text-xs text-fg-muted">
+                          <summary className="cursor-pointer">What&apos;s it about?</summary>
+                          <p className="mt-1 max-w-prose">{it.overview}</p>
+                        </details>
+                      ) : null}
+                      {it.info_checked_at === null ? <LookupButton itemId={it.id} /> : null}
                     </div>
                     <div className="flex flex-wrap items-center gap-1">
                       {it.status === "paused" ? <Badge>paused</Badge> : null}

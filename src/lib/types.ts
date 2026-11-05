@@ -674,6 +674,14 @@ export type WatchItem = {
   total_seasons: number | null;
   notes: string | null;
   updated_at: string;
+  /** Looked-up details (missing on databases not yet updated). */
+  year?: number | null;
+  imdb_rating?: number | null;
+  genres?: string[];
+  overview?: string | null;
+  runtime_minutes?: number | null;
+  total_episodes?: number | null;
+  info_checked_at?: string | null;
 };
 export type WatchProgress = { item_id: string; user_id: string; season: number; episode: number; rating: number | null; updated_at: string };
 

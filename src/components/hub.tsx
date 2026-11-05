@@ -8,7 +8,7 @@ export type HubItem = { href: string; iconKey: string; name: string; status?: st
 /** Each feature's colour, for its icon badge. */
 const TINT: Record<string, string> = {
   medicines: "var(--cat-meds)", supplements: "var(--cat-meds)", checkin: "var(--cat-check)", habits: "var(--cat-check)",
-  bladder_diary: "var(--cat-water)", pelvic_floor: "var(--cat-water)", cycle: "var(--danger)",
+  bladder_diary: "var(--cat-water)", pelvic_floor: "var(--cat-water)", cycle: "var(--danger)", private_log: "var(--cat-meds)",
   body_recomp: "var(--accent)", fitness: "var(--sun)", wearables: "var(--danger)", medical_records: "var(--accent)",
   food_diary: "var(--cat-food)", groceries: "var(--cat-food)", pantry: "var(--cat-food)", recipes: "var(--cat-food)", dining: "var(--cat-food)",
   child: "var(--sun)", maintenance: "var(--fg-muted)", documents: "var(--cat-water)", subscriptions: "var(--accent)", occasions: "var(--danger)", travel: "var(--cat-water)", watchlist: "var(--cat-meds)",

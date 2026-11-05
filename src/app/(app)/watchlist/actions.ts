@@ -15,18 +15,57 @@ const itemSchema = z.object({
   notes: z.preprocess(blank, z.string().trim().max(500).nullable()),
 });
 
+/** Looked-up details (year, IMDb rating…), saved with a new item when the add form used "Look up". */
+const infoSchema = z.object({
+  year: z.number().int().min(1880).max(2100).nullable().catch(null),
+  imdb_rating: z.number().min(0).max(10).nullable().catch(null),
+  genres: z.array(z.string().trim().max(30)).max(8).catch([]),
+  overview: z.string().max(600).nullable().catch(null),
+  runtime_minutes: z.number().int().min(1).max(1000).nullable().catch(null),
+  total_episodes: z.number().int().min(1).max(5000).nullable().catch(null),
+});
+type Info = z.infer<typeof infoSchema>;
+const infoColumns = (raw: unknown): Partial<Info> & { info_checked_at?: string } => {
+  const parsed = infoSchema.safeParse(raw);
+  return parsed.success ? { ...parsed.data, info_checked_at: new Date().toISOString() } : {};
+};
+
 export async function addWatchItem(_: ActionResult | null, form: FormData): Promise<ActionResult> {
-  const parsed = itemSchema.safeParse({ ...Object.fromEntries(form), together: form.get("together") === "on" });
+  const { info, ...fields } = Object.fromEntries(form);
+  const parsed = itemSchema.safeParse({ ...fields, together: form.get("together") === "on" });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
+  let extra = {};
+  try {
+    extra = typeof info === "string" && info ? infoColumns(JSON.parse(info)) : {};
+  } catch {
+    /* ignore a bad hidden field */
+  }
   try {
     const session = await requireModule("watchlist");
-    const { error } = await session.supabase.from("watchlist_items").insert({ ...parsed.data, household_id: session.household.id, added_by: session.userId });
+    const { error } = await session.supabase.from("watchlist_items").insert({ ...parsed.data, ...extra, household_id: session.household.id, added_by: session.userId });
     if (error) return { error: "Couldn't add." };
   } catch (e) {
     return { error: errorMessage(e) };
   }
   refreshModule("/watchlist");
   return { ok: true, message: "Added." };
+}
+
+/** Adds an AI suggestion (with its looked-up details) to the list. */
+export async function addWatchSuggestion(pick: { title: string; kind: string; where_to_watch: string | null; total_seasons: number | null; why?: string } & Partial<Info>, status: "want" | "watching" = "want"): Promise<ActionResult> {
+  const parsed = itemSchema.safeParse({ title: pick.title, kind: pick.kind, platform: pick.where_to_watch?.slice(0, 60) ?? "", status, together: true, total_seasons: pick.total_seasons ?? "", notes: pick.why ? `✨ ${pick.why}`.slice(0, 500) : "" });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  try {
+    const session = await requireModule("watchlist");
+    const { data: dupe } = await session.supabase.from("watchlist_items").select("id").eq("household_id", session.household.id).ilike("title", parsed.data.title.replace(/[%_]/g, "")).limit(1);
+    if (dupe?.length) return { error: "That's already on your list." };
+    const { error } = await session.supabase.from("watchlist_items").insert({ ...parsed.data, ...infoColumns(pick), household_id: session.household.id, added_by: session.userId });
+    if (error) return { error: "Couldn't add." };
+  } catch (e) {
+    return { error: errorMessage(e) };
+  }
+  refreshModule("/watchlist");
+  return { ok: true, message: status === "watching" ? `${pick.title}: enjoy! It's under Watching.` : `${pick.title} added to Want to watch.` };
 }
 
 export async function setWatchStatus(id: string, status: "want" | "watching" | "paused" | "finished" | "dropped") {

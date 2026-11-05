@@ -7,6 +7,8 @@ import { addDays, localTime, startOfLocalDayIso, todayIn, localDate } from "@/li
 import type { Medicine, MedicineDose } from "@/lib/types";
 import { slotsForDay } from "@/modules/medicines/logic";
 import type { T } from "@/lib/i18n/core";
+import { goalDays, weekStartOf, type FitnessGoal } from "@/modules/fitness/goals";
+import { KIND_META } from "@/modules/fitness/meta";
 
 /** One-line live statuses for hub tiles. Cheap counts only; missing modules return nothing. */
 export async function hubStatuses(session: AppSession, t: T): Promise<Record<string, { text: string; alert?: boolean; count?: number }>> {
@@ -16,7 +18,8 @@ export async function hubStatuses(session: AppSession, t: T): Promise<Record<str
   const can = (m: string) => session.isModuleEnabled(m) && session.accessTo(m, me) !== "none";
   const hid = session.household.id;
   const none = Promise.resolve({ data: null as unknown, count: null as number | null });
-  const [meds, doses, supps, suppLogs, bladder, groceries, pantry, checkin, lab] = await Promise.all([
+  const weekStart = weekStartOf(today);
+  const [meds, doses, supps, suppLogs, bladder, groceries, pantry, checkin, lab, fgoals, fweek] = await Promise.all([
     can("medicines") ? session.supabase.from("medicines").select("*").eq("owner_id", me).eq("active", true) : none,
     can("medicines") ? session.supabase.from("medicine_doses").select("*").eq("owner_id", me).eq("scheduled_date", today) : none,
     can("supplements") ? session.supabase.from("supplements").select("id", { count: "exact", head: true }).eq("owner_id", me).eq("active", true) : none,
@@ -26,6 +29,8 @@ export async function hubStatuses(session: AppSession, t: T): Promise<Record<str
     session.isModuleEnabled("pantry") ? session.supabase.from("pantry_items").select("id", { count: "exact", head: true }).eq("household_id", hid).is("used_up_at", null).lte("expires_on", addDays(today, 3)) : none,
     can("checkin") ? session.supabase.from("daily_checkins").select("owner_id", { count: "exact", head: true }).eq("owner_id", me).eq("checkin_date", today).not("sleep_quality", "is", null).not("mood", "is", null).not("energy", "is", null).not("stress", "is", null) : none,
     can("medical_records") ? session.supabase.from("lab_results").select("id, marker, test_date, flag, value, value_text, unit, panel").eq("owner_id", me).gte("test_date", addDays(today, -730)).limit(2000) : none,
+    can("fitness") ? session.supabase.from("fitness_goals").select("kind, times_per_week, min_minutes").eq("owner_id", me).eq("active", true) : none,
+    can("fitness") ? session.supabase.from("workout_logs").select("performed_on, kind, status, duration_minutes").eq("owner_id", me).gte("performed_on", weekStart) : none,
   ]);
   const out: Record<string, { text: string; alert?: boolean; count?: number }> = {};
   if (meds.data) {
@@ -49,6 +54,13 @@ export async function hubStatuses(session: AppSession, t: T): Promise<Record<str
     const watch = rows.filter((r) => r.flag && r.flag !== "normal" && r.test_date >= addDays(today, -365)).length;
     if (due) out.medical_records = { text: t("{n} re-checks due", { n: due }), alert: true, count: due };
     else if (watch) out.medical_records = { text: t("{n} results to watch", { n: watch }), alert: true, count: watch };
+  }
+  const goals = (Array.isArray(fgoals.data) ? fgoals.data : []) as Pick<FitnessGoal, "kind" | "times_per_week" | "min_minutes">[];
+  if (goals.length) {
+    const logs = (Array.isArray(fweek.data) ? fweek.data : []) as Parameters<typeof goalDays>[1];
+    const parts = goals.map((g) => ({ g, n: goalDays(g, logs, weekStart, addDays(weekStart, 6)).size }));
+    const open = parts.filter((p) => p.n < p.g.times_per_week);
+    out.fitness = { text: open.length ? parts.map((p) => `${p.g.kind === "any" ? t("Workouts") : t(KIND_META[p.g.kind].label)} ${p.n}/${p.g.times_per_week}`).join(" · ") : `✓ ${t("Weekly goals met")}` };
   }
   return out;
 }

@@ -1,6 +1,6 @@
 import {
   Activity, Baby, Flower2, BedDouble, CalendarCheck, ChefHat, ClipboardList, Droplet, Dumbbell, FileBadge, Gift, HeartPulse, House,
-  ListChecks, Pill, Plane, Refrigerator, Repeat, Salad, Scale, Settings, ShoppingCart, Smile, Sparkles, Stethoscope, Tv,
+  ListChecks, LockKeyhole, Pill, Plane, Refrigerator, Repeat, Salad, Scale, Settings, ShoppingCart, Smile, Sparkles, Stethoscope, Tv,
   UserRound, Utensils, UtensilsCrossed, Watch, Waves, Wrench, type LucideIcon,
 } from "lucide-react";
 
@@ -12,6 +12,7 @@ export const MODULE_ICONS: Record<string, LucideIcon> = {
   bladder_diary: Droplet,
   pelvic_floor: Waves,
   cycle: Flower2,
+  private_log: LockKeyhole,
   checkin: Smile,
   habits: ListChecks,
   groceries: ShoppingCart,

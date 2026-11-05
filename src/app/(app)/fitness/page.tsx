@@ -8,6 +8,8 @@ import { ClassButtons, WorkoutForm } from "./client";
 import { deleteWorkout, updateWorkout } from "./actions";
 import { EditRecord } from "@/components/edit-record";
 import { WORKOUT_KINDS } from "@/lib/types";
+import { goalProgress, type FitnessGoal } from "@/modules/fitness/goals";
+import { GoalsCard } from "./goals-card";
 
 export const metadata = { title: "Fitness" };
 
@@ -18,10 +20,13 @@ export default async function FitnessPage() {
   const canWrite = session.accessTo("fitness", ownerId) === "write";
   const monday = addDays(today, -((dayOfWeek(today) + 6) % 7));
   const week = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
-  const [{ data: c }, { data: l }] = await Promise.all([
+  const [{ data: c }, { data: l }, { data: g }] = await Promise.all([
     session.supabase.from("fitness_classes").select("*").eq("owner_id", ownerId),
-    session.supabase.from("workout_logs").select("*").eq("owner_id", ownerId).gte("performed_on", addDays(monday, -49)).order("performed_on", { ascending: false }),
+    // 12 weeks: the chart shows 8, goal streaks look further back.
+    session.supabase.from("workout_logs").select("*").eq("owner_id", ownerId).gte("performed_on", addDays(monday, -84)).order("performed_on", { ascending: false }),
+    session.supabase.from("fitness_goals").select("*").eq("owner_id", ownerId).eq("active", true).order("created_at"),
   ]);
+  const goals = ((g ?? []) as FitnessGoal[]).map((x) => ({ id: x.id, kind: x.kind, times_per_week: x.times_per_week, min_minutes: x.min_minutes, progress: goalProgress(x, (l ?? []) as WorkoutLog[], today) }));
   const classes = (c ?? []) as FitnessClass[];
   const logs = (l ?? []) as WorkoutLog[];
   const done = logs.filter((x) => x.status === "done");
@@ -44,6 +49,8 @@ export default async function FitnessPage() {
           <p className="text-2xl font-semibold">{logs.filter((x) => x.status === "skipped" && x.performed_on >= monday).length}</p>
         </Card>
       </div>
+
+      <GoalsCard ownerId={ownerId} today={today} goals={goals} canWrite={canWrite} isSelf={ownerId === session.userId} />
 
       {canWrite ? <WorkoutForm ownerId={ownerId} today={today} /> : null}
 

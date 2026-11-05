@@ -4,6 +4,9 @@ import { z } from "zod";
 import { errorMessage, refreshModule, requireWrite } from "@/lib/guards";
 import { getSession } from "@/lib/session";
 import { WORKOUT_KINDS, type ActionResult } from "@/lib/types";
+import { KIND_META } from "@/modules/fitness/meta";
+
+const KIND_LABEL = Object.fromEntries(Object.entries(KIND_META).map(([k, v]) => [k, v.label])) as Record<string, string>;
 
 const MODULE = "fitness";
 const blank = (v: unknown) => (v === "" || v == null ? null : v);
@@ -124,4 +127,56 @@ export async function updateWorkout(id: string, ownerId: string, input: Record<s
   }
   refreshModule("/fitness");
   return { ok: true, message: "Saved." };
+}
+
+const goalSchema = z.object({
+  ownerId: z.uuid(),
+  kind: z.enum(["any", ...WORKOUT_KINDS]),
+  times_per_week: z.coerce.number().int().min(1, "At least once a week").max(14),
+  min_minutes: z.preprocess(blank, z.coerce.number().int().min(1).max(600).nullable()),
+});
+
+/** "Gym 4 times a week": one goal per workout type; saving the same type again changes it. */
+export async function saveGoal(input: { ownerId: string; kind: string; times_per_week: number | string; min_minutes?: number | string | null }): Promise<ActionResult> {
+  const parsed = goalSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const { ownerId, ...values } = parsed.data;
+  try {
+    const session = await requireWrite(MODULE, ownerId);
+    const { error } = await session.supabase
+      .from("fitness_goals")
+      .upsert({ ...values, active: true, owner_id: ownerId, household_id: session.household.id }, { onConflict: "owner_id,kind" });
+    if (error) return { error: error.code === "42P01" ? "Run the latest database update in Supabase first." : "Couldn't save the goal." };
+  } catch (e) {
+    return { error: errorMessage(e) };
+  }
+  refreshModule("/fitness");
+  return { ok: true, message: "Weekly goal saved." };
+}
+
+export async function deleteGoal(id: string): Promise<ActionResult> {
+  const session = await getSession();
+  const { error } = await session.supabase.from("fitness_goals").delete().eq("id", id).eq("owner_id", session.userId);
+  if (error) return { error: "Couldn't remove the goal." };
+  refreshModule("/fitness");
+  return { ok: true, message: "Goal removed." };
+}
+
+/** One tap from a goal: "Gym today" logs a done session of that type (with the goal's minimum minutes, if it has one). */
+export async function logGoalSession(ownerId: string, kind: string, date: string, minutes: number | null): Promise<ActionResult & { id?: string }> {
+  const k = z.enum(WORKOUT_KINDS).safeParse(kind === "any" ? "other" : kind);
+  if (!k.success || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: "Invalid workout" };
+  try {
+    const session = await requireWrite(MODULE, ownerId);
+    const { data, error } = await session.supabase
+      .from("workout_logs")
+      .insert({ owner_id: ownerId, household_id: session.household.id, performed_on: date, kind: k.data, title: kind === "any" ? "Workout" : (KIND_LABEL[k.data] ?? "Workout"), status: "done", duration_minutes: minutes })
+      .select("id")
+      .single();
+    if (error) return { error: "Couldn't save." };
+    refreshModule("/fitness");
+    return { ok: true, id: data.id };
+  } catch (e) {
+    return { error: errorMessage(e) };
+  }
 }

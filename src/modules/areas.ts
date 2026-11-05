@@ -43,7 +43,7 @@ export function activeAreaHref(path: string, items: { href: string }[]) {
 
 /** Path prefixes for the phone tab bar, so "Health" / "Food" stay highlighted inside their features. */
 export const TAB_MATCH = {
-  health: ["/health", "/medical", "/medicines", "/supplements", "/bladder", "/pelvic-floor", "/cycle", "/checkin", "/habits", "/body", "/fitness", "/wearables"],
+  health: ["/health", "/medical", "/medicines", "/supplements", "/bladder", "/pelvic-floor", "/cycle", "/private", "/checkin", "/habits", "/body", "/fitness", "/wearables"],
   food: ["/food", "/groceries", "/pantry", "/recipes", "/dining"],
   family: ["/me", "/child", "/maintenance", "/occasions", "/watchlist", "/travel", "/documents", "/subscriptions", "/settings", "/digest", "/customize", "/notifications"],
 } as const;
