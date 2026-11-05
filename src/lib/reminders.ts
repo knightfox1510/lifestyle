@@ -4,13 +4,15 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { usualMealTimes } from "@/modules/food/usual-times";
 import { skipKey } from "@/modules/engagement/day-goals";
+import { refillInfo } from "@/modules/medicines/logic";
+import { retestsDue } from "@/modules/medical/labs";
 import { notifyUser } from "@/lib/push";
 import { addDays, dayOfWeek, localDate, localTime, startOfLocalDayIso } from "@/lib/dates";
 import { isScheduledOn } from "@/modules/medicines/logic";
 import { TIMING_LABEL, supplementRepeat, timingTimes } from "@/modules/supplements/meta";
 import { isDueOn } from "@/modules/schedule";
 import { nextOccurrence } from "@/modules/occasions/logic";
-import type { Occasion } from "@/lib/types";
+import type { Occasion, LabResult } from "@/lib/types";
 import { daysUntil } from "@/modules/pantry/match";
 import { generateDigest, weekStart } from "@/lib/digest";
 import { loadDays, waterSettings } from "@/lib/today";
@@ -220,6 +222,25 @@ async function remindUser(
 
   // Daily digest of due things, at the person's chosen hour.
   const dailyNow = inWindow(time, prefs.daily_hour * 60, WINDOW_MINUTES);
+
+  // Refills: one nudge (at the daily hour) when a medicine is down to ~5 days, again only after it's restocked and runs low again.
+  if (dailyNow && prefs.medicines && on("medicines")) {
+    const { data: meds } = await admin.from("medicines").select("*").eq("owner_id", profile.id).eq("active", true).not("stock_count", "is", null);
+    for (const m of (meds ?? []) as Medicine[]) {
+      if (m.end_date && m.end_date < today) continue;
+      const r = refillInfo(m, today);
+      if (!r?.low) continue;
+      await send("refill", `refill:${m.id}:${m.stock_count}`, `💊 ${tr("Time to reorder {name}", { name: m.name })}`, r.daysLeft !== null ? tr("About {n} days left. Your refill list is in Medicines.", { n: r.daysLeft }) : tr("Running low. Your refill list is in Medicines."), "/medicines");
+    }
+  }
+
+  // Lab re-checks: one nudge (at the daily hour) when an out-of-range test is due to be re-done.
+  if (dailyNow && on("medical_records")) {
+    const { data: labRows } = await admin.from("lab_results").select("id, marker, test_date, flag, value, value_text, unit, panel").eq("owner_id", profile.id).gte("test_date", addDays(today, -730)).limit(2000);
+    for (const r of retestsDue((labRows ?? []) as LabResult[], today).filter((x) => x.status === "due")) {
+      await send("lab_retest", `retest:${r.marker.toLowerCase()}:${r.lastDate}`, `🧪 ${tr("Time to re-check {marker}", { marker: r.marker })}`, tr("It was {value} on {date}. Book the test, or ask your doctor.", { value: r.value, date: r.lastDate }), "/medical/labs");
+    }
+  }
 
   // AI coach: once a plan's review date arrives, one nudge (at the daily hour) to see how it went.
   if (dailyNow && on("body_recomp")) {

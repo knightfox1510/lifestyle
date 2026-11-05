@@ -5,6 +5,9 @@ import { MODULES } from "@/modules/registry";
 import { getT } from "@/lib/i18n/server";
 import { hubStatuses } from "@/lib/hub-status";
 import { HealthScoreCard } from "@/components/health-score";
+import Link from "next/link";
+import { loadPatternDays } from "@/lib/patterns-data";
+import { findPatterns } from "@/modules/patterns";
 import { loadDays, waterSettings } from "@/lib/today";
 import { waterAccess } from "@/lib/water";
 import { todayIn } from "@/lib/dates";
@@ -21,14 +24,15 @@ export default async function HealthHub() {
   const isSelf = subject === session.userId;
   const [status, water] = await Promise.all([hubStatuses(session, t), waterSettings(session.supabase, subject)]);
   const waterAcc = isSelf ? "write" : waterAccess(session, subject);
-  const days = await loadDays(session.supabase, subject, {
+  const [days, patternDays] = await Promise.all([loadDays(session.supabase, subject, {
     tz,
     today: todayIn(tz),
     days: 14,
     enabled: { medicines: can("medicines"), food: can("food_diary"), checkin: can("checkin"), supplements: can("supplements"), water: waterAcc !== "none" },
     waterTarget: water.target,
     supplementTimes: session.profile.supplement_times,
-  });
+  }), loadPatternDays(session, subject)]);
+  const patterns = findPatterns(patternDays).found;
   const tile = (keys: string[]) =>
     keys
       .map((k) => MODULES.find((m) => m.key === k))
@@ -53,6 +57,17 @@ export default async function HealthHub() {
     <div className="space-y-6">
       <PageHeader title={t("Health")} subtitle={t("Medicines, records and daily health tracking.")} />
       <HealthScoreCard statuses={days.statuses} t={t} />
+      <Link href="/health/patterns" className="pressable block rounded-[20px] bg-surface p-4 shadow-[0_0_0_1px_var(--border)] hover:bg-surface-2/50">
+        <p className="text-[13px] font-medium uppercase tracking-[0.08em] text-fg-muted">{t("Patterns")}</p>
+        {patterns.length ? (
+          <>
+            <p className="mt-1 text-[15px] leading-snug">{patterns[0].text}</p>
+            <p className="mt-1 text-[13px] text-accent">{patterns.length > 1 ? t("{n} more patterns →", { n: patterns.length - 1 }) : t("See how it's worked out →")}</p>
+          </>
+        ) : (
+          <p className="mt-1 text-[14px] text-fg-muted">{t("What affects what in your days: shows up as you keep logging →")}</p>
+        )}
+      </Link>
       {sections.map(([title, keys]) => (
         <HubGrid key={title} title={t(title)} items={tile(keys)} />
       ))}

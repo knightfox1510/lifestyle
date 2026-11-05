@@ -1,4 +1,6 @@
 import "server-only";
+import { retestsDue } from "@/modules/medical/labs";
+import type { LabResult } from "@/lib/types";
 
 import type { AppSession } from "@/lib/session";
 import { addDays, localTime, startOfLocalDayIso, todayIn, localDate } from "@/lib/dates";
@@ -23,7 +25,7 @@ export async function hubStatuses(session: AppSession, t: T): Promise<Record<str
     session.isModuleEnabled("groceries") ? session.supabase.from("grocery_items").select("id", { count: "exact", head: true }).eq("household_id", hid).eq("checked", false) : none,
     session.isModuleEnabled("pantry") ? session.supabase.from("pantry_items").select("id", { count: "exact", head: true }).eq("household_id", hid).is("used_up_at", null).lte("expires_on", addDays(today, 3)) : none,
     can("checkin") ? session.supabase.from("daily_checkins").select("owner_id", { count: "exact", head: true }).eq("owner_id", me).eq("checkin_date", today) : none,
-    can("medical_records") ? session.supabase.from("lab_results").select("id", { count: "exact", head: true }).eq("owner_id", me).neq("flag", "normal").gte("test_date", addDays(today, -365)) : none,
+    can("medical_records") ? session.supabase.from("lab_results").select("id, marker, test_date, flag, value, value_text, unit, panel").eq("owner_id", me).gte("test_date", addDays(today, -730)).limit(2000) : none,
   ]);
   const out: Record<string, { text: string; alert?: boolean; count?: number }> = {};
   if (meds.data) {
@@ -40,6 +42,13 @@ export async function hubStatuses(session: AppSession, t: T): Promise<Record<str
   if (groceries.count != null) out.groceries = { text: groceries.count ? t("{n} items to buy", { n: groceries.count }) : t("List is empty") };
   if (pantry.count != null && pantry.count > 0) out.pantry = { text: t("{n} expiring soon", { n: pantry.count }), alert: true, count: pantry.count };
   if (checkin.count != null) out.checkin = checkin.count ? { text: `✓ ${t("Done today")}` } : { text: t("Not done yet") };
-  if (lab.count) out.medical_records = { text: t("{n} results to watch", { n: lab.count }), alert: true, count: lab.count };
+  const labRows = (Array.isArray(lab.data) ? lab.data : []) as LabResult[];
+  if (labRows.length) {
+    const rows = labRows;
+    const due = retestsDue(rows, today).filter((r) => r.status === "due").length;
+    const watch = rows.filter((r) => r.flag && r.flag !== "normal" && r.test_date >= addDays(today, -365)).length;
+    if (due) out.medical_records = { text: t("{n} re-checks due", { n: due }), alert: true, count: due };
+    else if (watch) out.medical_records = { text: t("{n} results to watch", { n: watch }), alert: true, count: watch };
+  }
   return out;
 }

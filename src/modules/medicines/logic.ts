@@ -1,3 +1,4 @@
+import { addDays } from "@/lib/dates";
 import { isDueOn } from "@/modules/schedule";
 import type { Medicine, MedicineDose } from "@/lib/types";
 
@@ -45,13 +46,27 @@ export function adherence(meds: Medicine[], doses: MedicineDose[], days: string[
   return { scheduled, taken, pct: scheduled ? Math.round((taken / scheduled) * 100) : null };
 }
 
-export function refillInfo(med: Medicine) {
+/** Average units used per day, allowing for chosen weekdays or "every N days". */
+export function unitsPerDay(med: Pick<Medicine, "dose_amount" | "times" | "days_of_week" | "repeat_every_days">) {
+  const perDose = med.dose_amount * Math.max(med.times.length, 0);
+  const share = med.days_of_week?.length ? med.days_of_week.length / 7 : med.repeat_every_days && med.repeat_every_days > 1 ? 1 / med.repeat_every_days : 1;
+  return perDose * share;
+}
+
+/**
+ * Stock left, roughly how many days that lasts, whether it's time to reorder,
+ * the last day to order (a few days before it runs out) and how much covers
+ * a month.
+ */
+export function refillInfo(med: Medicine, today?: string, leadDays = 3) {
   if (med.stock_count === null) return null;
-  const perDay = med.dose_amount * Math.max(med.times.length, 0);
+  const perDay = unitsPerDay(med);
   const daysLeft = perDay > 0 ? Math.floor(med.stock_count / perDay) : null;
   const low =
     (med.refill_threshold !== null && med.stock_count <= med.refill_threshold) || (daysLeft !== null && daysLeft <= 5);
-  return { stock: med.stock_count, daysLeft, low };
+  const orderBy = today && daysLeft !== null ? addDays(today, Math.max(0, daysLeft - leadDays)) : null;
+  const monthSupply = perDay > 0 ? Math.ceil(perDay * 30) : null;
+  return { stock: med.stock_count, daysLeft, low, orderBy, monthSupply };
 }
 
 export function doseLabel(med: Medicine) {

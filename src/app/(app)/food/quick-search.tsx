@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { Search, X } from "lucide-react";
 import { Card, Input, cx } from "@/components/ui";
 import { useToast } from "@/components/toaster";
+import { VoiceButton } from "@/components/voice-input";
 import type { FoodHit, PersonPortion } from "@/components/nutrition-ui";
 import type { Meal } from "@/lib/types";
 import { MEAL_META, eatenAtFor, mealForHour, type LogDay } from "@/modules/food/meta";
@@ -89,9 +90,12 @@ export function FoodQuickSearch({ ownerId, people, day, meal, recent, compact }:
 
   return (
     <div className={cx("space-y-1.5", compact ? "" : "rounded-2xl")}>
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted" aria-hidden />
-        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={meal ? `Search to add to ${MEAL_META[meal].label.toLowerCase()}…` : "Search foods you've had, your foods, dishes…"} className="!pl-9" aria-label="Search foods to log" />
+      <div className="flex gap-2">
+        <div className="relative min-w-0 flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted" aria-hidden />
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={meal ? `Search to add to ${MEAL_META[meal].label.toLowerCase()}…` : "Search foods you've had, your foods, dishes…"} className="!pl-9" aria-label="Search foods to log" />
+        </div>
+        <VoiceButton onText={(text) => setQ(text.trim())} />
       </div>
       {usual.length ? (
         <div className="flex flex-wrap gap-1.5">

@@ -62,3 +62,44 @@ export function byMarker(results: LabResult[]) {
     .map((list) => list.sort((a, b) => b.test_date.localeCompare(a.test_date)))
     .sort((a, b) => (a[0].panel ?? "zz").localeCompare(b[0].panel ?? "zz") || a[0].marker.localeCompare(b[0].marker));
 }
+
+/**
+ * Usual time before re-checking an out-of-range test (general guidance; a
+ * doctor's own instruction wins). Matched on the marker's name.
+ */
+const RETEST_RULES: [RegExp, number, string][] = [
+  [/\b(tsh|t3|t4|thyroid)\b/i, 42, "about 6 weeks"],
+  [/vitamin\s*d|25.?oh|\bd3\b/i, 90, "about 3 months"],
+  [/\bb.?12\b|cobalamin|folate|folic/i, 90, "about 3 months"],
+  [/hba1c|glycated|a1c/i, 90, "about 3 months"],
+  [/glucose|sugar|fbs|ppbs|rbs/i, 90, "about 3 months"],
+  [/cholesterol|\bldl\b|\bhdl\b|triglycer|lipid|vldl/i, 180, "about 6 months"],
+  [/haemoglobin|hemoglobin|\bhb\b|ferritin|\biron\b|tibc|transferrin/i, 90, "about 3 months"],
+  [/creatinine|egfr|urea|\bbun\b|uric/i, 90, "about 3 months"],
+  [/\b(alt|ast|sgpt|sgot|ggt|bilirubin|alkaline)\b/i, 90, "about 3 months"],
+  [/\b(crp|esr)\b/i, 42, "about 6 weeks"],
+];
+
+export type Retest = { marker: string; lastDate: string; value: string; flag: LabFlag; due: string; interval: string; status: "due" | "soon" | "later" };
+
+/**
+ * Re-checks to plan: the latest result of each marker that was out of range,
+ * when it's usually re-tested, and whether that's due. A newer normal result
+ * closes it automatically (the latest is what counts).
+ */
+export function retestsDue(results: LabResult[], today: string): Retest[] {
+  const out: Retest[] = [];
+  for (const group of byMarker(results)) {
+    const latest = group[0];
+    if (!latest.flag || latest.flag === "normal") continue;
+    const rule = RETEST_RULES.find(([re]) => re.test(latest.marker));
+    const days = rule?.[1] ?? 90;
+    const d = new Date(`${latest.test_date}T12:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + days);
+    const due = d.toISOString().slice(0, 10);
+    const soon = new Date(`${today}T12:00:00Z`);
+    soon.setUTCDate(soon.getUTCDate() + 21);
+    out.push({ marker: latest.marker, lastDate: latest.test_date, value: valueLabel(latest), flag: latest.flag, due, interval: rule?.[2] ?? "about 3 months", status: due <= today ? "due" : due <= soon.toISOString().slice(0, 10) ? "soon" : "later" });
+  }
+  return out.sort((a, b) => a.due.localeCompare(b.due));
+}

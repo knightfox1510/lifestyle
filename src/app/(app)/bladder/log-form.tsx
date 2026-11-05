@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { Card, Checkbox, Field, Input, Textarea, cx } from "@/components/ui";
+import { VoiceButton } from "@/components/voice-input";
 import { ActionMessage, SubmitButton } from "@/components/form-status";
 import { BLADDER_TRIGGERS, DRINKS, LEAK_AMOUNTS, type ActionResult } from "@/lib/types";
 import { AMOUNT_LABEL, DRINK_META, KIND_META, TRIGGER_LABEL } from "@/modules/bladder/meta";
@@ -38,12 +39,14 @@ export function BladderLogForm({ ownerId, day }: { ownerId: string; day?: string
   const [drink, setDrink] = useState<(typeof DRINKS)[number]>("water");
   const [volume, setVolume] = useState(250);
   const [caffeinated, setCaffeinated] = useState(false);
+  const [notes, setNotes] = useState("");
 
   const reset = () => {
     setTime("");
     setAmount("small");
     setUrgency(null);
     setTriggers([]);
+    setNotes("");
     setMode(null);
   };
   const wrap = (fn: (p: ActionResult | null, f: FormData) => Promise<ActionResult>) => async (p: ActionResult | null, f: FormData) => {
@@ -135,9 +138,13 @@ export function BladderLogForm({ ownerId, day }: { ownerId: string; day?: string
             <Field label="When" hint="Leave empty for now">
               <Input type="datetime-local" value={time} max={nowLocal()} onChange={(e) => setTime(e.target.value)} />
             </Field>
-            <Field label="Notes">
-              <Textarea name="notes" maxLength={1000} className="min-h-10" placeholder="e.g. during squats, 3rd set" />
-            </Field>
+            <div className="space-y-1.5">
+              <span className="block text-[13px] font-medium text-fg-muted">Notes</span>
+              <div className="flex gap-2">
+                <Textarea name="notes" value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={1000} className="min-h-10" placeholder="e.g. during squats, 3rd set" aria-label="Notes" />
+                <VoiceButton onText={(text) => setNotes((p) => (p ? `${p} ${text}` : text).slice(0, 1000))} />
+              </div>
+            </div>
           </div>
           {mode === "leak" ? <Checkbox name="pad_changed" label="Changed pad" /> : null}
           <SubmitButton>Save {KIND_META[mode].label.toLowerCase()}</SubmitButton>

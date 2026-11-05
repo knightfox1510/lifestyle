@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { RefillList } from "./refill-list";
 import { PillIcon } from "@/components/pill-icon";
 import { getSession } from "@/lib/session";
 import { addDays, localDate, localTime, shortDate, todayIn } from "@/lib/dates";
@@ -54,6 +55,13 @@ export default async function MedicinesTodayPage({ searchParams }: PageProps<"/m
   const asNeeded = meds.filter((m) => m.times.length === 0 && (isCurrentOn(m, date) || startedLater.has(m.id)));
   const upcoming = isToday ? meds.filter((m) => isUpcomingOn(m, today)) : [];
   const lowStock = meds.filter((m) => isCurrentOn(m, today)).map((m) => ({ m, r: refillInfo(m) })).filter((x) => x.r?.low);
+  // Anything with ten days or less left goes on the refill list (with an order-by date).
+  const refills = meds
+    .filter((m) => isCurrentOn(m, today))
+    .map((m) => ({ m, r: refillInfo(m, today) }))
+    .filter((x) => x.r && (x.r.low || (x.r.daysLeft !== null && x.r.daysLeft <= 10)))
+    .sort((a, b) => (a.r!.daysLeft ?? 999) - (b.r!.daysLeft ?? 999))
+    .map(({ m, r }) => ({ id: m.id, name: m.name, strength: m.strength, unit: m.dose_unit, stock: r!.stock, daysLeft: r!.daysLeft, orderBy: r!.orderBy, monthSupply: r!.monthSupply, pillShape: (m as { pill_shape?: string | null }).pill_shape ?? null, pillColor: (m as { pill_color?: string | null }).pill_color ?? null }));
   const now = localTime(new Date(), tz);
   const done = slots.filter((s) => s.dose).length;
   const serious = meds.length ? (await medicineChecksFor(session, ownerId)).findings.filter((f) => f.severity === "high") : [];
@@ -88,7 +96,8 @@ export default async function MedicinesTodayPage({ searchParams }: PageProps<"/m
           <Link href="/medicines/checks" className="font-medium underline">{t("See checks")}</Link>
         </Notice>
       ) : null}
-      {lowStock.length ? (
+      {refills.length ? <RefillList items={refills} person={session.subject.display_name} /> : null}
+      {lowStock.length && !refills.length ? (
         <Notice tone="danger">
           ⚠️ {t("Running low:")}{" "}
           {lowStock.map(({ m, r }, i) => (

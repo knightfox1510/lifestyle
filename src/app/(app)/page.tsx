@@ -19,6 +19,7 @@ import { CoachCheckinCard } from "@/components/today/coach-checkin";
 import { DayNote, ReopenDayButton } from "@/components/today/day-close";
 import { PillIcon } from "@/components/pill-icon";
 import { MEAL_META } from "@/modules/food/meta";
+import { jointWeek, partnerHint } from "@/modules/engagement/us";
 import { activityFor, checkMilestones, recentCheers } from "@/lib/engagement";
 import { dayScore, missedOn, nextUp } from "@/modules/engagement/rings";
 import { DayArc, DayBars, DayTiles, WeekStrip } from "@/components/today/day-views";
@@ -44,7 +45,10 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
 
   const water = await waterSettings(session.supabase, subject.user_id);
   const waterAcc = isSelf ? "write" : waterAccess(session, subject.user_id);
-  const [day, me, partner, widgetsRes, { data: photoRows }] = await Promise.all([
+  // Your partner's day for the "Us" card: only what they share with you.
+  const pid = isSelf && session.partner && !past ? session.partner.user_id : null;
+  const canP = (m: string) => Boolean(pid) && session.isModuleEnabled(m) && session.accessTo(m, pid!) !== "none";
+  const [day, me, partner, widgetsRes, { data: photoRows }, partnerDays] = await Promise.all([
     loadDays(session.supabase, subject.user_id, {
       tz,
       today: viewDate,
@@ -60,6 +64,18 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
     can("food_diary")
       ? session.supabase.from("food_entries").select("photo_path, eaten_at, description").eq("owner_id", subject.user_id).not("photo_path", "is", null).gte("eaten_at", startOfLocalDayIso(viewDate)).lt("eaten_at", startOfLocalDayIso(addDays(viewDate, 2))).order("eaten_at").limit(30)
       : Promise.resolve({ data: [] }),
+    pid
+      ? waterSettings(session.supabase, pid).then((w) =>
+          loadDays(session.supabase, pid, {
+            tz,
+            today,
+            days: 7,
+            enabled: { medicines: canP("medicines"), food: canP("food_diary"), checkin: canP("checkin"), supplements: canP("supplements"), water: waterAccess(session, pid) !== "none" },
+            waterTarget: w.target,
+            supplementTimes: null,
+          }),
+        )
+      : Promise.resolve(null),
   ]);
   const [[fresh, cheers], checkin] = await Promise.all([
     isSelf && !past ? Promise.all([checkMilestones(session, day, me.streak, today), recentCheers(session)]) : Promise.resolve([[], []] as [Awaited<ReturnType<typeof checkMilestones>>, Awaited<ReturnType<typeof recentCheers>>]),
@@ -278,7 +294,28 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
       ) : null}
 
       {partner && session.partner ? (
-        <PartnerCard partner={{ id: session.partner.user_id, name: session.partner.display_name, streak: partner.streak, loggedToday: partner.loggedToday }} cheers={cheers.map((c) => ({ name: c.name, emoji: c.emoji }))} />
+        <PartnerCard
+          partner={{ id: session.partner.user_id, name: session.partner.display_name, streak: partner.streak, loggedToday: partner.loggedToday }}
+          cheers={cheers.map((c) => ({ name: c.name, emoji: c.emoji }))}
+          us={
+            partnerDays
+              ? {
+                  me: rs.map((r) => ({ key: r.key, pct: r.pct })),
+                  them: partnerDays.today.rings.map((r) => ({ key: r.key, pct: r.pct })),
+                  meName: session.me.display_name,
+                  joint: jointWeek(day.week, partnerDays.week, today),
+                  hint: partnerHint({
+                    name: session.partner.display_name,
+                    now,
+                    waterPct: partnerDays.today.rings.find((r) => r.key === "water")?.pct ?? null,
+                    lastWater: partnerDays.events.filter((e) => e.kind === "water").at(-1)?.time ?? null,
+                    mealsLogged: canP("food_diary") ? partnerDays.mealsToday.filter((m) => m !== "snack" && m !== "other").length : null,
+                    dosesLeftOverdue: partnerDays.dueDoses.filter((d) => d.time < now).length,
+                  }),
+                }
+              : null
+          }
+        />
       ) : null}
 
       {!past ? <InstallPrompt compact /> : null}

@@ -1,9 +1,10 @@
 import Link from "next/link";
+import { todayIn } from "@/lib/dates";
 import { getSession } from "@/lib/session";
 import { Badge, Card, EmptyState, buttonClass, cx } from "@/components/ui";
 import { LineChart } from "@/components/charts";
 import { formatDate } from "@/modules/medical/meta";
-import { byMarker, refLabel, valueLabel } from "@/modules/medical/labs";
+import { byMarker, refLabel, valueLabel, retestsDue } from "@/modules/medical/labs";
 import type { LabFlag, LabResult } from "@/lib/types";
 import { AddLabForm } from "./add-lab-form";
 import { setLabIncludeInAi } from "../actions";
@@ -29,6 +30,7 @@ export default async function LabsPage({ searchParams }: PageProps<"/medical/lab
   const groups = byMarker(results);
   const selected = typeof markerParam === "string" ? groups.find((g) => g[0].marker.toLowerCase() === markerParam.toLowerCase()) : undefined;
   const outOfRange = groups.filter((g) => g[0].flag && g[0].flag !== "normal");
+  const retests = retestsDue(results, todayIn(session.profile.timezone));
   const panels = [...new Set(groups.map((g) => g[0].panel ?? "Other"))];
 
   if (selected) {
@@ -84,6 +86,24 @@ export default async function LabsPage({ searchParams }: PageProps<"/medical/lab
         Upload blood work or other reports under <Link href="/medical/documents" className="text-accent underline">Papers & reports</Link> and use
         “Read with AI” to pull every value in, or add results by hand.
       </p>
+      {retests.length ? (
+        <section className="space-y-2 rounded-[20px] bg-surface p-4 shadow-[0_0_0_1px_var(--border)]">
+          <h2 className="font-semibold">🔁 Re-checks to plan</h2>
+          <ul className="divide-y divide-border text-sm">
+            {retests.map((r) => (
+              <li key={r.marker} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                <span className="min-w-0">
+                  <Link href={`/medical/labs?marker=${encodeURIComponent(r.marker)}`} className="font-medium hover:underline">{r.marker}</Link>
+                  <span className="block text-xs text-fg-muted">{r.value} ({r.flag}) on {r.lastDate} · usually re-checked after {r.interval}</span>
+                </span>
+                <Badge tone={r.status === "due" ? "danger" : r.status === "soon" ? "warn" : "neutral"}>{r.status === "due" ? `Due since ${r.due}` : `Due ${r.due}`}</Badge>
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs text-fg-muted">General timing; follow your doctor&apos;s plan if it&apos;s different. It clears when a newer result is added.</p>
+        </section>
+      ) : null}
+
       {canWrite ? <AddLabForm ownerId={ownerId} /> : null}
 
       {groups.length === 0 ? (

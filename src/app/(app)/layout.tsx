@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ErrorReporter } from "@/components/error-reporter";
 import { OfflineSync } from "@/components/offline-sync";
 import { Search } from "lucide-react";
 import { getSession } from "@/lib/session";
@@ -74,6 +75,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
       </div>
       <AppLockGate />
       <OfflineSync />
+      <ErrorReporter />
     </div>
     </ToastProvider>
     </I18nProvider>

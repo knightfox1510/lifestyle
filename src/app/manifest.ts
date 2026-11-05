@@ -26,8 +26,11 @@ export default function manifest(): MetadataRoute.Manifest {
       enctype: "multipart/form-data",
       params: { title: "title", text: "text", files: [{ name: "photos", accept: ["image/*"] }] },
     },
+    // Long-press the app icon: the things logged most, one tap each.
     shortcuts: [
-      { name: "Medical timeline", url: "/medical", icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }] },
+      { name: "+250 ml water", short_name: "Water", description: "Log a glass of water", url: "/quick/water", icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }] },
+      { name: "Log food", short_name: "Food", description: "Search, describe or photograph a meal", url: "/food#add", icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }] },
+      { name: "Today's medicines", short_name: "Medicines", description: "Take today's doses", url: "/medicines", icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }] },
       { name: "Ask AI", url: "/assistant", icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }] },
     ],
   };

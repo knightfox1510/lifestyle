@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { reportError } from "@/components/error-reporter";
 
 /** Errors that a fresh page load fixes: a new version was deployed while the page was open. */
 export function isStaleDeployError(error: unknown) {
@@ -12,6 +13,8 @@ export function isStaleDeployError(error: unknown) {
 function useAutoRecover(error: unknown) {
   useEffect(() => {
     console.error(error);
+    // A new version deployed mid-session isn't a bug; anything else goes to the error log.
+    if (!isStaleDeployError(error)) reportError(error);
     if (!isStaleDeployError(error)) return;
     try {
       const key = `hearth:auto-reload:${location.pathname}`;

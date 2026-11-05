@@ -1,0 +1,53 @@
+name: Checks
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npx next typegen && npx tsc --noEmit
+      - run: npx vitest run
+      - run: npm run build
+      - name: Database rules (RLS) tests
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql > /dev/null
+          npm run test:db
+          USE_ALL_IN_ONE=1 npm run test:db
+          USE_UPDATE=1 npm run test:db
+
+  e2e:
+    needs: checks
+    runs-on: ubuntu-latest
+    # Runs only when the test environment is configured (repository secrets).
+    env:
+      E2E_BASE_URL: ${{ secrets.E2E_BASE_URL }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.E2E_SUPABASE_SERVICE_ROLE_KEY }}
+      E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
+    steps:
+      - uses: actions/checkout@v4
+        if: env.E2E_BASE_URL != ''
+      - uses: actions/setup-node@v4
+        if: env.E2E_BASE_URL != ''
+        with:
+          node-version: 22
+          cache: npm
+      - if: env.E2E_BASE_URL != ''
+        run: npm ci && npx playwright install --with-deps chromium
+      - if: env.E2E_BASE_URL != ''
+        run: npm run test:e2e
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: test-results

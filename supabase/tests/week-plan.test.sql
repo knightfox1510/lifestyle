@@ -153,5 +153,21 @@ do $$ begin
   assert (select note from public.day_closes) = 'Travelled', 'with a check-in share the partner sees the note';
 end $$;
 reset role;
+-- App errors: written by the server only; you read only your own.
+reset role;
+insert into public.app_errors (user_id, source, path, message) values ('4d4d4d4d-0000-0000-0000-000000000051', 'client', '/food', 'Boom');
+set role authenticated;
+select set_config('request.jwt.claim.sub', :q, false);
+do $$ begin
+  assert (select count(*) from public.app_errors) = 0, 'others cannot read your errors';
+  insert into public.app_errors (user_id, source, message) values ('5e5e5e5e-0000-0000-0000-000000000052', 'client', 'x');
+  raise exception 'SHOULD_FAIL: users cannot write errors directly';
+exception when insufficient_privilege then null;
+end $$;
+select set_config('request.jwt.claim.sub', :p, false);
+do $$ begin
+  assert (select count(*) from public.app_errors) = 1, 'you read your own';
+end $$;
+reset role;
 \o
 \echo 'ALL WEEK PLAN TESTS PASSED'

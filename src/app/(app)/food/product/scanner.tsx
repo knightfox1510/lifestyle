@@ -18,7 +18,7 @@ const getDetector = (): Detector | null => {
   return w.BarcodeDetector ? new w.BarcodeDetector({ formats: ["ean_13", "ean_8", "upc_a", "upc_e"] }) : null;
 };
 
-export function ProductScanner({ me, people }: { me: string; people: PersonPortion[] }) {
+export function ProductScanner({ me, people, recent = [] }: { me: string; people: PersonPortion[]; /** Products scanned before (saved with a barcode). */ recent?: { name: string; brand: string | null; barcode: string }[] }) {
   const [mode, setMode] = useState<"barcode" | "label">("barcode");
   const [code, setCode] = useState("");
   const [product, setProduct] = useState<Product | null>(null);
@@ -161,6 +161,18 @@ export function ProductScanner({ me, people }: { me: string; people: PersonPorti
 
   return (
     <div className="space-y-4">
+      {recent.length && !product ? (
+        <Card className="space-y-2">
+          <p className="text-sm font-medium">Scanned before</p>
+          <div className="flex flex-wrap gap-1.5">
+            {recent.map((r) => (
+              <button key={r.barcode} type="button" disabled={loading} onClick={() => { setCode(r.barcode); void lookup(r.barcode); }} className="pressable rounded-full border border-border px-3 py-1.5 text-sm hover:border-accent hover:text-accent">
+                ▥ {r.name}{r.brand ? <span className="text-fg-muted"> · {r.brand}</span> : null}
+              </button>
+            ))}
+          </div>
+        </Card>
+      ) : null}
       <Card className="space-y-3">
         <div className="grid grid-cols-2 gap-2">
           {(["barcode", "label"] as const).map((m) => (
