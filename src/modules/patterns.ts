@@ -20,9 +20,14 @@ export type DayFacts = {
   energy?: number | null;
   stress?: number | null;
   workout?: boolean;
+  /** Private log (only loaded for your own data): standard drinks that day, intimacy that day. */
+  drinks?: number;
+  intimacy?: boolean;
+  /** Next morning's weight minus this morning's (kg). */
+  weightChange?: number | null;
 };
 
-type Num = keyof Omit<DayFacts, "day" | "workout">;
+type Num = keyof Omit<DayFacts, "day" | "workout" | "intimacy">;
 type Rule = {
   id: string;
   area: "food" | "sleep" | "bladder" | "mood" | "activity";
@@ -36,9 +41,12 @@ type Rule = {
   unit: string;
   what: string;
   digits?: number;
+  /** Uses the private log: shown only to its owner, on the private log page. */
+  private?: boolean;
 };
 
 const has = (v: number | null | undefined): v is number => v != null && Number.isFinite(v);
+const drinkSplit = (d: DayFacts): "a" | "b" | null => (d.drinks === undefined ? null : d.drinks >= 2 ? "a" : d.drinks === 0 ? "b" : null);
 
 export const RULES: Rule[] = [
   { id: "sleep-kcal", area: "food", split: (d) => (has(d.sleepH) ? (d.sleepH < 6.5 ? "a" : d.sleepH >= 7 ? "b" : null) : null), outcome: "kcal", a: "after nights under 6½ h", b: "after 7 h or more", unit: " kcal", what: "you eat" },
@@ -51,6 +59,15 @@ export const RULES: Rule[] = [
   { id: "steps-sleep", area: "sleep", split: (d) => (has(d.steps) ? (d.steps >= 8000 ? "a" : d.steps < 5000 ? "b" : null) : null), outcome: "sleepH", nextDay: true, a: "after days with 8,000+ steps", b: "after days under 5,000", unit: " h", what: "you sleep", digits: 1 },
   { id: "workout-sleep", area: "sleep", split: (d) => (d.workout === undefined ? null : d.workout ? "a" : "b"), outcome: "sleepH", nextDay: true, a: "after a workout day", b: "after days without one", unit: " h", what: "you sleep", digits: 1 },
   { id: "workout-mood", area: "mood", split: (d) => (d.workout === undefined ? null : d.workout ? "a" : "b"), outcome: "mood", a: "on workout days", b: "on other days", unit: "/5", what: "your mood is", digits: 1 },
+  { id: "drinks-sleep", area: "sleep", private: true, split: drinkSplit, outcome: "sleepH", nextDay: true, a: "after drinking (2+ drinks)", b: "after alcohol-free days", unit: " h", what: "you sleep", digits: 1 },
+  { id: "drinks-energy", area: "mood", private: true, split: drinkSplit, outcome: "energy", nextDay: true, a: "the day after drinking (2+ drinks)", b: "after alcohol-free days", unit: "/5", what: "your energy is", digits: 1 },
+  { id: "drinks-mood", area: "mood", private: true, split: drinkSplit, outcome: "mood", nextDay: true, a: "the day after drinking (2+ drinks)", b: "after alcohol-free days", unit: "/5", what: "your mood is", digits: 1 },
+  { id: "drinks-kcal", area: "food", private: true, split: drinkSplit, outcome: "kcal", nextDay: true, a: "the day after drinking (2+ drinks)", b: "after alcohol-free days", unit: " kcal", what: "you eat" },
+  { id: "drinks-leaks", area: "bladder", private: true, split: drinkSplit, outcome: "leaks", a: "on drinking days (2+ drinks)", b: "on alcohol-free days", unit: " leaks", what: "you have", digits: 1 },
+  { id: "drinks-weight", area: "food", private: true, split: drinkSplit, outcome: "weightChange", a: "after drinking (2+ drinks)", b: "after alcohol-free days", unit: " kg", what: "the scale moves", digits: 1 },
+  { id: "intimacy-mood", area: "mood", private: true, split: (d) => (d.intimacy === undefined ? null : d.intimacy ? "a" : "b"), outcome: "mood", a: "on days with intimacy", b: "on other days", unit: "/5", what: "your mood is", digits: 1 },
+  { id: "intimacy-stress", area: "mood", private: true, split: (d) => (d.intimacy === undefined ? null : d.intimacy ? "a" : "b"), outcome: "stress", a: "on days with intimacy", b: "on other days", unit: "/5", what: "your stress is", digits: 1 },
+  { id: "intimacy-sleep", area: "sleep", private: true, split: (d) => (d.intimacy === undefined ? null : d.intimacy ? "a" : "b"), outcome: "sleepH", nextDay: true, a: "after days with intimacy", b: "after other days", unit: " h", what: "you sleep", digits: 1 },
   { id: "sleep-steps", area: "activity", split: (d) => (has(d.sleepH) ? (d.sleepH < 6.5 ? "a" : d.sleepH >= 7 ? "b" : null) : null), outcome: "steps", a: "after nights under 6½ h", b: "after 7 h or more", unit: " steps", what: "you walk" },
 ];
 
@@ -64,13 +81,14 @@ const sd = (xs: number[]) => {
 const round = (n: number, digits = 0) => Math.round(n * 10 ** digits) / 10 ** digits;
 const fmt = (n: number, digits = 0) => round(n, digits).toLocaleString("en-IN");
 
-export function findPatterns(days: DayFacts[], minDays = 5): { found: Pattern[]; needMore: string[] } {
+/** `rules`: the shared comparisons (default), or only the private-log ones (for its owner's private page). */
+export function findPatterns(days: DayFacts[], minDays = 5, rules: "shared" | "private" = "shared"): { found: Pattern[]; needMore: string[] } {
   const sorted = [...days].sort((x, y) => x.day.localeCompare(y.day));
   const byDay = new Map(sorted.map((d) => [d.day, d]));
   const next = (day: string) => byDay.get(new Date(Date.parse(`${day}T12:00:00Z`) + 864e5).toISOString().slice(0, 10));
   const found: Pattern[] = [];
   const needMore: string[] = [];
-  for (const r of RULES) {
+  for (const r of RULES.filter((x) => Boolean(x.private) === (rules === "private"))) {
     const groups = { a: [] as number[], b: [] as number[] };
     for (const d of sorted) {
       const g = r.split(d);
@@ -92,9 +110,9 @@ export function findPatterns(days: DayFacts[], minDays = 5): { found: Pattern[];
     const digits = r.digits ?? 0;
     const more = ma > mb;
     const diff = round(Math.abs(ma - mb), digits);
-    const verb = r.what === "you eat" ? (more ? "about " + fmt(diff, digits) + " kcal more" : "about " + fmt(diff, digits) + " kcal less") : r.what === "you have" ? `${fmt(diff, digits)} ${more ? "more" : "fewer"}${r.unit}` : r.what === "you sleep" ? `${fmt(diff, digits)} h ${more ? "longer" : "less"}` : r.what === "you walk" ? `${fmt(diff, digits)} ${more ? "more" : "fewer"} steps` : `${more ? "higher" : "lower"} (${fmt(ma, digits)} vs ${fmt(mb, digits)}${r.unit})`;
+    const verb = r.what === "you eat" ? (more ? "about " + fmt(diff, digits) + " kcal more" : "about " + fmt(diff, digits) + " kcal less") : r.what === "you have" ? `${fmt(diff, digits)} ${more ? "more" : "fewer"}${r.unit}` : r.what === "you sleep" ? `${fmt(diff, digits)} h ${more ? "longer" : "less"}` : r.what === "you walk" ? `${fmt(diff, digits)} ${more ? "more" : "fewer"} steps` : r.what === "the scale moves" ? `${fmt(diff, digits)} kg ${more ? "more (up)" : "less"} by the next morning` : `${more ? "higher" : "lower"} (${fmt(ma, digits)} vs ${fmt(mb, digits)}${r.unit})`;
     const text =
-      r.what === "your energy is" || r.what === "your mood is"
+      r.what === "your energy is" || r.what === "your mood is" || r.what === "your stress is"
         ? `${cap(r.a)} ${r.what} ${verb}.`
         : `${cap(r.a)} ${r.what} ${verb} (${fmt(ma, digits)} vs ${fmt(mb, digits)}${r.unit} ${r.b}).`;
     found.push({ id: r.id, area: r.area, text, a: { label: r.a, mean: round(ma, digits), n: groups.a.length }, b: { label: r.b, mean: round(mb, digits), n: groups.b.length }, diff, strength: effect >= 0.8 && groups.a.length >= 8 && groups.b.length >= 8 ? "clear" : "possible" });

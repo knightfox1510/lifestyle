@@ -68,3 +68,21 @@ describe("us card", () => {
     expect(partnerHint({ name: "kari", now: "08:00", waterPct: 0, lastWater: null, mealsLogged: 0, dosesLeftOverdue: 0 })).toBeNull();
   });
 });
+
+describe("private-log patterns", () => {
+  // Drinking every third day; the next night is shorter and the scale is up the next morning.
+  const days: DayFacts[] = Array.from({ length: 45 }, (_, i) => {
+    const drank = i % 3 === 0;
+    const after = i % 3 === 1;
+    return { day: day(i), drinks: drank ? 4 : 0, sleepH: (after ? 6.1 : 7.4) + ((i * 7) % 3) / 10, weightChange: drank ? 0.6 + ((i * 3) % 3) / 10 : -0.1 + ((i * 5) % 3) / 10 - 0.1, intimacy: i % 4 === 0, mood: 3 };
+  });
+  it("finds drinking patterns only when asked for private ones", () => {
+    expect(findPatterns(days).found.some((p) => p.id.startsWith("drinks-"))).toBe(false);
+    const found = findPatterns(days, 5, "private").found;
+    expect(found.find((p) => p.id === "drinks-sleep")?.text).toMatch(/^After drinking \(2\+ drinks\) you sleep 1\.\d h less/);
+    expect(found.find((p) => p.id === "drinks-weight")?.text).toMatch(/the scale moves 0\.\d kg more \(up\) by the next morning/);
+    // Mood is the same on every day: nothing to report.
+    expect(found.some((p) => p.id === "intimacy-mood")).toBe(false);
+    expect(found.some((p) => p.id === "sleep-steps")).toBe(false);
+  });
+});

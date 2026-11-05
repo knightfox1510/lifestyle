@@ -7,7 +7,8 @@ import { ProgressControls, Stars } from "./progress-controls";
 import { deleteWatchItem, setMyPosition, setWatchStatus, updateWatchItem } from "./actions";
 import { EditRecord } from "@/components/edit-record";
 import { InfoLine } from "./info-line";
-import { LookupAll, LookupButton, WatchSuggest } from "./watch-ai";
+import { LookupAll, LookupButton, PickTonight, SeasonCheck, WatchSuggest } from "./watch-ai";
+import { WATCH_SORTS, newSeason, sortWatch, type WatchSort } from "@/modules/watchlist/logic";
 
 export const metadata = { title: "Watchlist" };
 
@@ -22,15 +23,21 @@ const label = (p: Pick<WatchProgress, "season" | "episode"> | undefined) => (p ?
 
 export default async function WatchlistPage({ searchParams }: PageProps<"/watchlist">) {
   const session = await getSession();
-  const { tab: t } = await searchParams;
+  const { tab: t, sort: so } = await searchParams;
   const tab = TABS.find((x) => x.key === t) ?? TABS[0];
+  const sort: WatchSort = WATCH_SORTS.find((x) => x.key === so)?.key ?? "recent";
   const [{ data: i }, { data: p }] = await Promise.all([
     session.supabase.from("watchlist_items").select("*").eq("household_id", session.household.id).order("updated_at", { ascending: false }),
     session.supabase.from("watch_progress").select("*").eq("household_id", session.household.id),
   ]);
   const items = (i ?? []) as WatchItem[];
   const progress = (p ?? []) as WatchProgress[];
-  const shown = items.filter((x) => (tab.statuses as readonly string[]).includes(x.status));
+  const shown = sortWatch(items.filter((x) => (tab.statuses as readonly string[]).includes(x.status)), sort);
+  // Furthest season anyone in the house has reached, per series.
+  const reached = (id: string) => progress.filter((x) => x.item_id === id).reduce<number | null>((a, x) => Math.max(a ?? 0, x.season), null);
+  const series = items.filter((x) => x.kind !== "movie" && ["watching", "paused", "finished"].includes(x.status));
+  const lastSeasonCheck = series.map((x) => x.seasons_checked_at).filter((x): x is string => Boolean(x)).sort().at(-1) ?? null;
+  const fresh = items.filter((x) => ["paused", "finished"].includes(x.status) && newSeason(x, reached(x.id)));
   const names = Object.fromEntries(session.members.map((m) => [m.user_id, m.user_id === session.userId ? "You" : m.display_name]));
 
   return (
@@ -45,6 +52,28 @@ export default async function WatchlistPage({ searchParams }: PageProps<"/watchl
             {x.label} ({items.filter((it) => (x.statuses as readonly string[]).includes(it.status)).length})
           </Link>
         ))}
+      </div>
+      {fresh.length ? (
+        <Card className="space-y-1 !border-accent/40 !p-4">
+          <p className="text-sm font-semibold">🆕 New seasons out</p>
+          {fresh.map((x) => (
+            <div key={x.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+              <span>{x.title}: season {x.latest_season}{x.next_season ? <span className="text-xs text-fg-muted"> · {x.next_season}</span> : null}</span>
+              <form action={setWatchStatus.bind(null, x.id, "watching")}><button className={buttonClass("secondary", "sm")}>Watch it</button></form>
+            </div>
+          ))}
+        </Card>
+      ) : null}
+      {tab.key !== "done" ? <PickTonight items={items.filter((x) => (tab.key === "want" ? x.status === "want" : x.status === "want" || x.status === "watching")).map((x) => ({ id: x.id, title: x.title, kind: x.kind, runtime_minutes: x.runtime_minutes ?? null, imdb_rating: x.imdb_rating ?? null, platform: x.platform, status: x.status }))} /> : null}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <div className="flex flex-wrap gap-1" role="group" aria-label="Sort">
+          {WATCH_SORTS.map((x) => (
+            <Link key={x.key} href={`/watchlist?tab=${tab.key}${x.key === "recent" ? "" : `&sort=${x.key}`}`} className={cx("rounded-lg px-2 py-0.5 text-xs", x.key === sort ? "bg-surface-2 font-medium text-fg" : "text-fg-muted hover:text-fg")}>
+              {x.label}
+            </Link>
+          ))}
+        </div>
+        {series.length ? <SeasonCheck last={lastSeasonCheck} /> : null}
       </div>
       {items.filter((x) => x.info_checked_at === null).length > 1 ? <LookupAll ids={items.filter((x) => x.info_checked_at === null && x.status !== "dropped").map((x) => x.id)} /> : null}
       {shown.length === 0 ? (
@@ -77,6 +106,7 @@ export default async function WatchlistPage({ searchParams }: PageProps<"/watchl
                       {it.info_checked_at === null ? <LookupButton itemId={it.id} /> : null}
                     </div>
                     <div className="flex flex-wrap items-center gap-1">
+                      {newSeason(it, reached(it.id)) ? <Badge tone="accent">🆕 S{it.latest_season} out</Badge> : it.next_season && it.kind !== "movie" ? <Badge>{it.next_season}</Badge> : null}
                       {it.status === "paused" ? <Badge>paused</Badge> : null}
                       {it.status === "dropped" ? <Badge>dropped</Badge> : null}
                       <Stars itemId={it.id} value={mine?.rating ?? null} />

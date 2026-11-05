@@ -36,3 +36,15 @@ export const watchSuggestSchema = z.object({
   note: z.string().max(200).nullable(),
 });
 export type WatchSuggestion = z.infer<typeof watchSuggestSchema>["picks"][number];
+
+export const seasonCheckSchema = z.object({
+  shows: z
+    .array(
+      z.object({
+        n: z.number().int().describe("The number of the show in the list you were given"),
+        seasons_released: z.number().int().min(1).max(100).nullable().describe("Seasons fully or partly released so far (null if you can't tell)"),
+        next_season: z.string().max(80).nullable().describe("What's announced next, e.g. 'Season 5: March 2027', 'Season 3 renewed, no date', 'Ended'; null if unknown"),
+      }),
+    )
+    .max(40),
+});

@@ -77,6 +77,22 @@ do $$ begin
 exception when check_violation then null;
 end $$;
 
+-- Health Connect workouts: saved once per session (re-imports don't double).
+select set_config('request.jwt.claim.sub', :p, false);
+insert into public.workout_logs (household_id, performed_on, kind, title, status, duration_minutes, external_id)
+values (:'hid', '2026-11-02', 'gym', 'Strength training', 'done', 60, 'hc:1793000000000')
+on conflict (owner_id, external_id) do nothing;
+insert into public.workout_logs (household_id, performed_on, kind, title, status, duration_minutes, external_id)
+values (:'hid', '2026-11-02', 'gym', 'Strength training', 'done', 60, 'hc:1793000000000')
+on conflict (owner_id, external_id) do nothing;
+insert into public.workout_logs (household_id, performed_on, kind, title, status) values (:'hid', '2026-11-02', 'walk', 'Walk', 'done');
+insert into public.workout_logs (household_id, performed_on, kind, title, status) values (:'hid', '2026-11-03', 'walk', 'Walk', 'done');
+do $$ begin
+  assert (select count(*) from public.workout_logs where external_id is not null) = 1, 'one row per imported session';
+  assert (select count(*) from public.workout_logs where external_id is null) = 2, 'hand-logged workouts are unaffected';
+end $$;
+update public.watchlist_items set latest_season = 4, next_season = 'Season 5: 2027', seasons_checked_at = now();
+
 reset role;
 \o
 \echo 'ALL PRIVATE LOG & GOALS TESTS PASSED'

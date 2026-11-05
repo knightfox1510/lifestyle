@@ -6,8 +6,10 @@ import { Sparkles } from "lucide-react";
 import { Button, Card, Input, Notice, cx } from "@/components/ui";
 import { useToast } from "@/components/toaster";
 import type { WatchSuggestion } from "@/lib/ai/watch-schemas";
-import { addWatchSuggestion } from "./actions";
+import { addWatchSuggestion, setWatchStatus } from "./actions";
 import { InfoLine } from "./info-line";
+import type { WatchItem } from "@/lib/types";
+import { pickForTonight } from "@/modules/watchlist/logic";
 
 const KINDS = [["", "Anything"], ["series", "Series"], ["movie", "Movie"], ["documentary", "Documentary"], ["anime", "Anime"]] as const;
 const TIME = [[null, "Any length"], [45, "~45 min"], [120, "~2 h"], [300, "A binge"]] as const;
@@ -176,5 +178,93 @@ export function LookupAll({ ids }: { ids: string[] }) {
       <Sparkles className="size-4" aria-hidden />
       {done !== null ? `Looking up ${done + 1 > batch.length ? batch.length : done + 1} of ${batch.length}…` : `Look up IMDb ratings & details for ${batch.length}${ids.length > batch.length ? ` of ${ids.length}` : ""} titles`}
     </button>
+  );
+}
+
+/** One web search for new seasons of the series you watch. */
+export function SeasonCheck({ last }: { last: string | null }) {
+  const { toast } = useToast();
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  return (
+    <button
+      type="button"
+      disabled={loading}
+      className="inline-flex items-center gap-1.5 text-sm text-accent disabled:text-fg-muted"
+      onClick={async () => {
+        setLoading(true);
+        try {
+          const res = await fetch("/api/ai/watch-seasons", { method: "POST" });
+          const body = await res.json();
+          if (!res.ok) throw new Error(body.error ?? "Couldn't check");
+          toast(body.newOnes ? `${body.newOnes} show${body.newOnes === 1 ? " has" : "s have"} a new season` : "No new seasons", { kind: "ai", detail: `${body.checked} series checked` });
+          router.refresh();
+        } catch (e) {
+          toast((e as Error).message, { tone: "error" });
+        } finally {
+          setLoading(false);
+        }
+      }}
+    >
+      <Sparkles className="size-4" aria-hidden />
+      {loading ? "Checking…" : "Any new seasons?"}
+      {last && !loading ? <span className="text-xs text-fg-muted">(checked {new Date(last).toLocaleDateString("en-IN", { day: "numeric", month: "short" })})</span> : null}
+    </button>
+  );
+}
+
+type Pickable = { id: string; title: string; kind: WatchItem["kind"]; runtime_minutes: number | null; imdb_rating: number | null; platform: string | null; status: string };
+
+/** "Pick one for us": a quick shuffle, weighted towards well-rated titles that fit the time you have. */
+export function PickTonight({ items }: { items: Pickable[] }) {
+  const [minutes, setMinutes] = useState<number | null>(null);
+  const [shown, setShown] = useState<Pickable | null>(null);
+  const [spinning, setSpinning] = useState(false);
+  const [none, setNone] = useState(false);
+  const [pending, start] = useTransition();
+  const router = useRouter();
+
+  async function pick() {
+    const final = pickForTonight(items, minutes);
+    setNone(!final);
+    if (!final) return setShown(null);
+    setSpinning(true);
+    // A short shuffle through the list before landing.
+    for (let n = 0; n < 8 && items.length > 1; n++) {
+      setShown(items[Math.floor(Math.random() * items.length)]);
+      await new Promise((r) => setTimeout(r, 70 + n * 18));
+    }
+    setShown(final);
+    setSpinning(false);
+  }
+
+  if (!items.length) return null;
+  return (
+    <Card className="space-y-2 !p-4">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Button size="sm" onClick={() => void pick()} disabled={spinning}>🎲 Pick one for us</Button>
+        {TIME.map(([m, l]) => <button key={l} type="button" className={chip(minutes === m)} onClick={() => setMinutes(m)}>{l}</button>)}
+      </div>
+      {shown ? (
+        <div className={cx("flex flex-wrap items-center justify-between gap-2 rounded-xl bg-accent-soft/50 px-3 py-2", !spinning && "[animation:toast-in_.25s_ease-out]")}>
+          <p className={cx("font-medium", spinning && "text-fg-muted")}>
+            {shown.title}
+            <span className="text-xs font-normal text-fg-muted">
+              {shown.imdb_rating != null ? ` · ★ ${Number(shown.imdb_rating).toFixed(1)}` : ""}{shown.runtime_minutes ? ` · ${shown.runtime_minutes} min${shown.kind === "movie" ? "" : " episodes"}` : ""}{shown.platform ? ` · ${shown.platform}` : ""}
+            </span>
+          </p>
+          {!spinning ? (
+            <div className="flex gap-1.5">
+              {shown.status === "want" ? (
+                <Button size="sm" disabled={pending} onClick={() => start(async () => { await setWatchStatus(shown.id, "watching"); router.refresh(); })}>Start watching</Button>
+              ) : null}
+              <Button size="sm" variant="ghost" onClick={() => void pick()}>Another</Button>
+            </div>
+          ) : null}
+        </div>
+      ) : none ? (
+        <p className="text-sm text-fg-muted">Nothing on the list fits that. Try a longer time, or ask for ideas above.</p>
+      ) : null}
+    </Card>
   );
 }

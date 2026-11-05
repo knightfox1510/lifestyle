@@ -5,6 +5,9 @@ import { ColumnChart } from "@/components/charts";
 import { PRIVATE_META, detailLabel, drinksOf, drinksPerWeek, summarise, type PrivateLog } from "@/modules/private-log/meta";
 import { weekStartOf } from "@/modules/fitness/goals";
 import { AlcoholAiToggle, DeleteEntry, QuickLog } from "./quick-log";
+import { Badge } from "@/components/ui";
+import { loadPatternDays } from "@/lib/patterns-data";
+import { findPatterns } from "@/modules/patterns";
 
 export const metadata = { title: "Private log" };
 
@@ -55,6 +58,8 @@ export default async function PrivatePage() {
   const drinks = drinksPerWeek(logs, monday, 12);
   const recent = logs.filter((l) => l.occurred_on >= addDays(today, -29));
   const byDay = [...new Set(recent.map((l) => l.occurred_on))];
+  // What drinking and intimacy seem to go with: your own data only, never on the shared Patterns page.
+  const patterns = isSelf && logs.length ? findPatterns(await loadPatternDays(session, ownerId, 90, true), 5, "private") : null;
   const aiOn = Boolean((session.profile as { ai_include_alcohol?: boolean }).ai_include_alcohol);
 
   return (
@@ -79,6 +84,25 @@ export default async function PrivatePage() {
             height={110}
           />
           <p className="mt-2 text-xs text-fg-muted">1 standard drink ≈ 10 g alcohol: a 30 ml peg, or about ⅔ of a 330 ml beer. Fewer drinks and more alcohol-free days help sleep, recovery and fat loss.</p>
+        </Card>
+      ) : null}
+
+      {patterns ? (
+        <Card className="space-y-2 !p-4">
+          <p className="text-sm font-semibold">What it seems to go with</p>
+          {patterns.found.length ? (
+            <ul className="space-y-2">
+              {patterns.found.map((p) => (
+                <li key={p.id} className="text-sm">
+                  {p.text}{" "}
+                  <span className="text-xs text-fg-muted"><Badge tone={p.strength === "clear" ? "accent" : "neutral"}>{p.strength === "clear" ? "Clear" : "Possible"}</Badge> {p.a.n} vs {p.b.n} days</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-fg-muted">Nothing clear yet. With a few weeks of logs (and sleep, check-ins, weigh-ins or food), this shows how drinking and intimacy line up with your sleep, mood, energy, appetite, the scale and bladder.</p>
+          )}
+          <p className="text-xs text-fg-muted">From the last 90 days. Only you see this; it shows what tends to go together, not what causes what.</p>
         </Card>
       ) : null}
 
@@ -112,7 +136,7 @@ export default async function PrivatePage() {
       {isSelf ? (
         <Card className="space-y-2 !p-4">
           <p className="text-sm font-semibold">Privacy</p>
-          <p className="text-xs text-fg-muted">This log is yours alone. Your partner sees it only if you share “Private log” in Settings → Sharing, and even then can&apos;t add or change anything. It never shows on Today, in reminders or in the weekly summary. To hide it from your menus entirely, switch it off in Settings → My features.</p>
+          <p className="text-xs text-fg-muted">This log is yours alone. Your partner sees it only if you share “Private log” in Settings → Sharing, and even then can&apos;t add or change anything. It never shows on Today, in reminders or in the weekly summary. To hide it from your menus entirely, switch it off in Settings → My features. To ask for your fingerprint or a PIN before this screen opens on this device, use Settings → Privacy &amp; data → App lock → Only private screens.</p>
           <AlcoholAiToggle on={aiOn} />
         </Card>
       ) : null}

@@ -87,6 +87,7 @@ export default async function FitnessPage() {
                   <li key={x.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
                     <span>
                       {KIND_META[x.kind].icon} {x.title}
+                      {x.external_id?.startsWith("hc:") ? <span className="text-xs text-fg-muted" title="From Health Connect"> · ⌚</span> : null}
                       <span className="text-xs text-fg-muted">{x.duration_minutes ? ` · ${x.duration_minutes} min` : ""}{x.intensity ? ` · effort ${x.intensity}/5` : ""}</span>
                     </span>
                     {canWrite ? (

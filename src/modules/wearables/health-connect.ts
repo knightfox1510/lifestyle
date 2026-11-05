@@ -27,7 +27,35 @@ export type HcDay = {
   hrv_ms?: number;
 };
 export type HcWeight = { day: string; at: string; weight_kg: number };
-export type HcSummary = { days: HcDay[]; weights: HcWeight[]; found: string[]; missing: string[]; tables: string[] };
+/** One workout session (gym, walk, run…) as a band or phone recorded it. */
+export type HcSession = { day: string; start: number; minutes: number; type: number; kind: HcWorkoutKind };
+export type HcSummary = { days: HcDay[]; weights: HcWeight[]; sessions: HcSession[]; found: string[]; missing: string[]; tables: string[] };
+
+export type HcWorkoutKind = "gym" | "yoga" | "pilates" | "swim" | "run" | "walk" | "cycle" | "dance" | "sport" | "class" | "other";
+
+/** Health Connect's ExerciseSessionRecord exercise types → Hearth workout kinds. */
+const EXERCISE_KIND: Record<number, HcWorkoutKind> = {
+  10: "gym", 13: "gym", 25: "gym", 36: "gym", 54: "gym", 68: "gym", 69: "gym", 70: "gym", 81: "gym",
+  83: "yoga", 71: "yoga",
+  48: "pilates",
+  73: "swim", 74: "swim",
+  56: "run", 57: "run",
+  79: "walk", 37: "walk",
+  8: "cycle", 9: "cycle",
+  16: "dance",
+  2: "sport", 4: "sport", 5: "sport", 11: "sport", 14: "sport", 27: "sport", 28: "sport", 29: "sport", 32: "sport", 35: "sport", 44: "sport", 50: "sport", 55: "sport", 64: "sport", 65: "sport", 66: "sport", 75: "sport", 76: "sport", 78: "sport", 80: "sport",
+  26: "class",
+};
+export const exerciseKind = (type: number): HcWorkoutKind => EXERCISE_KIND[type] ?? "other";
+
+/** Readable name for a session's exercise type ("Strength training", "Badminton"…), for the workout's title. */
+const EXERCISE_NAME: Record<number, string> = {
+  2: "Badminton", 5: "Basketball", 8: "Cycling", 9: "Exercise bike", 10: "Boot camp", 11: "Boxing", 13: "Calisthenics", 14: "Cricket", 16: "Dancing", 25: "Elliptical", 26: "Exercise class", 36: "HIIT", 37: "Hiking", 44: "Martial arts", 48: "Pilates", 54: "Rowing machine", 56: "Running", 57: "Treadmill run", 64: "Football", 66: "Squash", 68: "Stair climbing", 69: "Stair climber", 70: "Strength training", 71: "Stretching", 73: "Open-water swim", 74: "Pool swim", 75: "Table tennis", 76: "Tennis", 78: "Volleyball", 79: "Walking", 81: "Weightlifting", 83: "Yoga",
+};
+export const exerciseName = (type: number) => EXERCISE_NAME[type] ?? "Workout";
+
+/** Sessions shorter than this (auto-detected strolls) aren't counted as workouts. */
+export const MIN_SESSION_MINUTES = 10;
 
 const MIN = 60_000;
 
@@ -50,6 +78,7 @@ export function summarizeHealthConnect(query: Query, tz: string, opts: { sinceDa
   const cutoff = opts.sinceDay ? Date.parse(`${opts.sinceDay}T00:00:00Z`) - 2 * 864e5 : null;
   const after = (col: string) => (cutoff == null ? "" : ` WHERE "${col}" >= ${cutoff}`);
   const days = new Map<string, HcDay>();
+  const sessions: HcSession[] = [];
   const get = (d: string) => days.get(d) ?? (days.set(d, { day: d }), days.get(d)!);
   const found: string[] = [];
   const missing: string[] = [];
@@ -232,16 +261,27 @@ export function summarizeHealthConnect(query: Query, tz: string, opts: { sinceDa
     const e = pick(c, "end_time");
     if (s && e) {
       const off = pick(c, "start_zone_offset", "zone_offset");
+      const ty = pick(c, "exercise_type", "type");
       const acc = new Map<string, number>();
-      for (const r of query(`SELECT "${s}" AS s, "${e}" AS e${off ? `, "${off}" AS o` : ""} FROM "${ex}"${after(s)}`)) {
+      const raw: (HcSession & { end: number })[] = [];
+      for (const r of query(`SELECT "${s}" AS s, "${e}" AS e${off ? `, "${off}" AS o` : ""}${ty ? `, "${ty}" AS ty` : ""} FROM "${ex}"${after(s)}`)) {
         const ms0 = num(r.s);
         const ms1 = num(r.e);
         if (ms0 == null || ms1 == null || ms1 <= ms0) continue;
         const d = dayOf(ms0, num(r.o), tz);
         if (d < since) continue;
         acc.set(d, (acc.get(d) ?? 0) + (ms1 - ms0) / MIN);
+        const minutes = Math.round((ms1 - ms0) / MIN);
+        const type = Number(r.ty ?? 0) || 0;
+        if (minutes >= MIN_SESSION_MINUTES && minutes <= 600) raw.push({ day: d, start: ms0, end: ms1, minutes, type, kind: exerciseKind(type) });
       }
       for (const [d, m] of acc) get(d).active_minutes = Math.min(1440, Math.round(m));
+      // The same session written by two apps (band + phone): of overlapping sessions of one kind, keep the first.
+      raw.sort((a, b) => a.start - b.start);
+      for (const x of raw) {
+        const dupe = sessions.some((y) => y.kind === x.kind && Math.min(x.end, y.start + y.minutes * MIN) - Math.max(x.start, y.start) > 0.5 * Math.min(x.minutes, y.minutes) * MIN);
+        if (!dupe) sessions.push({ day: x.day, start: x.start, minutes: x.minutes, type: x.type, kind: x.kind });
+      }
       found.push("workouts");
     }
   }
@@ -272,6 +312,7 @@ export function summarizeHealthConnect(query: Query, tz: string, opts: { sinceDa
   return {
     days: [...days.values()].filter((d) => Object.keys(d).length > 1).sort((a, b) => a.day.localeCompare(b.day)),
     weights,
+    sessions: sessions.sort((a, b) => a.start - b.start),
     found,
     missing,
     tables,

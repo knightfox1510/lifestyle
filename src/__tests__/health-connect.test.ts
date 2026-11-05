@@ -17,6 +17,7 @@ async function exportDb() {
     CREATE TABLE sleep_session_record_table (row_id INTEGER PRIMARY KEY, start_time INTEGER, end_time INTEGER, end_zone_offset INTEGER, app_info_id INTEGER);
     CREATE TABLE sleep_stages_table (parent_key INTEGER, stage_start_time INTEGER, stage_end_time INTEGER, stage_type INTEGER);
     CREATE TABLE weight_record_table (row_id INTEGER PRIMARY KEY, time INTEGER, zone_offset INTEGER, weight REAL);
+    CREATE TABLE exercise_session_record_table (row_id INTEGER PRIMARY KEY, start_time INTEGER, end_time INTEGER, start_zone_offset INTEGER, exercise_type INTEGER, app_info_id INTEGER);
   `);
   const ins = (sql: string, rows: unknown[][]) => rows.forEach((r) => db.run(sql, r as never[]));
   // 2 Nov: phone 6,000 steps and band 7,500 for the same day → 7,500, not 13,500.
@@ -37,6 +38,13 @@ async function exportDb() {
   ins("INSERT INTO sleep_session_record_table (row_id,start_time,end_time,end_zone_offset,app_info_id) VALUES (?,?,?,?,?)", [[7, at("2026-11-01T17:30:00Z"), at("2026-11-02T01:00:00Z"), IST, 2]]);
   ins("INSERT INTO sleep_stages_table VALUES (?,?,?,?)", [[7, at("2026-11-01T18:00:00Z"), at("2026-11-01T19:00:00Z"), 5], [7, at("2026-11-01T22:00:00Z"), at("2026-11-01T22:30:00Z"), 5], [7, at("2026-11-01T19:00:00Z"), at("2026-11-01T20:00:00Z"), 4]]);
   ins("INSERT INTO weight_record_table (time,zone_offset,weight) VALUES (?,?,?)", [[at("2026-11-02T01:30:00Z"), IST, 72400]]);
+  // Gym 07:00–08:00 IST (written by band and phone), a 5-minute stroll, and an evening walk.
+  ins("INSERT INTO exercise_session_record_table (start_time,end_time,start_zone_offset,exercise_type,app_info_id) VALUES (?,?,?,?,?)", [
+    [at("2026-11-02T01:30:00Z"), at("2026-11-02T02:30:00Z"), IST, 70, 1],
+    [at("2026-11-02T01:31:00Z"), at("2026-11-02T02:30:00Z"), IST, 70, 2],
+    [at("2026-11-02T05:00:00Z"), at("2026-11-02T05:05:00Z"), IST, 79, 2],
+    [at("2026-11-02T13:00:00Z"), at("2026-11-02T13:40:00Z"), IST, 79, 2],
+  ]);
   return db;
 }
 
@@ -54,6 +62,7 @@ describe("Health Connect export", () => {
     expect(s.days.find((d) => d.day === "2026-11-03")!.steps).toBe(800);
     expect(s.weights).toEqual([{ day: "2026-11-02", at: "2026-11-02T01:30:00.000Z", weight_kg: 72.4 }]);
     expect(s.found).toEqual(expect.arrayContaining(["steps", "sleep", "deep sleep", "heart rate", "weight"]));
+    expect(s.sessions.map((x) => [x.day, x.kind, x.minutes])).toEqual([["2026-11-02", "gym", 60], ["2026-11-02", "walk", 40]]);
     // Only new days when asked.
     expect(summarizeHealthConnect(query, "Asia/Kolkata", { sinceDay: "2026-11-03" }).days.map((d) => d.day)).toEqual(["2026-11-03"]);
   });

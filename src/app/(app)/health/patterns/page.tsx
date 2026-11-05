@@ -56,7 +56,7 @@ export default async function PatternsPage() {
         <p className="font-medium">{t("How this works")}</p>
         <p className="text-fg-muted">{t("Days are split into two groups (say, short and good nights) and something else is compared between them. A pattern is shown only when both groups have at least 5 days and the gap is big next to your usual day-to-day ups and downs. It shows what tends to go together, not what causes what.")}</p>
         {missing.length ? <p className="text-fg-muted">{t("More would show with more days of:")} {missing.join("; ")}.</p> : null}
-        <p className="text-fg-muted">{t("Checked: {n} comparisons.", { n: RULES.length })} <Link href="/body/coach" className="text-accent underline">{t("Ask the AI coach what to do about them")}</Link></p>
+        <p className="text-fg-muted">{t("Checked: {n} comparisons.", { n: RULES.filter((r) => !r.private).length })} <Link href="/body/coach" className="text-accent underline">{t("Ask the AI coach what to do about them")}</Link></p>
       </Card>
     </div>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
+import Link from "next/link";
 import { Flame } from "lucide-react";
 import { sendCheer } from "@/lib/engagement-actions";
 import { useToast } from "@/components/toaster";
@@ -99,6 +100,7 @@ export function PartnerCard({
           {us.hint ? <p className="rounded-xl bg-surface-2/70 px-3 py-2 text-[13px]">💬 {us.hint}</p> : null}
         </div>
       ) : null}
+      <Link href="/us" className="mt-2 inline-block text-[13px] text-accent">{t("Our week together")} →</Link>
     </section>
   );
 }

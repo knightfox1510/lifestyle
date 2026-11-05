@@ -45,5 +45,5 @@ export function activeAreaHref(path: string, items: { href: string }[]) {
 export const TAB_MATCH = {
   health: ["/health", "/medical", "/medicines", "/supplements", "/bladder", "/pelvic-floor", "/cycle", "/private", "/checkin", "/habits", "/body", "/fitness", "/wearables"],
   food: ["/food", "/groceries", "/pantry", "/recipes", "/dining"],
-  family: ["/me", "/child", "/maintenance", "/occasions", "/watchlist", "/travel", "/documents", "/subscriptions", "/settings", "/digest", "/customize", "/notifications"],
+  family: ["/me", "/us", "/child", "/maintenance", "/occasions", "/watchlist", "/travel", "/documents", "/subscriptions", "/settings", "/digest", "/customize", "/notifications"],
 } as const;

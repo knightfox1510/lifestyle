@@ -95,33 +95,37 @@ const chunkSchema = z.object({
   weights: z.array(weightSchema).max(2000),
   found: z.array(z.string().max(40)).max(20),
   missing: z.array(z.string().max(40)).max(20),
+  sessions: z
+    .array(z.object({ day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), start: z.number().int(), minutes: z.number().int().min(1).max(600), type: z.number().int().min(0).max(200), kind: z.enum(["gym", "yoga", "pilates", "swim", "run", "walk", "cycle", "dance", "sport", "class", "other"]) }))
+    .max(2000)
+    .optional(),
 });
 
 /**
  * Saves part of a Health Connect export that this device read itself (the
  * file never leaves the phone or computer, only the daily totals do).
  */
-export async function saveHealthConnectChunk(input: unknown): Promise<ActionResult & { days?: number; weights?: number }> {
+export async function saveHealthConnectChunk(input: unknown): Promise<ActionResult & { days?: number; weights?: number; workouts?: number }> {
   const session = await getSession();
   if (!session.isModuleEnabled("wearables")) return { error: "Wearables are turned off." };
   const parsed = chunkSchema.safeParse(input);
   if (!parsed.success) return { error: "Couldn't read those days." };
   const days = parsed.data.days.map((d) => Object.fromEntries(Object.entries(d).filter(([, v]) => v != null))) as typeof parsed.data.days;
   try {
-    const res = await saveHealthConnect(session.supabase, session.userId, session.household.id, { ...parsed.data, days: days as never }, { bodyOn: session.isModuleEnabled("body_recomp") });
-    return { ok: true, days: res.days, weights: res.weights };
+    const res = await saveHealthConnect(session.supabase, session.userId, session.household.id, { ...parsed.data, days: days as never }, { bodyOn: session.isModuleEnabled("body_recomp"), fitnessOn: session.isModuleEnabled("fitness") });
+    return { ok: true, days: res.days, weights: res.weights, workouts: res.workouts };
   } catch (e) {
     return { error: errorMessage(e) };
   }
 }
 
 /** Records the result of a manual import, so it shows next to the daily sync's. */
-export async function finishHealthConnectImport(input: { file: string; days: number; weights: number; firstDay: string | null; lastDay: string | null; found: string[] }): Promise<ActionResult> {
+export async function finishHealthConnectImport(input: { file: string; days: number; weights: number; workouts?: number; firstDay: string | null; lastDay: string | null; found: string[] }): Promise<ActionResult> {
   const session = await getSession();
   const ok = input.days > 0;
   const day = (d: string | null) => (d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null);
   const message = ok
-    ? `Manual upload: imported ${input.days} days (${day(input.firstDay)} to ${day(input.lastDay)}): ${input.found.slice(0, 10).join(", ")}${input.weights ? `, plus ${input.weights} weigh-ins` : ""}.`
+    ? `Manual upload: imported ${input.days} days (${day(input.firstDay)} to ${day(input.lastDay)}): ${input.found.slice(0, 10).join(", ")}${input.weights ? `, plus ${input.weights} weigh-ins` : ""}${input.workouts ? `, plus ${input.workouts} workouts for Fitness` : ""}.`
     : "Manual upload: nothing to import.";
   const { data: last } = await session.supabase.from("health_connect_syncs").select("last_day").eq("user_id", session.userId).maybeSingle();
   const lastDay = [day(input.lastDay), last?.last_day ?? null].filter(Boolean).sort().at(-1) ?? null;

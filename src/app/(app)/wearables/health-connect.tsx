@@ -71,14 +71,16 @@ export function HealthConnectSync({ origin, status, tz }: { origin: string; stat
       const lastWeigh = [...new Map(summary.weights.map((w) => [w.day, w])).values()];
       let days = 0;
       let weights = 0;
+      let workouts = 0;
       for (let i = 0; i < Math.max(summary.days.length, 1); i += 400) {
         setBusy(`Saving days ${i + 1}–${Math.min(i + 400, summary.days.length)} of ${summary.days.length}…`);
-        const r = await saveHealthConnectChunk({ days: summary.days.slice(i, i + 400), weights: i === 0 ? lastWeigh.slice(-2000) : [], found: summary.found, missing: summary.missing });
+        const r = await saveHealthConnectChunk({ days: summary.days.slice(i, i + 400), weights: i === 0 ? lastWeigh.slice(-2000) : [], sessions: i === 0 ? summary.sessions.slice(-2000) : [], found: summary.found, missing: summary.missing });
         if (r.error) throw new Error(r.error);
         days += r.days ?? 0;
         weights += r.weights ?? 0;
+        workouts += r.workouts ?? 0;
       }
-      const r = await finishHealthConnectImport({ file: file.name, days, weights, firstDay: summary.days[0]?.day ?? null, lastDay: summary.days.at(-1)?.day ?? null, found: summary.found });
+      const r = await finishHealthConnectImport({ file: file.name, days, weights, workouts, firstDay: summary.days[0]?.day ?? null, lastDay: summary.days.at(-1)?.day ?? null, found: summary.found });
       setMsg(r.error ? { tone: "danger", text: `${r.error} Tables in the file: ${summary.tables.slice(0, 15).join(", ") || "none"}.` } : { tone: "accent", text: r.message ?? "Imported." });
       router.refresh();
     } catch (e) {

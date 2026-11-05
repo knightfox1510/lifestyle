@@ -545,6 +545,8 @@ export type WorkoutLog = {
   duration_minutes: number | null;
   intensity: number | null;
   notes: string | null;
+  /** Set for workouts that came from Health Connect ("hc:<start ms>"). */
+  external_id?: string | null;
 };
 
 export type Dependent = {
@@ -682,6 +684,10 @@ export type WatchItem = {
   runtime_minutes?: number | null;
   total_episodes?: number | null;
   info_checked_at?: string | null;
+  /** Seasons released so far / what's announced, from "Check for new seasons". */
+  latest_season?: number | null;
+  next_season?: string | null;
+  seasons_checked_at?: string | null;
 };
 export type WatchProgress = { item_id: string; user_id: string; season: number; episode: number; rating: number | null; updated_at: string };
 

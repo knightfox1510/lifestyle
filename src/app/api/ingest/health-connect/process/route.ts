@@ -46,10 +46,11 @@ export async function POST(request: Request) {
       // Re-read the last few days each time (late syncs from the band), everything on the first run.
       const since = last?.last_day ? addDays(last.last_day, -3) : undefined;
       const summary = await readHealthConnectZip(src, tz, since);
-      const { data: mods } = await admin.from("household_modules").select("enabled").eq("household_id", householdId).eq("module_key", "body_recomp").maybeSingle();
-      const res = await saveHealthConnect(admin, userId, householdId, summary, { bodyOn: Boolean(mods?.enabled) });
+      const { data: mods } = await admin.from("household_modules").select("module_key, enabled").eq("household_id", householdId).in("module_key", ["body_recomp", "fitness"]);
+      const isOn = (k: string) => ((mods ?? []) as { module_key: string; enabled: boolean }[]).some((m) => m.module_key === k && m.enabled);
+      const res = await saveHealthConnect(admin, userId, householdId, summary, { bodyOn: isOn("body_recomp"), fitnessOn: isOn("fitness") });
       const message = res.days
-        ? `Imported ${res.days} day${res.days === 1 ? "" : "s"} (${res.found.join(", ") || "nothing recognised"})${res.weights ? ` and ${res.weights} weigh-in${res.weights === 1 ? "" : "s"}` : ""}.`
+        ? `Imported ${res.days} day${res.days === 1 ? "" : "s"} (${res.found.join(", ") || "nothing recognised"})${res.weights ? ` and ${res.weights} weigh-in${res.weights === 1 ? "" : "s"}` : ""}${res.workouts ? `, plus ${res.workouts} workout${res.workouts === 1 ? "" : "s"} for Fitness` : ""}.`
         : `No new days. Found: ${res.found.join(", ") || "nothing"}; tables: ${summary.tables.slice(0, 12).join(", ")}`;
       await record("ok", message, { last_day: res.lastDay ?? last?.last_day ?? null, days_imported: (last?.days_imported ?? 0) + res.days });
     } catch (e) {

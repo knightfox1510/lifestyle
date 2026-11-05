@@ -8,7 +8,7 @@ import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { pickDbEntry, summarizeHealthConnect, type HcSummary } from "@/modules/wearables/health-connect";
+import { exerciseName, pickDbEntry, summarizeHealthConnect, type HcSession, type HcSummary } from "@/modules/wearables/health-connect";
 import { entryDataRange, inflateEntry, listZip, type ReadRange } from "@/modules/wearables/zip-entry";
 import { addDays } from "@/lib/dates";
 
@@ -92,14 +92,14 @@ export async function driveZip(fileId: string, accessToken: string): Promise<Zip
   };
 }
 
-export type ImportResult = { days: number; weights: number; firstDay: string | null; lastDay: string | null; found: string[]; missing: string[] };
+export type ImportResult = { days: number; weights: number; workouts: number; firstDay: string | null; lastDay: string | null; found: string[]; missing: string[] };
 
 /**
  * Saves a summary for one person: per-day wearable numbers (only the fields
  * found, so manual entries for other fields stay), and weigh-ins into Body
  * on days that don't have one yet.
  */
-export async function saveHealthConnect(db: SupabaseClient, ownerId: string, householdId: string, s: Pick<HcSummary, "days" | "weights" | "found" | "missing">, opts: { bodyOn: boolean }): Promise<ImportResult> {
+export async function saveHealthConnect(db: SupabaseClient, ownerId: string, householdId: string, s: Pick<HcSummary, "days" | "weights" | "found" | "missing"> & { sessions?: HcSession[] }, opts: { bodyOn: boolean; fitnessOn?: boolean }): Promise<ImportResult> {
   const groups = new Map<string, Record<string, unknown>[]>();
   for (const d of s.days) {
     const { day, ...metrics } = d;
@@ -127,5 +127,33 @@ export async function saveHealthConnect(db: SupabaseClient, ownerId: string, hou
       if (!error) weights = rows.length;
     }
   }
-  return { days: s.days.length, weights, firstDay: s.days[0]?.day ?? null, lastDay: s.days.at(-1)?.day ?? null, found: s.found, missing: s.missing };
+  const workouts = opts.fitnessOn && s.sessions?.length ? await saveSessions(db, ownerId, householdId, s.sessions) : 0;
+  return { days: s.days.length, weights, workouts, firstDay: s.days[0]?.day ?? null, lastDay: s.days.at(-1)?.day ?? null, found: s.found, missing: s.missing };
+}
+
+/**
+ * Workout sessions from the band or phone become workouts in Fitness, so
+ * they count toward weekly goals. Each is saved once (keyed by its start
+ * time), edits made in Hearth are kept, and a day where that kind of workout
+ * was already logged by hand isn't doubled.
+ */
+export async function saveSessions(db: SupabaseClient, ownerId: string, householdId: string, sessions: HcSession[]) {
+  if (!sessions.length) return 0;
+  const first = sessions.reduce((a, x) => (x.day < a ? x.day : a), sessions[0].day);
+  const { data: manual } = await db.from("workout_logs").select("performed_on, kind").eq("owner_id", ownerId).is("external_id", null).eq("status", "done").gte("performed_on", first);
+  const had = new Set(((manual ?? []) as { performed_on: string; kind: string }[]).map((m) => `${m.performed_on}:${m.kind}`));
+  const rows = sessions
+    .filter((x) => !had.has(`${x.day}:${x.kind}`))
+    .map((x) => ({ owner_id: ownerId, household_id: householdId, performed_on: x.day, kind: x.kind, title: exerciseName(x.type), status: "done", duration_minutes: x.minutes, external_id: `hc:${x.start}`, notes: "From Health Connect" }));
+  let saved = 0;
+  for (let i = 0; i < rows.length; i += 500) {
+    const { data, error } = await db.from("workout_logs").upsert(rows.slice(i, i + 500), { onConflict: "owner_id,external_id", ignoreDuplicates: true }).select("id");
+    if (error) {
+      // Older database without the column: skip workouts, keep the rest of the import.
+      if (error.code === "42703" || error.code === "42P10") return 0;
+      throw new Error(`Couldn't save the workouts (${error.message}).`);
+    }
+    saved += data?.length ?? 0;
+  }
+  return saved;
 }

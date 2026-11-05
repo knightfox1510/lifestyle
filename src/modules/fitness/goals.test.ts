@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { goalDays, goalProgress, weekStartOf } from "./goals";
+import { goalDays, goalNudge, goalProgress, weekStartOf } from "./goals";
 
 const log = (performed_on: string, kind: "gym" | "walk" | "yoga", duration_minutes: number | null = 45, status: "done" | "skipped" = "done") => ({ performed_on, kind, status, duration_minutes });
 
@@ -37,5 +37,24 @@ describe("weekly fitness goals", () => {
     const logs = [log("2026-10-19", "walk"), log("2026-10-20", "walk"), log("2026-10-26", "walk"), log("2026-10-28", "walk"), log("2026-11-02", "walk")];
     expect(goalProgress(goal, logs, "2026-11-05").streak).toBe(2);
     expect(goalProgress(goal, [...logs, log("2026-11-05", "walk")], "2026-11-05").streak).toBe(3);
+  });
+});
+
+describe("goal nudge", () => {
+  const label = (k: string) => (k === "gym" ? "Gym" : k);
+  const gym = { kind: "gym" as const, min_minutes: null, times_per_week: 4 };
+  it("stays quiet when on track or already done today", () => {
+    expect(goalNudge([gym], [log("2026-11-02", "gym"), log("2026-11-04", "gym")], "2026-11-05", label)).toBeNull();
+    expect(goalNudge([gym], [log("2026-11-02", "gym")], "2026-11-06", label)?.title).toContain("Gym 1 of 4");
+    expect(goalNudge([gym], [log("2026-11-02", "gym"), log("2026-11-06", "gym")], "2026-11-06", label)).toBeNull();
+  });
+  it("nudges when every day left is needed", () => {
+    const n = goalNudge([gym], [log("2026-11-02", "gym"), log("2026-11-03", "gym")], "2026-11-07", label);
+    expect(n?.title).toBe("🏋️ Gym 2 of 4");
+    expect(n?.body).toContain("every day to Sunday");
+    expect(goalNudge([gym], ["02", "03", "04"].map((d) => log(`2026-11-${d}`, "gym")), "2026-11-08", label)?.body).toContain("Last chance");
+  });
+  it("doesn't nag early in the week for being behind", () => {
+    expect(goalNudge([{ ...gym, times_per_week: 3 }], [], "2026-11-04", label)).toBeNull();
   });
 });

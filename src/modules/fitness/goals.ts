@@ -87,3 +87,28 @@ export const GOAL_STATE_TEXT: Record<GoalProgress["state"], string> = {
   tight: "Needs every day left",
   out_of_reach: "Out of reach this week",
 };
+
+/**
+ * One evening nudge for goals that are slipping: "Gym 2 of 4: needs today
+ * and tomorrow". Only goals that are tight (every day left needed) or, from
+ * Thursday, behind pace; nothing if today's session is already done.
+ */
+export function goalNudge(goals: Pick<FitnessGoal, "kind" | "min_minutes" | "times_per_week">[], logs: Log[], today: string, label: (kind: string) => string): { title: string; body: string } | null {
+  const dayIndex = Math.round((Date.parse(`${today}T12:00:00Z`) - Date.parse(`${weekStartOf(today)}T12:00:00Z`)) / 86_400_000);
+  const slipping = goals
+    .map((g) => ({ g, p: goalProgress(g, logs, today) }))
+    .filter(({ p }) => !p.today && (p.state === "tight" || (p.state === "behind" && dayIndex >= 3)));
+  if (!slipping.length) return null;
+  const line = ({ g, p }: (typeof slipping)[number]) => `${label(g.kind)} ${p.done} of ${p.target}`;
+  const tight = slipping.filter((x) => x.p.state === "tight");
+  const first = (tight[0] ?? slipping[0]).p;
+  const left = first.target - first.done;
+  return {
+    title: `🏋️ ${slipping.map(line).join(" · ")}`,
+    body: tight.length
+      ? left === 1 && first.daysLeft === 1
+        ? "Last chance this week: today finishes it."
+        : `Needs today${first.daysLeft > 1 ? ` and every day to Sunday (${left} to go)` : ""}. Tap to log it when done.`
+      : `${left} to go this week. A session today keeps it in reach.`,
+  };
+}

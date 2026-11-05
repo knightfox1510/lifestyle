@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Button, Field, Input, Notice, Select } from "@/components/ui";
 import { LogoMark } from "@/components/logo";
 
@@ -9,8 +11,26 @@ import { LogoMark } from "@/components/logo";
  * PIN via WebAuthn with user verification) or a Hearth PIN as fallback.
  * Settings live in localStorage on this device only; the unlock state is per
  * browser tab session.
+ *
+ * It can lock the whole app, or only the private screens (private log,
+ * cycle, medical records): the rest of the app opens as usual and those ask
+ * first, again after the app has been away or you've been elsewhere in it.
  */
-type LockConfig = { method: "passkey" | "pin"; credId?: string; pinHash?: string; salt?: string; timeoutMin: number };
+type LockConfig = { method: "passkey" | "pin"; credId?: string; pinHash?: string; salt?: string; timeoutMin: number; scope?: "app" | "sensitive"; sections?: string[] };
+
+/** Screens the "private screens only" lock covers. */
+export const LOCKABLE: { key: string; label: string; paths: string[] }[] = [
+  { key: "private_log", label: "Private log", paths: ["/private"] },
+  { key: "cycle", label: "Cycle", paths: ["/cycle"] },
+  { key: "medical_records", label: "Medical records & labs", paths: ["/medical"] },
+  { key: "bladder_diary", label: "Bladder diary", paths: ["/bladder"] },
+];
+const DEFAULT_SECTIONS = ["private_log", "cycle", "medical_records"];
+const SENSITIVE_LEFT = "hearth.sensitiveLeftAt";
+const UNLOCKED_SENSITIVE = "hearth.unlockedSensitiveAt";
+
+const lockedPaths = (c: LockConfig) => LOCKABLE.filter((l) => (c.sections ?? DEFAULT_SECTIONS).includes(l.key)).flatMap((l) => l.paths);
+const onPaths = (path: string, paths: string[]) => paths.some((p) => path === p || path.startsWith(`${p}/`));
 
 const KEY = "hearth.lock";
 const UNLOCKED = "hearth.unlockedAt";
@@ -33,9 +53,10 @@ function writeConfig(c: LockConfig | null) {
     /* storage unavailable */
   }
 }
-function markUnlocked() {
+function markUnlocked(sensitive = false) {
   try {
-    sessionStorage.setItem(UNLOCKED, String(Date.now()));
+    sessionStorage.setItem(sensitive ? UNLOCKED_SENSITIVE : UNLOCKED, String(Date.now()));
+    if (sensitive) sessionStorage.removeItem(SENSITIVE_LEFT);
   } catch {
     /* ignore */
   }
@@ -82,23 +103,45 @@ function useConfig() {
 export function AppLockGate() {
   const raw = useConfig();
   const config = useMemo(() => parseConfig(raw), [raw]);
+  const path = usePathname();
+  const sensitive = config?.scope === "sensitive";
+  const here = Boolean(config && (!sensitive || onPaths(path, lockedPaths(config))));
   const [locked, setLocked] = useState(false);
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const wasHere = useRef(false);
+  // Which page the lock was last checked for: until then a covered screen, so a private page doesn't flash.
+  const [checkedFor, setCheckedFor] = useState<string | null>(null);
 
   const evaluate = useCallback(() => {
-    if (!config) return setLocked(false);
+    if (!config || !here) return setLocked(false);
     let unlockedAt = 0;
     let hiddenAt = 0;
+    let leftAt = 0;
     try {
-      unlockedAt = Number(sessionStorage.getItem(UNLOCKED) ?? 0);
+      unlockedAt = Number(sessionStorage.getItem(sensitive ? UNLOCKED_SENSITIVE : UNLOCKED) ?? 0);
       hiddenAt = Number(sessionStorage.getItem(HIDDEN_AT) ?? 0);
+      leftAt = sensitive ? Number(sessionStorage.getItem(SENSITIVE_LEFT) ?? 0) : 0;
     } catch {
       /* ignore */
     }
-    const away = hiddenAt && Date.now() - hiddenAt > config.timeoutMin * 60000;
+    const limit = config.timeoutMin * 60000;
+    const away = (hiddenAt && Date.now() - hiddenAt > limit) || (leftAt && Date.now() - leftAt > limit);
     setLocked(!unlockedAt || Boolean(away));
-  }, [config]);
+    setCheckedFor(path);
+  }, [config, here, sensitive, path]);
+
+  // Private-screens lock: note when you leave them, so coming back later asks again.
+  useEffect(() => {
+    if (!sensitive) return;
+    try {
+      if (here) sessionStorage.removeItem(SENSITIVE_LEFT);
+      else if (wasHere.current) sessionStorage.setItem(SENSITIVE_LEFT, String(Date.now()));
+    } catch {
+      /* ignore */
+    }
+    wasHere.current = here;
+  }, [here, sensitive]);
 
   useEffect(() => {
     const t = window.setTimeout(evaluate, 0);
@@ -120,6 +163,9 @@ export function AppLockGate() {
     };
   }, [evaluate]);
 
+  // Not checked yet on this kind of screen (first load, or just arrived on a private one).
+  const stillChecking = config && here && (checkedFor === null || (sensitive && !onPaths(checkedFor, lockedPaths(config))));
+  if (stillChecking) return <div className="fixed inset-0 z-[100] bg-bg" aria-hidden />;
   if (!locked || !config) return null;
 
   async function unlock() {
@@ -127,7 +173,7 @@ export function AppLockGate() {
     try {
       if (config!.method === "passkey" && config!.credId) await verifyPasskey(config!.credId);
       else if ((await hashPin(pin, config!.salt!)) !== config!.pinHash) throw new Error("Wrong PIN");
-      markUnlocked();
+      markUnlocked(sensitive);
       setPin("");
       setLocked(false);
     } catch (e) {
@@ -138,7 +184,8 @@ export function AppLockGate() {
   return (
     <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-4 bg-bg/95 p-6 text-center backdrop-blur-xl" role="dialog" aria-modal="true" aria-label="App locked">
       <LogoMark className="size-14" />
-      <p className="text-lg font-semibold">Hearth is locked</p>
+      <p className="text-lg font-semibold">{sensitive ? "This screen is locked" : "Hearth is locked"}</p>
+      {sensitive ? <p className="-mt-2 text-sm text-fg-muted">Private screens ask first on this device.</p> : null}
       {config.method === "pin" ? (
         <form onSubmit={(e) => { e.preventDefault(); void unlock(); }} className="flex gap-2">
           <Input type="password" inputMode="numeric" autoComplete="off" value={pin} onChange={(e) => setPin(e.target.value)} placeholder="PIN" className="w-32 text-center tracking-widest" autoFocus aria-label="PIN" />
@@ -148,9 +195,13 @@ export function AppLockGate() {
         <Button onClick={unlock}>🔓 Unlock</Button>
       )}
       {error ? <p className="text-sm text-danger">{error}</p> : null}
-      <form action="/auth/signout" method="post">
-        <button className="text-xs text-fg-muted underline">Sign out instead</button>
-      </form>
+      {sensitive ? (
+        <Link href="/" className="text-sm text-fg-muted underline">Back to Today</Link>
+      ) : (
+        <form action="/auth/signout" method="post">
+          <button className="text-xs text-fg-muted underline">Sign out instead</button>
+        </form>
+      )}
     </div>
   );
 }
@@ -159,6 +210,8 @@ export function AppLockSettings() {
   const raw = useConfig();
   const config = parseConfig(raw);
   const [timeout, setTimeoutMin] = useState(5);
+  const [scope, setScope] = useState<"app" | "sensitive">("app");
+  const [sections, setSections] = useState<string[]>(DEFAULT_SECTIONS);
   const [pin, setPin] = useState("");
   const [msg, setMsg] = useState<{ tone: "accent" | "danger"; text: string } | null>(null);
   const passkeySupported = useSyncExternalStore(
@@ -181,8 +234,8 @@ export function AppLockSettings() {
         },
       })) as PublicKeyCredential | null;
       if (!cred) throw new Error("No credential");
-      writeConfig({ method: "passkey", credId: b64(cred.rawId), timeoutMin: timeout });
-      markUnlocked();
+      writeConfig({ method: "passkey", credId: b64(cred.rawId), timeoutMin: timeout, scope, sections });
+      markUnlocked(scope === "sensitive");
       setMsg({ tone: "accent", text: "App lock is on for this device." });
     } catch (e) {
       setMsg({ tone: "danger", text: (e as Error).name === "NotAllowedError" ? "Cancelled." : "This device couldn't set up a passkey. Use a PIN instead." });
@@ -192,8 +245,9 @@ export function AppLockSettings() {
   async function enablePin() {
     if (!/^\d{4,8}$/.test(pin)) return setMsg({ tone: "danger", text: "Use 4 to 8 digits." });
     const salt = b64(rand(16));
-    writeConfig({ method: "pin", salt, pinHash: await hashPin(pin, salt), timeoutMin: timeout });
-    markUnlocked();
+    if (scope === "sensitive" && !sections.length) return setMsg({ tone: "danger", text: "Pick at least one screen to lock." });
+    writeConfig({ method: "pin", salt, pinHash: await hashPin(pin, salt), timeoutMin: timeout, scope, sections });
+    markUnlocked(scope === "sensitive");
     setPin("");
     setMsg({ tone: "accent", text: "PIN lock is on for this device." });
   }
@@ -201,7 +255,9 @@ export function AppLockSettings() {
   if (config) {
     return (
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm">✓ On ({config.method === "passkey" ? "fingerprint / face / device PIN" : "Hearth PIN"}), locks after {config.timeoutMin} min away.</span>
+        <span className="text-sm">
+          ✓ On for {config.scope === "sensitive" ? LOCKABLE.filter((l) => (config.sections ?? DEFAULT_SECTIONS).includes(l.key)).map((l) => l.label).join(", ") : "the whole app"} ({config.method === "passkey" ? "fingerprint / face / device PIN" : "Hearth PIN"}), asks again after {config.timeoutMin} min away. To change it, turn it off and set it up again.
+        </span>
         <Button size="sm" variant="ghost" onClick={async () => {
           try {
             if (config.method === "passkey" && config.credId) await verifyPasskey(config.credId);
@@ -218,7 +274,21 @@ export function AppLockSettings() {
 
   return (
     <div className="space-y-3">
-      <Field label="Lock after the app has been away for" className="w-56">
+      <div className="space-y-1.5 text-sm">
+        <label className="flex items-center gap-2"><input type="radio" name="lock-scope" checked={scope === "app"} onChange={() => setScope("app")} className="accent-[var(--accent)]" /> The whole app</label>
+        <label className="flex items-center gap-2"><input type="radio" name="lock-scope" checked={scope === "sensitive"} onChange={() => setScope("sensitive")} className="accent-[var(--accent)]" /> Only private screens</label>
+        {scope === "sensitive" ? (
+          <div className="ml-6 flex flex-wrap gap-x-4 gap-y-1">
+            {LOCKABLE.map((l) => (
+              <label key={l.key} className="flex items-center gap-1.5">
+                <input type="checkbox" className="size-4 accent-[var(--accent)]" checked={sections.includes(l.key)} onChange={(e) => setSections(e.target.checked ? [...sections, l.key] : sections.filter((k) => k !== l.key))} />
+                {l.label}
+              </label>
+            ))}
+          </div>
+        ) : null}
+      </div>
+      <Field label={scope === "sensitive" ? "Ask again after being away from them for" : "Lock after the app has been away for"} className="w-64">
         <Select value={timeout} onChange={(e) => setTimeoutMin(Number(e.target.value))}>
           {[0, 1, 5, 15, 60].map((m) => (
             <option key={m} value={m}>{m === 0 ? "Immediately" : `${m} minute${m === 1 ? "" : "s"}`}</option>
@@ -226,7 +296,7 @@ export function AppLockSettings() {
         </Select>
       </Field>
       <div className="flex flex-wrap items-end gap-2">
-        {passkeySupported ? <Button onClick={enablePasskey}>Use fingerprint / face</Button> : null}
+        {passkeySupported ? <Button onClick={enablePasskey} disabled={scope === "sensitive" && !sections.length}>Use fingerprint / face</Button> : null}
         <Field label="or a 4–8 digit PIN" className="w-40">
           <Input type="password" inputMode="numeric" value={pin} onChange={(e) => setPin(e.target.value)} autoComplete="new-password" />
         </Field>

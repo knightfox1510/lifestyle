@@ -15,9 +15,14 @@ import { nextOccurrence } from "@/modules/occasions/logic";
 import type { Occasion, LabResult } from "@/lib/types";
 import { daysUntil } from "@/modules/pantry/match";
 import { generateDigest, weekStart } from "@/lib/digest";
+import { goalNudge, weekStartOf, type FitnessGoal } from "@/modules/fitness/goals";
+import { KIND_META } from "@/modules/fitness/meta";
 import { loadDays, waterSettings } from "@/lib/today";
 import { serviceSession } from "@/lib/service-session";
-import type { FitnessClass, Medicine, NotificationPrefs, Profile, Supplement } from "@/lib/types";
+import type { FitnessClass, Medicine, NotificationPrefs, Profile, Supplement, WorkoutKind } from "@/lib/types";
+
+/** When the weekly-goal nudge goes out (local time): early evening, still time for a walk or the gym. */
+const GOAL_NUDGE_MINUTES = 18 * 60 + 30;
 import { makeT, isLang } from "@/lib/i18n/core";
 import { WINDOW_MINUTES, dueWaterSlot, inQuietHours, inWindow, shouldRemind, toMinutes } from "@/modules/notifications/timing";
 
@@ -155,6 +160,16 @@ async function remindUser(
       if (inWindow(time, remindAt)) {
         await send("fitness", `fit:${c.id}:${classDay}`, `🏋️ ${tr("{name} at {time}", { name: c.name, time: c.start_time.slice(0, 5) })}`, `${c.duration_minutes} min${c.location ? ` · ${c.location}` : ""}`, "/fitness");
       }
+    }
+    // Weekly goals that are slipping: one nudge in the early evening, while there's still time to go.
+    if (!closedToday && inWindow(time, GOAL_NUDGE_MINUTES)) {
+      const ws = weekStartOf(today);
+      const [{ data: goals }, { data: wlogs }] = await Promise.all([
+        admin.from("fitness_goals").select("kind, times_per_week, min_minutes").eq("owner_id", profile.id).eq("active", true),
+        admin.from("workout_logs").select("performed_on, kind, status, duration_minutes").eq("owner_id", profile.id).gte("performed_on", ws),
+      ]);
+      const nudge = goals?.length ? goalNudge(goals as FitnessGoal[], (wlogs ?? []) as never, today, (k) => (k === "any" ? tr("Workouts") : tr(KIND_META[k as WorkoutKind]?.label ?? k))) : null;
+      if (nudge) await send("fitness", `fitgoal:${today}`, nudge.title, nudge.body, "/fitness");
     }
   }
 

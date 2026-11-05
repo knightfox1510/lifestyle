@@ -17,7 +17,7 @@ export default async function PrivacyPage() {
         <Card className="space-y-3">
           <h2 className="font-semibold">🔒 App lock (this device)</h2>
           <p className="text-sm text-fg-muted">
-            Ask for your fingerprint, face or device PIN (or a Hearth PIN) when the app opens or after it has been in the background. Useful on a shared phone or laptop. It keeps others from opening the app on this device; your data is already protected on the server by your sign-in.
+            Ask for your fingerprint, face or device PIN (or a Hearth PIN) when the app opens or after it has been in the background, or only before private screens (private log, cycle, medical records). Useful on a shared phone or laptop. It keeps others from opening the app on this device; your data is already protected on the server by your sign-in.
           </p>
           <AppLockSettings />
         </Card>

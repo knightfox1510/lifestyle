@@ -32,6 +32,7 @@ export default async function MeHub() {
         title={t("You")}
         items={[
           { href: "/digest/wrap", name: t("Your week"), hint: t("Streaks, doses, water and cheers") },
+          ...(session.members.length > 1 ? [{ href: "/us", name: t("Our week together"), hint: t("Both of you side by side: days closed, workouts, shows") }] : []),
           { href: "/assistant", name: t("Ask AI"), hint: t("Suggestions that use your health data") },
           { href: "/settings", name: t("Settings"), hint: t("Language, Home view, profile") },
           { href: "/settings/notifications", name: t("Notifications"), hint: t("Reminders, water, close your day") },

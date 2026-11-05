@@ -270,6 +270,8 @@ export const PHRASES: Record<string, { hi: string; mr: string }> = {
   "Workouts": { hi: "वर्कआउट", mr: "वर्कआउट" },
   "Weekly goals met": { hi: "साप्ताहिक लक्ष्य पूरे", mr: "साप्ताहिक उद्दिष्टे पूर्ण" },
   "Private log": { hi: "निजी लॉग", mr: "खाजगी नोंद" },
+  "Our week together": { hi: "हमारा साथ का हफ़्ता", mr: "आपला एकत्र आठवडा" },
+  "Both of you side by side: days closed, workouts, shows": { hi: "आप दोनों साथ-साथ: पूरे किए दिन, वर्कआउट, शो", mr: "तुम्ही दोघे शेजारी: पूर्ण केलेले दिवस, वर्कआउट, शो" },
   "Missed that day": { hi: "उस दिन छूटा", mr: "त्या दिवशी राहिलेले" },
   "Supplement": { hi: "सप्लीमेंट", mr: "सप्लिमेंट" },
   "{ml} of {target} ml": { hi: "{target} में से {ml} ml", mr: "{target} पैकी {ml} ml" },
