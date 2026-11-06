@@ -44,7 +44,7 @@ export function AiSettings({
         <h2 className="font-semibold">AI (Gemini)</h2>
         <p className="text-sm text-fg-muted">
           {hasCustomKey ? "Using your household's own Gemini key." : "Using the app's shared Gemini key."} {usedToday} of {limit} requests
-          used today.
+          used today. <a href="/settings/ai-usage" className="text-accent underline">See which features use the most</a>
         </p>
       </div>
       <form action={testAction} className="flex flex-wrap items-center gap-2">
@@ -57,7 +57,7 @@ export function AiSettings({
             <Field label="AI model" className="min-w-60 flex-1" hint="If the chosen model is busy, Hearth retries and then falls back to a lighter one automatically.">
               <Select name="ai_model" defaultValue={model}>
                 <option value="standard">Standard (Flash): faster, more free requests</option>
-                <option value="best">Best (Pro): smarter, slower, fewer free requests</option>
+                <option value="best">Best (Pro) for health reasoning only (coach, visit summary, medicine checks): about 4× the cost; everything else stays on Flash</option>
               </Select>
             </Field>
             <SubmitButton variant="secondary">Save model</SubmitButton>

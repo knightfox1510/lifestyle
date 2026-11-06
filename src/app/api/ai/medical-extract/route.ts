@@ -47,8 +47,8 @@ export async function POST(request: Request) {
         responseJsonSchema: toGeminiSchema(medicalExtractionSchema),
         temperature: 0,
       },
-    }, { deadline, quick: true });
-    await recordUsage(session, "medical_extract", false, res.usageMetadata);
+    }, { deadline, quick: true, feature: "medical_extract" });
+    await recordUsage(session, "medical_extract", false, res);
 
     const extraction = medicalExtractionSchema.safeParse(clampToSchema(JSON.parse(res.text ?? "{}"), medicalExtractionSchema));
     if (!extraction.success) throw new AiError("The AI response couldn't be read. Try again.", 502);

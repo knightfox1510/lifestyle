@@ -38,8 +38,8 @@ export async function POST(request: Request) {
         systemInstruction: `${SAFETY_INSTRUCTIONS}\n\n${context.text}`,
         temperature: 0.6,
       },
-    });
-    await recordUsage(session, "assistant", context.usedMedical, res.usageMetadata);
+    }, { feature: "assistant" });
+    await recordUsage(session, "assistant", context.usedMedical, res);
     return NextResponse.json({ answer: res.text ?? "", usedMedical: context.usedMedical, stats: context.stats });
   } catch (err) {
     if (err instanceof AiError) return NextResponse.json({ error: err.message }, { status: err.status });

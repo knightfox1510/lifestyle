@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     const today = todayIn(tz);
 
     const [ctx, facts, pantryRes, foodRes] = await Promise.all([
-      buildAiContext(session, { subjectId: input.subjectId, useMedicalHistory: input.useMedicalHistory }),
+      buildAiContext(session, { subjectId: input.subjectId, useMedicalHistory: input.useMedicalHistory, brief: true }),
       personFacts(session, input.subjectId),
       session.isModuleEnabled("pantry")
         ? session.supabase.from("pantry_items").select("*").eq("household_id", session.household.id).is("used_up_at", null).limit(300)

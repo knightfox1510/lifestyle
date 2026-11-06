@@ -29,6 +29,8 @@ export async function POST(request: Request) {
       parts: photo ? [photo, { text }] : [{ text }],
       temperature: 0,
       system: "You are a careful pharmacist's assistant. You give factual composition data only and never advise on dosing changes.",
+      // A brand's composition doesn't change: the same name looked up again reuses the answer.
+      cache: photo ? undefined : { key: `${name.toLowerCase()}\n${strength.toLowerCase()}`, days: 180 },
     });
   });
 }

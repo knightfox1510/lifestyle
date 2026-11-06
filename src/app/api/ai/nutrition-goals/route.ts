@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     const input = body.parse(await request.json());
     if (session.accessTo("food_diary", input.subjectId) !== "write") throw new AiError("You can't set goals for this person.", 403);
     const [ctx, facts] = await Promise.all([
-      buildAiContext(session, { subjectId: input.subjectId, useMedicalHistory: input.useMedicalHistory }),
+      buildAiContext(session, { subjectId: input.subjectId, useMedicalHistory: input.useMedicalHistory, brief: true }),
       personFacts(session, input.subjectId),
     ]);
     const prompt = `Suggest daily nutrition targets.

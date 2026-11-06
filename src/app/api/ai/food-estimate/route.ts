@@ -9,6 +9,7 @@ import { mealCalcSystemPrompt } from "@/lib/nutrition/meal-prompt";
 import { computeItem, type CalcItem } from "@/modules/nutrition/compute";
 import { cleanIrritants } from "@/modules/nutrition/irritants";
 import type { Nutrients } from "@/modules/nutrition/nutrients";
+import { mealForHour } from "@/modules/food/meta";
 
 /** Long AI jobs (documents, photos, whole-week plans) can take a while: up to 5 minutes on Vercel. */
 export const maxDuration = 300;
@@ -38,6 +39,8 @@ export async function POST(request: Request) {
       parts: [...(photo ? [photo] : []), { text: `Local time: ${hint || "unknown"}.\n${text ? `What I ate: ${text}` : "Work out the food in this photo."}` }],
       system,
       temperature: 0.1,
+      // The same meal typed again (no photo) at the same kind of mealtime reuses the answer for 60 days.
+      cache: photo ? undefined : { key: `${text.toLowerCase().replace(/\s+/g, " ")}\n${hint ? mealForHour(Number(hint.slice(0, 2)) || 12) : ""}`, days: 60 },
     });
 
     const items = await Promise.all(

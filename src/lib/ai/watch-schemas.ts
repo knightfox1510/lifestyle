@@ -23,6 +23,11 @@ export const watchInfoSchema = z.object({
 });
 export type WatchInfo = z.infer<typeof watchInfoSchema>;
 
+/** Several titles in one request (one web search session instead of one each). */
+export const watchInfoBatchSchema = z.object({
+  titles: z.array(z.object({ n: z.number().int().describe("The title's number in the list"), ...watchInfoSchema.shape })).max(12),
+});
+
 export const watchSuggestSchema = z.object({
   picks: z
     .array(

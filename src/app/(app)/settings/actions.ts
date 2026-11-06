@@ -135,7 +135,7 @@ export async function testAi(): Promise<ActionResult> {
   const session = await getSession();
   const started = Date.now();
   try {
-    const res = await generate(session, { contents: "Reply with the single word OK.", config: { temperature: 0, maxOutputTokens: 16 } });
+    const res = await generate(session, { contents: "Reply with the single word OK.", config: { temperature: 0, maxOutputTokens: 16 } }, { feature: "ai_test" });
     return { ok: true, message: `Working: ${res.modelUsed} answered in ${((Date.now() - started) / 1000).toFixed(1)} s.` };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "The AI test failed." };

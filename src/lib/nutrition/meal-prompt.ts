@@ -4,13 +4,15 @@ import { DISHES } from "@/modules/nutrition/dishes";
 import { measureRulesForAi } from "@/modules/nutrition/measures";
 
 export function mealCalcSystemPrompt(household: { foods: string[]; recipes: string[] }) {
+  // The long fixed lists come first and the household's own lists last: Gemini reuses (and bills at
+  // about a tenth) a prompt start it has seen recently, so the same ~5k-token start is cheap on every meal.
   const context = [
     `Built-in staples (key: name): ${STAPLES.map((s) => `${s.key}: ${s.name}`).join("; ")}`,
-    household.foods.length ? `Household's own foods: ${household.foods.join("; ")}` : "",
-    household.recipes.length ? `Household's saved recipes (calculated nutrition): ${household.recipes.join("; ")}` : "",
     `Built-in Indian dishes (key: name — standard serving): ${DISHES.map((d) => `${d.key}: ${d.name} — ${d.serving}`).join("; ")}`,
     MEASURE_HINTS,
     measureRulesForAi(),
+    household.foods.length ? `Household's own foods: ${household.foods.join("; ")}` : "",
+    household.recipes.length ? `Household's saved recipes (calculated nutrition): ${household.recipes.join("; ")}` : "",
   ]
     .filter(Boolean)
     .join("\n\n");

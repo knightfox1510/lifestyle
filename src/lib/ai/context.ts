@@ -59,9 +59,15 @@ function eventLine(e: MedicalEvent, byId: Map<string, MedicalEvent>): string {
   return parts.join(" · ");
 }
 
+/**
+ * `brief`: only what everyday suggestions need (allergies, ongoing conditions,
+ * current medicines, out-of-range labs), not the whole timeline and hospital
+ * papers: a fraction of the tokens for meal ideas, orders, plans and trips.
+ */
 export async function buildMedicalContext(
   session: AppSession,
   subjectId: string,
+  brief = false,
 ): Promise<Omit<AiContext, "usedMedical">> {
   const { supabase } = session;
   const [profileRes, eventsRes, docsRes, labsRes] = await Promise.all([
@@ -126,7 +132,7 @@ export async function buildMedicalContext(
   }
 
   const shown = new Set([...allergies, ...conditions, ...currentMeds].map((e) => e.id));
-  const history = events.filter((e) => !shown.has(e.id));
+  const history = brief ? [] : events.filter((e) => !shown.has(e.id));
   if (history.length) {
     lines.push("", "Medical timeline (newest first):", ...history.map((e) => eventLine(e, byId)));
   }
@@ -140,10 +146,12 @@ export async function buildMedicalContext(
       const ref = refLabel(latest);
       return `- ${latest.marker}: ${valueLabel(latest)} on ${latest.test_date}${latest.flag && latest.flag !== "normal" ? ` (${latest.flag.toUpperCase()})` : ""}${ref ? `, ref ${ref}` : ""}${prev ? `; previous ${valueLabel(prev)} on ${prev.test_date}` : ""}`;
     };
-    lines.push("", "Lab results / blood work (latest per test; out-of-range first):", ...flagged.map(labLine), ...rest.slice(0, 60).map(labLine));
+    if (brief) {
+      if (flagged.length) lines.push("", "Out-of-range lab results (latest):", ...flagged.slice(0, 15).map(labLine));
+    } else lines.push("", "Lab results / blood work (latest per test; out-of-range first):", ...flagged.map(labLine), ...rest.slice(0, 60).map(labLine));
   }
 
-  const docLines = docs
+  const docLines = (brief ? [] : docs)
     .map((d) => {
       const summary = d.ai_summary || d.notes;
       if (!summary) return null;
@@ -156,7 +164,8 @@ export async function buildMedicalContext(
   }
 
   let text = lines.join("\n").trim();
-  if (text.length > MAX_CHARS) text = `${text.slice(0, MAX_CHARS)}\n…(older history truncated)`;
+  const max = brief ? 4000 : MAX_CHARS;
+  if (text.length > max) text = `${text.slice(0, max)}\n…(truncated)`;
 
   return {
     text,
@@ -167,7 +176,8 @@ export async function buildMedicalContext(
 /** Shared context for every AI feature. */
 export async function buildAiContext(
   session: AppSession,
-  opts: { subjectId: string; useMedicalHistory?: boolean },
+  /** brief: the short health summary (see buildMedicalContext) for everyday suggestions. */
+  opts: { subjectId: string; useMedicalHistory?: boolean; brief?: boolean },
 ): Promise<AiContext> {
   const subject = session.members.find((m) => m.user_id === opts.subjectId);
   const isSelf = opts.subjectId === session.userId;
@@ -184,7 +194,7 @@ export async function buildAiContext(
 
   const medicalAllowed = session.isModuleEnabled("medical_records") && session.accessTo("medical_records", opts.subjectId) !== "none";
   const [medical, tracking] = await Promise.all([
-    medicalAllowed ? buildMedicalContext(session, opts.subjectId) : Promise.resolve({ text: "", stats: empty }),
+    medicalAllowed ? buildMedicalContext(session, opts.subjectId, opts.brief) : Promise.resolve({ text: "", stats: empty }),
     buildTrackingContext(session, opts.subjectId),
   ]);
   const sections = [

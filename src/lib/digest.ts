@@ -47,7 +47,7 @@ export async function generateDigest(session: AppSession): Promise<{ content: st
   const shown = (m: string) => session.isShown(m);
   const water = await waterSettings(session.supabase, session.userId);
   const [ctx, upcoming, days] = await Promise.all([
-    buildAiContext(session, { subjectId: session.userId, useMedicalHistory: session.profile.ai_use_medical_history }),
+    buildAiContext(session, { subjectId: session.userId, useMedicalHistory: session.profile.ai_use_medical_history, brief: true }),
     householdUpcoming(session, today),
     loadDays(session.supabase, session.userId, { tz: session.profile.timezone, today, days: 14, enabled: { medicines: shown("medicines"), food: shown("food_diary"), checkin: shown("checkin"), supplements: shown("supplements") }, waterTarget: water.target, supplementTimes: session.profile.supplement_times }),
   ]);
@@ -74,8 +74,8 @@ ${scoreLine}
 Household items:
 ${upcoming || "(none)"}`,
     config: { systemInstruction: `${SAFETY_INSTRUCTIONS}\n\n${ctx.text}`, temperature: 0.5 },
-  });
-  await recordUsage(session, "weekly_digest", ctx.usedMedical, res.usageMetadata);
+  }, { feature: "weekly_digest" });
+  await recordUsage(session, "weekly_digest", ctx.usedMedical, res);
   const content = (res.text ?? "").trim();
   if (!content) throw new AiError("The AI returned an empty summary.", 502);
   const { error } = await createAdminClient()

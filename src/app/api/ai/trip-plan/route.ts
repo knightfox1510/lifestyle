@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     const trip = t as Trip;
     const { data: it } = await session.supabase.from("trip_items").select("*").eq("trip_id", trip.id);
     const items = (it ?? []) as TripItem[];
-    const ctx = await buildAiContext(session, { subjectId: session.userId, useMedicalHistory: input.useMedicalHistory });
+    const ctx = await buildAiContext(session, { subjectId: session.userId, useMedicalHistory: input.useMedicalHistory, brief: true });
 
     const prompt = `Plan this trip for ${session.members.map((m) => m.display_name).join(" and ")}.
 Trip: ${trip.title}${trip.destination ? ` to ${trip.destination}` : ""}${trip.start_date ? `, ${trip.start_date} to ${trip.end_date ?? "?"}` : " (dates not fixed: plan ~5 days with date null)"}.

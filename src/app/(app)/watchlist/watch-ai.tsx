@@ -143,40 +143,34 @@ export function LookupButton({ itemId, again = false }: { itemId: string; again?
   );
 }
 
-/** Looks up details for the titles that don't have them yet, ten at a time (each one is an AI request). */
+/** Looks up details for the titles that don't have them yet: ten in one request. */
 export function LookupAll({ ids }: { ids: string[] }) {
   const { toast } = useToast();
   const router = useRouter();
-  const [done, setDone] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
   const batch = ids.slice(0, 10);
   return (
     <button
       type="button"
-      disabled={done !== null}
+      disabled={busy}
       className="inline-flex items-center gap-1.5 text-sm text-accent disabled:text-fg-muted"
       onClick={async () => {
-        setDone(0);
-        let ok = 0;
-        for (const id of batch) {
-          try {
-            const res = await fetch("/api/ai/watch-info", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ itemId: id }) });
-            if (res.status === 429) {
-              toast((await res.json()).error ?? "Daily AI limit reached.", { tone: "error" });
-              break;
-            }
-            if (res.ok) ok++;
-          } catch {
-            /* carry on with the rest */
-          }
-          setDone((d) => (d ?? 0) + 1);
+        setBusy(true);
+        try {
+          const res = await fetch("/api/ai/watch-info", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ itemIds: batch }) });
+          const body = await res.json();
+          if (!res.ok) throw new Error(body.error ?? "Couldn't look them up");
+          toast(`Details added for ${body.found} of ${body.checked} titles`, { kind: "ai" });
+          router.refresh();
+        } catch (e) {
+          toast((e as Error).message, { tone: "error" });
+        } finally {
+          setBusy(false);
         }
-        toast(`Details added for ${ok} title${ok === 1 ? "" : "s"}`, { kind: "ai" });
-        setDone(null);
-        router.refresh();
       }}
     >
       <Sparkles className="size-4" aria-hidden />
-      {done !== null ? `Looking up ${done + 1 > batch.length ? batch.length : done + 1} of ${batch.length}…` : `Look up IMDb ratings & details for ${batch.length}${ids.length > batch.length ? ` of ${ids.length}` : ""} titles`}
+      {busy ? `Looking up ${batch.length} titles…` : `Look up IMDb ratings & details for ${batch.length}${ids.length > batch.length ? ` of ${ids.length}` : ""} titles`}
     </button>
   );
 }
