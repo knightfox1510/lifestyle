@@ -35,7 +35,7 @@ export default async function DigestPage() {
   const digests = (data ?? []) as { week_start: string; content: string; created_at: string }[];
   return (
     <>
-      <PageHeader title="Weekly summary" subtitle="An AI recap of your week (health, habits, food, fitness) and what's coming up at home. Arrives Sunday evening if notifications are on." actions={<GenerateButton />} />
+      <PageHeader title="Weekly summary" subtitle="A recap of your week (goals, score, what to watch) and what's coming up at home. Arrives Sunday evening if notifications are on; it can be written by AI (Settings → Notifications)." actions={<GenerateButton />} />
       {week.length ? (
         <Section title={t("This week at a glance")} className="mb-5">
           <HealthScoreCard statuses={days.statuses} t={t} />

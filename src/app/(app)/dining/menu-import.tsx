@@ -223,9 +223,10 @@ export function MenuImport({ placeId, placeName, initialFiles, initialText, onDo
       <div className="space-y-2 rounded-xl bg-surface p-3">
         <p className="text-sm font-medium">🔎 Easiest: find it online</p>
         <p className="text-xs text-fg-muted">AI searches Swiggy, Zomato and the restaurant&apos;s site for its menu. Works best for chains and places listed on delivery apps. Takes about a minute.</p>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Input value={city} onChange={(e) => setCity(e.target.value)} maxLength={80} placeholder="City (e.g. Pune)" aria-label="City" className="!h-9 w-40" />
           <Button size="sm" onClick={() => void findOnline()} disabled={searching || loading}>{searching ? "Searching…" : "Find menu online"}</Button>
+          <span className="text-xs text-fg-muted">uses web search</span>
         </div>
       </div>
       <p className="text-center text-xs text-fg-muted">or from screenshots</p>

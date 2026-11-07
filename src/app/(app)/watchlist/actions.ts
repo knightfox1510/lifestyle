@@ -68,6 +68,18 @@ export async function addWatchSuggestion(pick: { title: string; kind: string; wh
   return { ok: true, message: status === "watching" ? `${pick.title}: enjoy! It's under Watching.` : `${pick.title} added to Want to watch.` };
 }
 
+/** "Watch it" on a new season: back to Watching, and the season count catches up so the "new season" badge clears. */
+export async function watchNewSeason(id: string) {
+  const session = await requireModule("watchlist");
+  const { data } = await session.supabase.from("watchlist_items").select("latest_season, total_seasons").eq("id", id).eq("household_id", session.household.id).maybeSingle();
+  await session.supabase
+    .from("watchlist_items")
+    .update({ status: "watching", ...(data?.latest_season && data.latest_season > (data.total_seasons ?? 0) ? { total_seasons: data.latest_season } : {}) })
+    .eq("id", id)
+    .eq("household_id", session.household.id);
+  refreshModule("/watchlist");
+}
+
 export async function setWatchStatus(id: string, status: "want" | "watching" | "paused" | "finished" | "dropped") {
   const session = await requireModule("watchlist");
   await session.supabase.from("watchlist_items").update({ status }).eq("id", id).eq("household_id", session.household.id);

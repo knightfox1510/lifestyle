@@ -3,7 +3,7 @@ import { getSession } from "@/lib/session";
 import { AiError } from "@/lib/ai/gemini";
 import { aiHandler, runJson } from "@/lib/ai/run";
 import { nutritionGoalSchema } from "@/lib/ai/phase2-schemas";
-import { SAFETY_INSTRUCTIONS, buildAiContext } from "@/lib/ai/context";
+import { SAFETY_INSTRUCTIONS, FOOD_TRACKING, buildAiContext } from "@/lib/ai/context";
 import { personFacts } from "@/lib/ai/person-facts";
 
 /** Photo and long AI requests can take a while; allow up to a minute on Vercel. */
@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     const input = body.parse(await request.json());
     if (session.accessTo("food_diary", input.subjectId) !== "write") throw new AiError("You can't set goals for this person.", 403);
     const [ctx, facts] = await Promise.all([
-      buildAiContext(session, { subjectId: input.subjectId, useMedicalHistory: input.useMedicalHistory, brief: true }),
+      buildAiContext(session, { subjectId: input.subjectId, useMedicalHistory: input.useMedicalHistory, brief: true, only: FOOD_TRACKING }),
       personFacts(session, input.subjectId),
     ]);
     const prompt = `Suggest daily nutrition targets.

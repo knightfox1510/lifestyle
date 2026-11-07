@@ -181,21 +181,21 @@ export function toGrams(amount: number, unit: Unit) {
 }
 
 /** The same rules, written out for the AI that turns "1 banana, a glass of milk" into grams. */
-export function measureRulesForAi() {
-  const refuse = Object.entries(META)
+/** `only`: limit the per-food rules to these staple keys (a typed meal needs only its own foods). */
+export function measureRulesForAi(only?: Set<string>) {
+  const entries = Object.entries(META).filter(([k]) => !only || only.has(k));
+  const refuse = entries
     .filter(([, m]) => m.refuse)
     .map(([k, m]) => `${k} ${Math.round(m.refuse! * 100)}%`)
     .join(", ");
-  const pieces = Object.entries(META)
+  const pieces = entries
     .filter(([, m]) => m.piece)
     .map(([k, m]) => `${k}: 1 ${m.piece!.label} = ${m.piece!.g} g`)
     .join("; ");
-  const dens = Object.entries(META)
+  const dens = entries
     .filter(([, m]) => m.density && m.density !== 1)
     .map(([k, m]) => `${k} ${m.density}`)
     .join(", ");
   return `Grams are always the EDIBLE part (no peel, seeds, core, shell or bone).
-- If a weight is given for the whole fruit/vegetable/egg/meat with its inedible part, subtract this share: ${refuse}.
-- Typical edible weight of one piece: ${pieces}.
-- ml → grams uses the food's density (g per ml; spooned dry foods by volume): ${dens}. 1 tsp = 5 ml, 1 tbsp = 15 ml, 1 katori = 150 ml, 1 cup = 240 ml, 1 glass = 250 ml.`;
+${refuse ? `- If a weight is given for the whole fruit/vegetable/egg/meat with its inedible part, subtract this share: ${refuse}.\n` : ""}${pieces ? `- Typical edible weight of one piece: ${pieces}.\n` : ""}- ml → grams uses the food's density (g per ml; spooned dry foods by volume)${dens ? `: ${dens}` : ""}. 1 tsp = 5 ml, 1 tbsp = 15 ml, 1 katori = 150 ml, 1 cup = 240 ml, 1 glass = 250 ml.`;
 }

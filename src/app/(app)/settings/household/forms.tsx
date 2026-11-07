@@ -26,12 +26,18 @@ export function AiSettings({
   limit,
   usedToday,
   model,
+  budget = null,
+  searchLimit = null,
+  spentInr = 0,
 }: {
   isOwner: boolean;
   hasCustomKey: boolean;
   limit: number;
   usedToday: number;
   model: "standard" | "best";
+  budget?: number | null;
+  searchLimit?: number | null;
+  spentInr?: number;
 }) {
   const [limitState, limitAction] = useActionState(saveAiLimit, null);
   const [modelState, modelAction] = useActionState(saveAiModel, null);
@@ -69,7 +75,13 @@ export function AiSettings({
             <Field label="Daily request limit" className="w-40">
               <Input type="number" name="ai_daily_limit" min={0} max={1000} defaultValue={limit} />
             </Field>
-            <SubmitButton variant="secondary">Save limit</SubmitButton>
+            <Field label="Monthly budget (₹)" className="w-44" hint={`About ₹${Math.round(spentInr)} used this month (estimate). Blank = no cap; you're warned at 80%.`}>
+              <Input type="number" name="ai_monthly_budget_inr" min={10} max={1000000} defaultValue={budget ?? ""} placeholder="No cap" />
+            </Field>
+            <Field label="Web searches a day" className="w-44" hint="Watchlist lookups, suggestions, online menus. Blank = no limit.">
+              <Input type="number" name="ai_search_daily_limit" min={0} max={500} defaultValue={searchLimit ?? ""} placeholder="No limit" />
+            </Field>
+            <SubmitButton variant="secondary">Save limits</SubmitButton>
             <div className="basis-full">
               <ActionMessage state={limitState} />
             </div>

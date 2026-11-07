@@ -64,6 +64,7 @@ const prefsSchema = z.object({
   maintenance: z.boolean(),
   child: z.boolean(),
   digest: z.boolean(),
+  digest_ai: z.boolean(),
   occasions: z.boolean(),
   travel: z.boolean(),
   water: z.boolean(),
@@ -80,7 +81,7 @@ const prefsSchema = z.object({
 });
 
 export async function saveNotificationPrefs(_: ActionResult | null, form: FormData): Promise<ActionResult> {
-  const flags = ["medicines", "fitness", "expiries", "renewals", "maintenance", "child", "digest", "occasions", "travel", "water", "close_day", "partner_updates"];
+  const flags = ["medicines", "fitness", "expiries", "renewals", "maintenance", "child", "digest", "digest_ai", "occasions", "travel", "water", "close_day", "partner_updates"];
   const parsed = prefsSchema.safeParse({
     ...Object.fromEntries(form),
     ...Object.fromEntries(flags.map((f) => [f, form.get(f) === "on"])),
@@ -88,7 +89,13 @@ export async function saveNotificationPrefs(_: ActionResult | null, form: FormDa
   if (!parsed.success) return { error: "Check the times and water settings." };
   if (parsed.data.water_start >= parsed.data.water_end) return { error: "Water reminders must start before they end." };
   const session = await getSession();
-  const { error } = await session.supabase.from("notification_prefs").upsert({ ...parsed.data, user_id: session.userId }, { onConflict: "user_id" });
+  let { error } = await session.supabase.from("notification_prefs").upsert({ ...parsed.data, user_id: session.userId }, { onConflict: "user_id" });
+  if (error) {
+    // Older database without the AI-summary column: save the rest.
+    const { digest_ai: _skip, ...rest } = parsed.data;
+    void _skip;
+    ({ error } = await session.supabase.from("notification_prefs").upsert({ ...rest, user_id: session.userId }, { onConflict: "user_id" }));
+  }
   if (error) return { error: "Couldn't save." };
   revalidatePath("/settings/notifications");
   return { ok: true, message: "Saved." };

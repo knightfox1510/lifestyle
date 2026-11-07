@@ -14,7 +14,11 @@ import { isDueOn } from "@/modules/schedule";
 import { nextOccurrence } from "@/modules/occasions/logic";
 import type { Occasion, LabResult } from "@/lib/types";
 import { daysUntil } from "@/modules/pantry/match";
-import { generateDigest, weekStart } from "@/lib/digest";
+import { digestInputs, generateDigest, saveDigest, weekStart } from "@/lib/digest";
+import { collectBatches, submitBatch } from "@/lib/ai/batch";
+import { applySeasons, seasonPrompt, seasonShows, type SeasonShow } from "@/lib/watch-seasons";
+import { seasonCheckSchema } from "@/lib/ai/watch-schemas";
+import { toGeminiSchema } from "@/lib/ai/schemas";
 import { goalNudge, weekStartOf, type FitnessGoal } from "@/modules/fitness/goals";
 import { KIND_META } from "@/modules/fitness/meta";
 import { loadDays, waterSettings } from "@/lib/today";
@@ -34,6 +38,7 @@ const DEFAULT_PREFS: Omit<NotificationPrefs, "user_id"> = {
   maintenance: true,
   child: true,
   digest: true,
+  digest_ai: false,
   occasions: true,
   travel: true,
   water: false,
@@ -333,22 +338,73 @@ async function remindUser(
     }
   }
 
-  // Weekly AI digest: Sunday 18:00 local.
-  if (prefs.digest && dayOfWeek(today) === 0 && inWindow(time, 18 * 60)) {
+  // Weekly summary, Sunday 18:00 local. Built from the week's numbers (free) unless the person chose
+  // "write it with AI": then it goes to Google's half-price batch mode and arrives a little later.
+  const sundayNow = dayOfWeek(today) === 0 && inWindow(time, 18 * 60);
+  const needSession = sundayNow || (await admin.from("ai_batches").select("id", { count: "exact", head: true }).eq("user_id", profile.id).eq("status", "pending")).count || (new Date(`${today}T12:00:00Z`).getUTCDate() === 1 && inWindow(time, prefs.daily_hour * 60, WINDOW_MINUTES));
+  const session = needSession ? await serviceSession(profile.id) : null;
+  if (session && prefs.digest && sundayNow) {
     const ws = weekStart(today);
-    const { data: existing } = await admin.from("digests").select("id").eq("user_id", profile.id).eq("week_start", ws).maybeSingle();
-    if (!existing) {
-      const session = await serviceSession(profile.id);
-      if (session) {
-        try {
+    const [{ data: existing }, { count: queued }] = await Promise.all([
+      admin.from("digests").select("id").eq("user_id", profile.id).eq("week_start", ws).maybeSingle(),
+      admin.from("ai_batches").select("id", { count: "exact", head: true }).eq("user_id", profile.id).eq("feature", "weekly_digest").gte("created_at", new Date(now.getTime() - 20 * 3600_000).toISOString()),
+    ]);
+    if (!existing && !queued) {
+      try {
+        const wantsAi = Boolean((prefs as { digest_ai?: boolean }).digest_ai);
+        const input = wantsAi ? await digestInputs(session, { ai: true }) : null;
+        const queuedNow = input?.request ? await submitBatch(admin, session, "weekly_digest", input.request, { ws }, { usedHealth: input.usedHealth }).catch(() => false) : false;
+        if (!queuedNow) {
           await generateDigest(session);
           result.digests += 1;
           await send("digest", `digest:${ws}`, `📬 ${tr("Your weekly summary is ready")}`, tr("Wins, things to watch and what's coming up."), "/digest/wrap");
-        } catch (err) {
-          console.warn("digest failed", profile.id, (err as Error).message);
         }
+      } catch (err) {
+        console.warn("digest failed", profile.id, (err as Error).message);
       }
     }
+  }
+
+  // Once a month (the 1st, at the daily hour), the household creator's run checks the watchlist's series for new seasons, in batch mode.
+  if (session && new Date(`${today}T12:00:00Z`).getUTCDate() === 1 && inWindow(time, prefs.daily_hour * 60, WINDOW_MINUTES) && session.household.created_by === profile.id && on("watchlist")) {
+    const { count: recent } = await admin.from("ai_batches").select("id", { count: "exact", head: true }).eq("household_id", hid).eq("feature", "watch_seasons").gte("created_at", new Date(now.getTime() - 20 * 864e5).toISOString());
+    const shows = recent ? [] : await seasonShows(admin, hid);
+    if (shows.length) {
+      await submitBatch(admin, session, "watch_seasons", { contents: seasonPrompt(shows), config: { temperature: 0.1, tools: [{ googleSearch: {} }], responseMimeType: "application/json", responseJsonSchema: toGeminiSchema(seasonCheckSchema) } }, { shows }).catch((e) => console.warn("season batch failed", (e as Error).message));
+    }
+  }
+
+  // Batch jobs that have finished since the last run.
+  if (session) {
+    const notices = await collectBatches(admin, session, {
+      weekly_digest: {
+        onDone: async ({ text }, p) => {
+          await saveDigest(profile.id, String(p.ws), text);
+          result.digests += 1;
+          return { kind: "digest", refKey: `digest:${p.ws}`, title: `📬 ${tr("Your weekly summary is ready")}`, body: tr("Wins, things to watch and what's coming up."), url: "/digest/wrap" };
+        },
+        onFail: async (p) => {
+          await generateDigest(session);
+          return { kind: "digest", refKey: `digest:${p.ws}`, title: `📬 ${tr("Your weekly summary is ready")}`, body: tr("Wins, things to watch and what's coming up."), url: "/digest/wrap" };
+        },
+      },
+      watch_seasons: {
+        onDone: async ({ text }, p) => {
+          let parsed;
+          try {
+            parsed = seasonCheckSchema.safeParse(JSON.parse(text.replace(/^```(json)?|```$/g, "")));
+          } catch {
+            return null;
+          }
+          if (!parsed.success) return null;
+          const shows = (p.shows ?? []) as SeasonShow[];
+          const fresh = await applySeasons(admin, hid, shows, parsed.data);
+          return fresh ? { kind: "watchlist", refKey: `seasons:${today}`, title: `🆕 ${fresh === 1 ? tr("A show you watch has a new season") : tr("{n} shows you watch have new seasons", { n: fresh })}`, body: tr("See them on the watchlist."), url: "/watchlist" } : null;
+        },
+        onFail: async () => null,
+      },
+    });
+    for (const n of notices) await send(n.kind, n.refKey, n.title, n.body, n.url);
   }
   return result;
 }

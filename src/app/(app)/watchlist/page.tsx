@@ -4,7 +4,7 @@ import { Badge, Card, EmptyState, buttonClass, cx } from "@/components/ui";
 import type { WatchItem, WatchProgress } from "@/lib/types";
 import { AddWatchForm } from "./add-form";
 import { ProgressControls, Stars } from "./progress-controls";
-import { deleteWatchItem, setMyPosition, setWatchStatus, updateWatchItem } from "./actions";
+import { deleteWatchItem, setMyPosition, setWatchStatus, updateWatchItem, watchNewSeason } from "./actions";
 import { EditRecord } from "@/components/edit-record";
 import { InfoLine } from "./info-line";
 import { LookupAll, LookupButton, PickTonight, SeasonCheck, WatchSuggest } from "./watch-ai";
@@ -59,7 +59,7 @@ export default async function WatchlistPage({ searchParams }: PageProps<"/watchl
           {fresh.map((x) => (
             <div key={x.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
               <span>{x.title}: season {x.latest_season}{x.next_season ? <span className="text-xs text-fg-muted"> · {x.next_season}</span> : null}</span>
-              <form action={setWatchStatus.bind(null, x.id, "watching")}><button className={buttonClass("secondary", "sm")}>Watch it</button></form>
+              <form action={watchNewSeason.bind(null, x.id)}><button className={buttonClass("secondary", "sm")}>Watch it</button></form>
             </div>
           ))}
         </Card>

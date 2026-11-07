@@ -24,6 +24,7 @@ export function Assistant({
 }) {
   const [subjectId, setSubjectId] = useState(people.some((p) => p.id === defaultSubject) ? defaultSubject : people[0]?.id);
   const [useMedical, setUseMedical] = useState(defaultUseMedical);
+  const [thinkHarder, setThinkHarder] = useState(false);
   const [prompt, setPrompt] = useState(defaultPrompt);
   const [answer, setAnswer] = useState<{ text: string; usedMedical: boolean } | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -37,7 +38,7 @@ export function Assistant({
       const res = await fetch("/api/ai/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: prompt || "preview", subjectId, useMedicalHistory: useMedical, previewOnly }),
+        body: JSON.stringify({ prompt: prompt || "preview", subjectId, useMedicalHistory: useMedical, previewOnly, thinkHarder }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? "Request failed");
@@ -87,6 +88,12 @@ export function Assistant({
               hint="Medical history, medicines, supplements, diaries and check-ins. Override for this question only; change the default in Settings or hide single entries."
             />
           )}
+          <Checkbox
+            checked={thinkHarder}
+            onChange={(e) => setThinkHarder(e.target.checked)}
+            label="Think harder"
+            hint="For tricky questions (several conditions or medicines at once): slower and costs several times more. Off is fine for most questions."
+          />
           {error ? <Notice tone="danger">{error}</Notice> : null}
           <div className="flex flex-wrap gap-2">
             <Button type="submit" disabled={loading || !prompt.trim()}>{loading ? "Thinking…" : "Ask"}</Button>

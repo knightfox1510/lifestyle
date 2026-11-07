@@ -68,7 +68,10 @@ export function WatchSuggest() {
       <div className="flex flex-wrap gap-1.5">
         {TIME.map(([m, l]) => <button key={l} type="button" className={chip(minutes === m)} onClick={() => setMinutes(m)}>{l}</button>)}
       </div>
-      <Button onClick={() => void ask()} disabled={loading}>{loading ? "Searching…" : picks ? "✨ More ideas" : "✨ Suggest"}</Button>
+      <div className="flex items-center gap-2">
+        <Button onClick={() => void ask()} disabled={loading}>{loading ? "Searching…" : picks ? "✨ More ideas" : "✨ Suggest"}</Button>
+        <span className="text-xs text-fg-muted">uses web search</span>
+      </div>
       {error ? <Notice tone="danger">{error}</Notice> : null}
       {picks ? (
         <ul className="space-y-2">
@@ -202,6 +205,7 @@ export function SeasonCheck({ last }: { last: string | null }) {
     >
       <Sparkles className="size-4" aria-hidden />
       {loading ? "Checking…" : "Any new seasons?"}
+      {!loading ? <span className="text-xs text-fg-muted">· web search</span> : null}
       {last && !loading ? <span className="text-xs text-fg-muted">(checked {new Date(last).toLocaleDateString("en-IN", { day: "numeric", month: "short" })})</span> : null}
     </button>
   );

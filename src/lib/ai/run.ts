@@ -42,7 +42,7 @@ export async function runJson<S extends z.ZodType>(
       return hit.data;
     }
   }
-  await assertQuota(session);
+  await assertQuota(session, opts.feature);
   const request = {
     contents: [{ role: "user", parts: opts.parts }],
     config: {

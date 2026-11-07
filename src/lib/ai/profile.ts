@@ -12,24 +12,28 @@ export type FeatureProfile = {
   thinking: Thinking;
   /** Photo detail: "medium" (~256 tokens) is plenty to recognise food; labels and documents keep full detail. */
   media?: "medium" | "high";
+  /** Simple reading or lookup: Flash-Lite (about half Flash's price), falling back to Flash. */
+  lite?: boolean;
+  /** Searches the web (billed per search on top of tokens; has its own daily limit). */
+  search?: boolean;
 };
 
 export const FEATURES: Record<string, FeatureProfile> = {
   food_estimate: { label: "Food: describe or photo a meal", thinking: "low", media: "medium" },
   quick_log: { label: "Quick log (type anything)", thinking: "minimal" },
-  food_label: { label: "Food: nutrition label photo", thinking: "minimal" },
-  supplement_label: { label: "Supplement label photo", thinking: "minimal" },
-  medicine_info: { label: "Medicine lookup / strip photo", thinking: "minimal" },
+  food_label: { label: "Food: nutrition label photo", thinking: "minimal", lite: true },
+  supplement_label: { label: "Supplement label photo", thinking: "minimal", lite: true },
+  medicine_info: { label: "Medicine lookup / strip photo", thinking: "minimal", lite: true },
   recipe_calc: { label: "Recipe nutrition", thinking: "minimal" },
-  scan_receipt: { label: "Pantry: receipt scan", thinking: "minimal" },
+  scan_receipt: { label: "Pantry: receipt scan", thinking: "minimal", lite: true },
   scan_shelf: { label: "Pantry: shelf photo", thinking: "minimal", media: "medium" },
-  scan_list: { label: "Pantry: list photo", thinking: "minimal" },
+  scan_list: { label: "Pantry: list photo", thinking: "minimal", lite: true },
   menu_import: { label: "Dining: menu screenshots", thinking: "minimal" },
   dining_import: { label: "Dining: bulk import", thinking: "minimal" },
-  menu_online: { label: "Dining: find menu online (web search)", thinking: "minimal" },
-  watch_info: { label: "Watchlist: look up titles (web search)", thinking: "minimal" },
-  watch_seasons: { label: "Watchlist: new seasons (web search)", thinking: "minimal" },
-  watch_suggest: { label: "Watchlist: suggestions (web search)", thinking: "low" },
+  menu_online: { label: "Dining: find menu online (web search)", thinking: "minimal", search: true },
+  watch_info: { label: "Watchlist: look up titles (web search)", thinking: "minimal", lite: true, search: true },
+  watch_seasons: { label: "Watchlist: new seasons (web search)", thinking: "minimal", lite: true, search: true },
+  watch_suggest: { label: "Watchlist: suggestions (web search)", thinking: "low", search: true },
   meal_ideas: { label: "Meal ideas", thinking: "low" },
   what_to_order: { label: "What to order", thinking: "low" },
   plan_recipe: { label: "Recipe from the plan", thinking: "low" },
@@ -42,8 +46,9 @@ export const FEATURES: Record<string, FeatureProfile> = {
   visit_summary: { label: "Doctor visit summary", thinking: "high", deep: true },
   medicine_check: { label: "Medicine safety check", thinking: "high", deep: true },
   medical_extract: { label: "Medical document reading", thinking: "low", deep: true },
-  assistant: { label: "Ask AI", thinking: "high", deep: true },
-  ai_test: { label: "Test AI button", thinking: "minimal" },
+  assistant: { label: "Ask AI", thinking: "low" },
+  assistant_deep: { label: "Ask AI (think harder)", thinking: "high", deep: true },
+  ai_test: { label: "Test AI button", thinking: "minimal", lite: true },
 };
 
 export const profileFor = (feature: string): FeatureProfile => FEATURES[feature] ?? { label: feature.replace(/_/g, " "), thinking: "low" };
@@ -70,6 +75,8 @@ export type UsageRow = {
   thinking_tokens?: number | null;
   cached_tokens?: number | null;
   search_queries?: number | null;
+  /** Sent in batch mode: half price. */
+  batch?: boolean | null;
 };
 
 /** Estimated cost of one AI request in US$. */
@@ -78,5 +85,5 @@ export function estimateUsd(r: UsageRow) {
   const cached = Math.min(r.cached_tokens ?? 0, r.input_tokens ?? 0);
   const input = ((r.input_tokens ?? 0) - cached + cached * 0.1) * p.input;
   const output = ((r.output_tokens ?? 0) + (r.thinking_tokens ?? 0)) * p.output;
-  return (input + output) / 1e6 + (r.search_queries ?? 0) * SEARCH_QUERY_USD;
+  return ((input + output) / 1e6) * (r.batch ? 0.5 : 1) + (r.search_queries ?? 0) * SEARCH_QUERY_USD;
 }

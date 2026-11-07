@@ -1,3 +1,4 @@
+import { monthSpendInr } from "@/lib/ai/budget";
 import { getSession } from "@/lib/session";
 import { Badge, Card, PageHeader, buttonClass } from "@/components/ui";
 import { MODULES } from "@/modules/registry";
@@ -130,6 +131,9 @@ export default async function HouseholdSettingsPage() {
             limit={session.household.ai_daily_limit}
             usedToday={usedToday ?? 0}
             model={session.household.ai_model ?? "standard"}
+            budget={session.household.ai_monthly_budget_inr ?? null}
+            searchLimit={session.household.ai_search_daily_limit ?? null}
+            spentInr={await monthSpendInr(session)}
           />
         </Card>
 

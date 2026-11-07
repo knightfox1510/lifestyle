@@ -6,15 +6,17 @@ import { decryptSecret } from "@/lib/crypto";
 import type { AppSession } from "@/lib/session";
 import type { GenerateContentParameters, GenerateContentResponse } from "@google/genai";
 import { aiLanguageLine } from "@/lib/i18n/server";
-import { FAILURE_MESSAGE, classifyAiError, cleanGeminiKey, modelChain, withRetry } from "@/lib/ai/retry";
+import { FAILURE_MESSAGE, MODELS, classifyAiError, cleanGeminiKey, modelChain, withRetry } from "@/lib/ai/retry";
 import { profileFor, type Thinking } from "@/lib/ai/profile";
+import { budgetBlock } from "@/lib/ai/budget";
 
 /**
  * Models for this household: Settings → Household → AI model, unless
  * GEMINI_MODEL is set in Vercel. "Best" (Pro, about 4× the price) is used only
  * for the features that reason over health data; everyday ones use Flash.
  */
-export function modelsFor(session: AppSession, deep = true) {
+export function modelsFor(session: AppSession, deep = true, lite = false) {
+  if (lite && !process.env.GEMINI_MODEL?.trim()) return [MODELS.lite, MODELS.standard];
   return modelChain(deep ? session.household.ai_model : "standard", process.env.GEMINI_MODEL);
 }
 
@@ -44,8 +46,12 @@ export async function getGemini(session: AppSession) {
   return new GoogleGenAI({ apiKey: await resolveApiKey(session) });
 }
 
-/** Enforces the household's daily AI request cap (answers reused from the cache don't count). */
-export async function assertQuota(session: AppSession) {
+/**
+ * Enforces the household's daily AI request cap (answers reused from the
+ * cache don't count) and, given the feature, the monthly budget and the daily
+ * web-search limit.
+ */
+export async function assertQuota(session: AppSession, feature?: string) {
   const start = new Date();
   start.setUTCHours(0, 0, 0, 0);
   const base = () => session.supabase.from("ai_usage").select("id", { count: "exact", head: true }).eq("household_id", session.household.id).gte("created_at", start.toISOString());
@@ -54,6 +60,10 @@ export async function assertQuota(session: AppSession) {
   const count = first.error ? (await base()).count : first.count;
   if ((count ?? 0) >= session.household.ai_daily_limit) {
     throw new AiError(`Daily AI limit reached (${session.household.ai_daily_limit} requests). It resets at midnight UTC.`, 429);
+  }
+  if (feature) {
+    const blocked = await budgetBlock(session, feature);
+    if (blocked) throw new AiError(blocked, 429);
   }
 }
 
@@ -70,7 +80,7 @@ export async function recordUsage(
   feature: string,
   usedMedicalContext: boolean,
   res?: { usageMetadata?: Usage; modelUsed?: string; attempts?: number; candidates?: { groundingMetadata?: { webSearchQueries?: string[] } }[] } | Usage,
-  opts: { fromCache?: boolean } = {},
+  opts: { fromCache?: boolean; batch?: boolean } = {},
 ) {
   const full = res && ("usageMetadata" in res || "modelUsed" in res) ? (res as { usageMetadata?: Usage; modelUsed?: string; attempts?: number; candidates?: { groundingMetadata?: { webSearchQueries?: string[] } }[] }) : { usageMetadata: res as Usage | undefined };
   const u = full.usageMetadata;
@@ -90,6 +100,7 @@ export async function recordUsage(
     model: "modelUsed" in full ? (full.modelUsed ?? null) : null,
     attempts: "attempts" in full ? (full.attempts ?? 1) : 1,
     from_cache: Boolean(opts.fromCache),
+    ...(opts.batch ? { batch: true } : {}),
   });
   if (error && !opts.fromCache) await session.supabase.from("ai_usage").insert(row);
 }
@@ -124,26 +135,38 @@ export function deadlineFor(maxDurationSeconds: number) {
   return Date.now() + (maxDurationSeconds - 8) * 1000;
 }
 
+/**
+ * The request settings for a feature: the household's language line, the
+ * feature's thinking level and photo detail, and the models to try. Shared by
+ * live calls and batch jobs, so both behave the same.
+ */
+export function prepareRequest(session: AppSession, request: Omit<GenerateContentParameters, "model">, opts: Pick<GenerateOptions, "feature" | "quick"> = {}) {
+  const lang = aiLanguageLine(session);
+  const sys = request.config?.systemInstruction;
+  const base = { ...request.config, systemInstruction: typeof sys === "string" || sys == null ? [sys, lang].filter(Boolean).join("\n\n") || undefined : sys };
+  const profile = opts.feature ? profileFor(opts.feature) : null;
+  // Thinking is billed as output: everyday features get little of it.
+  const level: Thinking = profile ? (opts.quick && profile.thinking === "high" ? "low" : profile.thinking) : opts.quick ? "low" : "high";
+  const hasImage = JSON.stringify(request.contents ?? "").includes('"inlineData"');
+  const media = profile?.media === "medium" && hasImage ? { mediaResolution: MediaResolution.MEDIA_RESOLUTION_MEDIUM } : {};
+  return {
+    models: modelsFor(session, profile?.deep ?? true, profile?.lite),
+    configFor: (model: string) => ({ ...base, ...(base.thinkingConfig ? {} : thinkingConfig(model, level)), ...media }),
+  };
+}
+
 export async function generate(
   session: AppSession,
   request: Omit<GenerateContentParameters, "model">,
   opts: GenerateOptions = {},
 ): Promise<GenerateContentResponse & { modelUsed: string; attempts: number }> {
   const ai = await getGemini(session);
-  const lang = aiLanguageLine(session);
-  const sys = request.config?.systemInstruction;
-  const config = { ...request.config, systemInstruction: typeof sys === "string" || sys == null ? [sys, lang].filter(Boolean).join("\n\n") || undefined : sys };
-  const profile = opts.feature ? profileFor(opts.feature) : null;
-  // Thinking is billed as output: everyday features get little of it.
-  const level: Thinking = profile ? (opts.quick && profile.thinking === "high" ? "low" : profile.thinking) : opts.quick ? "low" : "high";
-  const hasImage = JSON.stringify(request.contents ?? "").includes('"inlineData"');
-  const media = profile?.media === "medium" && hasImage ? { mediaResolution: MediaResolution.MEDIA_RESOLUTION_MEDIUM } : {};
+  const prep = prepareRequest(session, request, opts);
   let attempts = 0;
   try {
-    const { result, model } = await withRetry(modelsFor(session, profile?.deep ?? true), async (model, signal) => {
+    const { result, model } = await withRetry(prep.models, async (model, signal) => {
       attempts++;
-      const thinking = config.thinkingConfig ? {} : thinkingConfig(model, level);
-      const res = await ai.models.generateContent({ ...request, model, config: { ...config, ...thinking, ...media, ...(signal ? { abortSignal: signal } : {}) } });
+      const res = await ai.models.generateContent({ ...request, model, config: { ...prep.configFor(model), ...(signal ? { abortSignal: signal } : {}) } });
       if (!res.text?.trim()) throw Object.assign(new Error("Empty response"), { name: "EmptyResponse" });
       return res;
     }, { deadline: opts.deadline ?? deadlineFor(60) });

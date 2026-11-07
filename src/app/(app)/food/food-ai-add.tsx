@@ -13,7 +13,9 @@ import type { Meal } from "@/lib/types";
 import { MEAL_DEFAULT_TIME, MEAL_META, MEAL_ORDER, eatenAtFor, mealForHour, type LogDay } from "@/modules/food/meta";
 import { computeItem, disagreement, type CalcItem } from "@/modules/nutrition/compute";
 import { IRRITANT_META, type Irritant } from "@/modules/nutrition/irritants";
-import { logFoodForPeople, rememberFoods } from "./actions";
+import { logFoodForPeople, rememberFoods, repeatFood, undoFoodEntries } from "./actions";
+import { knownFoods } from "@/modules/food/known";
+import type { RecentFood } from "./quick-search";
 import { MeasureInput } from "./measure-input";
 import { PantryUsePrompt } from "@/components/pantry-use-prompt";
 import { useT } from "@/lib/i18n/client";
@@ -25,7 +27,7 @@ type Item = CalcItem & { keep: boolean; open: boolean; fixing?: number | null };
  * ingredients with grams → nutrition is calculated from food data (macros +
  * micronutrients). Grams and matches are editable; log for one or both of you.
  */
-export function FoodAiAdd({ ownerId, people, day, meal: preset }: { ownerId: string; people: PersonPortion[]; day?: LogDay; meal?: Meal }) {
+export function FoodAiAdd({ ownerId, people, day, meal: preset, recent = [] }: { ownerId: string; people: PersonPortion[]; day?: LogDay; meal?: Meal; recent?: RecentFood[] }) {
   const [text, setText] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
@@ -38,6 +40,23 @@ export function FoodAiAdd({ ownerId, people, day, meal: preset }: { ownerId: str
   const [saving, start] = useTransition();
   const [usedNames, setUsedNames] = useState<string[] | null>(null);
   const t = useT();
+  // Everything typed was logged before: add it again with the same numbers, no AI needed.
+  const known = !photo && text.trim() ? knownFoods(text, recent) : null;
+
+  function addKnown() {
+    if (!known) return;
+    start(async () => {
+      const ids: string[] = [];
+      for (const f of known) {
+        const r = await repeatFood(f.id, ownerId, meal, day ? eatenAtFor(day, meal) : undefined);
+        if (r.error) return toast(r.error, { tone: "error" });
+        if (r.id) ids.push(r.id);
+      }
+      const kcal = known.reduce((a, f) => a + (f.calories ?? 0), 0);
+      toast(`${known.map((f) => f.description).join(", ")} added`, { kind: "food", detail: kcal ? `${kcal} kcal` : null, undo: ids.length ? () => undoFoodEntries(ids) : undefined });
+      setText("");
+    });
+  }
 
   async function estimate() {
     setLoading(true);
@@ -146,7 +165,16 @@ export function FoodAiAdd({ ownerId, people, day, meal: preset }: { ownerId: str
           Photo: {photo.name} <button className="underline" onClick={() => setPhoto(null)}>remove</button>
         </p>
       ) : null}
-      <Button onClick={estimate} disabled={loading || (!text.trim() && !photo)}>
+      {known ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl bg-accent-soft/50 px-3 py-2 text-sm">
+          <span className="min-w-0 flex-1">
+            {t("Logged before")}: {known.map((f) => `${f.description}${f.quantity ? ` (${f.quantity})` : ""}`).join(", ")}
+            <span className="text-fg-muted"> · {known.reduce((a, f) => a + (f.calories ?? 0), 0)} kcal</span>
+          </span>
+          <Button size="sm" disabled={saving} onClick={addKnown}>{t("Add again")}</Button>
+        </div>
+      ) : null}
+      <Button onClick={estimate} disabled={loading || (!text.trim() && !photo)} variant={known ? "secondary" : undefined}>
         {loading ? t("Working it out…") : `✨ ${t("Calculate")}`}
       </Button>
       <p className="text-xs text-fg-muted">{t("Uses your saved recipes and foods first, then ingredients by weight. You can fix any grams before logging.")}</p>

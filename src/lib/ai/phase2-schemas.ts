@@ -152,12 +152,12 @@ export const menuExtractSchema = z.object({
 const irritantEnum = z.enum(["caffeine", "alcohol", "spicy", "citrus", "tomato", "carbonated", "sweetener", "chocolate"]);
 
 export const componentSchema = z.object({
-  name: z.string().min(1).max(80).describe("Ingredient, e.g. 'whole wheat flour', 'toor dal (raw)', 'ghee'"),
-  grams: z.number().min(0).max(3000).describe("Grams of this ingredient in the amount eaten (raw/dry weight for grains and pulses)"),
-  staple_key: z.string().max(40).nullable().describe("Key from the built-in staples list if one matches, else null"),
-  custom_food: z.string().max(120).nullable().describe("Exact name from the household's own foods if one matches, else null"),
-  search: z.string().max(80).nullable().describe("English search term for the USDA database if neither matches: the plain food as USDA names it, e.g. 'guava raw', 'paneer', 'almond milk unsweetened', 'basmati rice cooked'"),
-  kcal_per_100g: z.number().min(0).max(900).describe("Your own best estimate of kcal per 100 g of this ingredient as weighed (raw fruit/veg, dry grains), used to catch wrong database matches"),
+  name: z.string().min(1).max(80).describe("Ingredient"),
+  grams: z.number().min(0).max(3000).describe("Grams eaten (raw/dry for grains, pulses)"),
+  staple_key: z.string().max(40).nullable().describe("Built-in staple key, or null"),
+  custom_food: z.string().max(120).nullable().describe("Household food name, or null"),
+  search: z.string().max(80).nullable().describe("Plain USDA search term if neither, e.g. 'guava raw'"),
+  kcal_per_100g: z.number().min(0).max(900).describe("Your kcal/100 g estimate, as weighed"),
 });
 
 export const mealCalcSchema = z.object({
@@ -167,13 +167,13 @@ export const mealCalcSchema = z.object({
       z.object({
         description: z.string().min(1).max(200),
         quantity: z.string().max(60).nullable(),
-        recipe_title: z.string().max(150).nullable().describe("Exact title from the household's recipes if this item is one of them"),
-        recipe_servings: z.number().min(0.1).max(20).nullable().describe("Servings of that recipe eaten"),
-        dish_key: z.string().max(40).nullable().describe("Key of a built-in Indian dish, when this item is one of them and not a saved recipe"),
-        dish_servings: z.number().min(0.1).max(20).nullable().describe("Servings of that dish eaten, in its standard serving size"),
-        components: z.array(componentSchema).max(15).describe("Ingredient breakdown with grams, when not a saved recipe"),
-        estimate: foodItemSchema.pick({ calories: true, protein_g: true, carbs_g: true, fat_g: true, fiber_g: true }).describe("Your own overall estimate, used only if ingredients can't be matched"),
-        irritants: z.array(irritantEnum).max(8).describe("Bladder irritants present: caffeine, alcohol, spicy (chilli-hot), citrus, tomato, carbonated, sweetener (artificial), chocolate"),
+        recipe_title: z.string().max(150).nullable().describe("Household recipe title, or null"),
+        recipe_servings: z.number().min(0.1).max(20).nullable(),
+        dish_key: z.string().max(40).nullable().describe("Built-in dish key, or null"),
+        dish_servings: z.number().min(0.1).max(20).nullable().describe("In standard servings"),
+        components: z.array(componentSchema).max(15).describe("Empty for a recipe or dish"),
+        estimate: foodItemSchema.pick({ calories: true, protein_g: true, carbs_g: true, fat_g: true, fiber_g: true }).describe("Your own overall estimate"),
+        irritants: z.array(irritantEnum).max(8),
       }),
     )
     .max(15),

@@ -20,6 +20,10 @@ export type Household = {
   has_custom_ai_key: boolean;
   /** standard = Flash, best = Pro (missing on databases not yet updated). */
   ai_model?: "standard" | "best";
+  /** Monthly AI spend cap in ₹ (estimate) and web searches a day; null = none (missing before the update). */
+  ai_monthly_budget_inr?: number | null;
+  ai_search_daily_limit?: number | null;
+  ai_budget_warned_month?: string | null;
   shopping_day?: number;
 };
 
@@ -647,6 +651,8 @@ export type NotificationPrefs = {
   maintenance: boolean;
   child: boolean;
   digest: boolean;
+  /** Weekly summary written by AI (batch mode) instead of from the numbers. */
+  digest_ai?: boolean;
   occasions: boolean;
   travel: boolean;
   water: boolean;

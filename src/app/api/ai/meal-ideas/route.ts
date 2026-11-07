@@ -3,7 +3,7 @@ import { getSession } from "@/lib/session";
 import { AiError } from "@/lib/ai/gemini";
 import { aiHandler, runJson } from "@/lib/ai/run";
 import { MEALS, mealIdeasSchema } from "@/lib/ai/phase2-schemas";
-import { SAFETY_INSTRUCTIONS, buildAiContext } from "@/lib/ai/context";
+import { SAFETY_INSTRUCTIONS, FOOD_TRACKING, buildAiContext } from "@/lib/ai/context";
 import { personFacts } from "@/lib/ai/person-facts";
 import { addDays, localDate, startOfLocalDayIso, todayIn } from "@/lib/dates";
 import { totals } from "@/modules/food/meta";
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     const today = todayIn(tz);
 
     const [ctx, facts, pantryRes, foodRes] = await Promise.all([
-      buildAiContext(session, { subjectId: input.subjectId, useMedicalHistory: input.useMedicalHistory, brief: true }),
+      buildAiContext(session, { subjectId: input.subjectId, useMedicalHistory: input.useMedicalHistory, brief: true, only: FOOD_TRACKING }),
       personFacts(session, input.subjectId),
       session.isModuleEnabled("pantry")
         ? session.supabase.from("pantry_items").select("*").eq("household_id", session.household.id).is("used_up_at", null).limit(300)

@@ -110,6 +110,9 @@ export async function logWorkout(_: ActionResult | null, form: FormData): Promis
 
 export async function deleteWorkout(id: string) {
   const session = await getSession();
+  // A workout imported from Health Connect is remembered as deleted, so the next sync doesn't bring it back.
+  const { data: row } = await session.supabase.from("workout_logs").select("external_id").eq("id", id).eq("owner_id", session.userId).maybeSingle();
+  if (row?.external_id) await session.supabase.from("workout_dismissed").upsert({ owner_id: session.userId, external_id: row.external_id }, { onConflict: "owner_id,external_id" });
   await session.supabase.from("workout_logs").delete().eq("id", id).eq("owner_id", session.userId);
   refreshModule("/fitness");
 }

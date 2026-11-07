@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     if (!text && !photo) throw new AiError("Describe the food or add a photo.");
 
     const hh = await householdFoods(session);
-    const system = mealCalcSystemPrompt({ foods: hh.foods.map((f) => f.name), recipes: hh.recipes.map((r) => r.title) });
+    const system = mealCalcSystemPrompt({ foods: hh.foods.map((f) => f.name), recipes: hh.recipes.map((r) => r.title) }, { text: photo ? undefined : text });
 
     const result = await runJson(session, {
       feature: "food_estimate", maxDuration,

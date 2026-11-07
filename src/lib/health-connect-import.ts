@@ -142,8 +142,11 @@ export async function saveSessions(db: SupabaseClient, ownerId: string, househol
   const first = sessions.reduce((a, x) => (x.day < a ? x.day : a), sessions[0].day);
   const { data: manual } = await db.from("workout_logs").select("performed_on, kind").eq("owner_id", ownerId).is("external_id", null).eq("status", "done").gte("performed_on", first);
   const had = new Set(((manual ?? []) as { performed_on: string; kind: string }[]).map((m) => `${m.performed_on}:${m.kind}`));
+  // Imported workouts the person deleted stay deleted.
+  const { data: gone } = await db.from("workout_dismissed").select("external_id").eq("owner_id", ownerId);
+  const dismissed = new Set(((gone ?? []) as { external_id: string }[]).map((g) => g.external_id));
   const rows = sessions
-    .filter((x) => !had.has(`${x.day}:${x.kind}`))
+    .filter((x) => !had.has(`${x.day}:${x.kind}`) && !dismissed.has(`hc:${x.start}`))
     .map((x) => ({ owner_id: ownerId, household_id: householdId, performed_on: x.day, kind: x.kind, title: exerciseName(x.type), status: "done", duration_minutes: x.minutes, external_id: `hc:${x.start}`, notes: "From Health Connect" }));
   let saved = 0;
   for (let i = 0; i < rows.length; i += 500) {

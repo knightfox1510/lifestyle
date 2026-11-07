@@ -18,7 +18,7 @@ export default async function AiUsagePage({ searchParams }: { searchParams: Prom
   const since = daysAgoIso(days);
   const full = await session.supabase
     .from("ai_usage")
-    .select("feature, user_id, created_at, input_tokens, output_tokens, thinking_tokens, cached_tokens, search_queries, model, from_cache, attempts")
+    .select("feature, user_id, created_at, input_tokens, output_tokens, thinking_tokens, cached_tokens, search_queries, model, from_cache, attempts, batch")
     .eq("household_id", session.household.id)
     .gte("created_at", since)
     .order("created_at", { ascending: false })
@@ -103,7 +103,7 @@ export default async function AiUsagePage({ searchParams }: { searchParams: Prom
                 {[...modelCount].map(([m, n]) => (
                   <p key={m} className="flex justify-between"><span className="capitalize">{m}</span><span className="tabular-nums">{n} requests</span></p>
                 ))}
-                <p className="pt-1 text-xs text-fg-muted">Pro costs about 4× Flash. With &ldquo;Best&rdquo; chosen, only the AI coach, doctor visit summary, medicine checks, medical documents, nutrition report and Ask AI use Pro.</p>
+                <p className="pt-1 text-xs text-fg-muted">Pro costs about 4× Flash. With &ldquo;Best&rdquo; chosen, only the AI coach, doctor visit summary, medicine checks, medical documents, nutrition report and Ask AI with &ldquo;Think harder&rdquo; use Pro; simple reading jobs (labels, receipts, lookups) use Flash-Lite, about half Flash&apos;s price.</p>
               </Card>
             </div>
           </>

@@ -145,9 +145,18 @@ export async function testAi(): Promise<ActionResult> {
 export async function saveAiLimit(_: ActionResult | null, form: FormData): Promise<ActionResult> {
   const limit = z.coerce.number().int().min(0).max(1000).safeParse(form.get("ai_daily_limit"));
   if (!limit.success) return { error: "Enter a number between 0 and 1000." };
+  const optional = (max: number, min = 0) => z.preprocess((v) => (v === "" || v == null ? null : v), z.coerce.number().int().min(min).max(max).nullable());
+  const budget = optional(1_000_000, 10).safeParse(form.get("ai_monthly_budget_inr"));
+  const searches = optional(500).safeParse(form.get("ai_search_daily_limit"));
+  if (!budget.success) return { error: "The monthly budget should be at least ₹10, or blank." };
+  if (!searches.success) return { error: "Web searches a day: a number up to 500, or blank." };
   const session = await getSession();
   if (session.me.role !== "owner") return { error: "Only the household owner can change this." };
-  await session.supabase.from("households").update({ ai_daily_limit: limit.data }).eq("id", session.household.id);
+  const { error } = await session.supabase.from("households").update({ ai_daily_limit: limit.data, ai_monthly_budget_inr: budget.data, ai_search_daily_limit: searches.data }).eq("id", session.household.id);
+  if (error) {
+    await session.supabase.from("households").update({ ai_daily_limit: limit.data }).eq("id", session.household.id);
+    return { error: "Saved the daily limit. The budget needs the latest database update in Supabase." };
+  }
   refreshAll();
   return { ok: true, message: "Saved." };
 }

@@ -24,9 +24,33 @@ do $$ begin
   assert (select result from public.ai_cache) = '{"items": [1]}'::jsonb, 'upsert replaces the answer';
 end $$;
 
+-- Budget and search limit (owner), batch flag, AI weekly summary choice.
+update public.households set ai_monthly_budget_inr = 500, ai_search_daily_limit = 20 where id = :'hid';
+do $$ begin
+  update public.households set ai_monthly_budget_inr = 5 where name = 'AI home';
+  raise exception 'SHOULD_FAIL: budget too small';
+exception when check_violation then null;
+end $$;
+insert into public.ai_usage (household_id, user_id, feature, batch) values (:'hid', :a, 'weekly_digest', true);
+insert into public.notification_prefs (user_id, digest_ai) values (:a, true) on conflict (user_id) do update set digest_ai = true;
+-- Batch jobs are written by the server only.
+do $$ begin
+  insert into public.ai_batches (household_id, user_id, feature, job_name) values ((select id from public.households where name = 'AI home'), '56565656-0000-0000-0000-0000000000a1', 'weekly_digest', 'batches/x');
+  raise exception 'SHOULD_FAIL: users cannot queue batch jobs';
+exception when insufficient_privilege then null;
+end $$;
+-- Deleted imported workouts: your own list only.
+insert into public.workout_dismissed (external_id) values ('hc:1793000000000');
+do $$ begin
+  assert (select ai_monthly_budget_inr from public.households where name = 'AI home') = 500, 'owner sets the budget';
+  assert (select count(*) from public.ai_usage where batch) = 1, 'batch requests are flagged';
+  assert (select count(*) from public.workout_dismissed) = 1, 'dismissed workout remembered';
+end $$;
+
 select set_config('request.jwt.claim.sub', :b, false);
 do $$ begin
   assert (select count(*) from public.ai_cache) = 0, 'outsiders see no cached answers';
+  assert (select count(*) from public.workout_dismissed) = 0, 'others cannot see your dismissed workouts';
 end $$;
 
 reset role;

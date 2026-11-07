@@ -35,7 +35,7 @@ export async function POST(request: Request) {
 
   const deadline = deadlineFor(maxDuration);
   try {
-    await assertQuota(session);
+    await assertQuota(session, "medical_extract");
     const file = await session.supabase.storage.from("medical-documents").download(document.storage_path);
     if (file.error || !file.data) throw new AiError("Couldn't read the uploaded file", 404);
     const base64 = Buffer.from(await file.data.arrayBuffer()).toString("base64");

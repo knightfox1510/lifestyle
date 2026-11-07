@@ -67,7 +67,7 @@ export function FoodAddPanel({ ownerId, people, day, meal, recent, compact = fal
       {!compact ? <p className="px-1 text-xs text-fg-muted">{active.hint}</p> : null}
       <div role="tabpanel" className="[animation:fade-in_.15s_ease-out]">
         {tab === "search" ? <FoodQuickSearch ownerId={ownerId} people={people} day={day} meal={meal} recent={recent} compact={compact} /> : null}
-        {tab === "ai" ? <FoodAiAdd key={`${day.date}-${meal ?? ""}`} ownerId={ownerId} people={people} day={day} meal={meal} /> : null}
+        {tab === "ai" ? <FoodAiAdd key={`${day.date}-${meal ?? ""}`} ownerId={ownerId} people={people} day={day} meal={meal} recent={recent} /> : null}
         {tab === "manual" ? <ManualFoodForm key={`m-${day.date}-${meal ?? ""}`} ownerId={ownerId} day={day} meal={meal} defaultOpen /> : null}
       </div>
       {extra ? <div className="flex flex-wrap gap-x-5 gap-y-1.5 px-1">{extra}</div> : null}

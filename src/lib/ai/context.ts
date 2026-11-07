@@ -177,7 +177,7 @@ export async function buildMedicalContext(
 export async function buildAiContext(
   session: AppSession,
   /** brief: the short health summary (see buildMedicalContext) for everyday suggestions. */
-  opts: { subjectId: string; useMedicalHistory?: boolean; brief?: boolean },
+  opts: { subjectId: string; useMedicalHistory?: boolean; brief?: boolean; /** Only these features' tracking data (module keys). */ only?: string[] },
 ): Promise<AiContext> {
   const subject = session.members.find((m) => m.user_id === opts.subjectId);
   const isSelf = opts.subjectId === session.userId;
@@ -195,7 +195,7 @@ export async function buildAiContext(
   const medicalAllowed = session.isModuleEnabled("medical_records") && session.accessTo("medical_records", opts.subjectId) !== "none";
   const [medical, tracking] = await Promise.all([
     medicalAllowed ? buildMedicalContext(session, opts.subjectId, opts.brief) : Promise.resolve({ text: "", stats: empty }),
-    buildTrackingContext(session, opts.subjectId),
+    buildTrackingContext(session, opts.subjectId, opts.only),
   ]);
   const sections = [
     medical.text ? `=== MEDICAL HISTORY ===\n${medical.text}` : "",
@@ -206,6 +206,9 @@ export async function buildAiContext(
   }
   return { text: `${header}\n\n${sections.join("\n\n")}`, usedMedical: true, stats: medical.stats };
 }
+
+/** Tracking data food suggestions use (bladder diary for irritants); not check-ins, habits or pelvic floor. */
+export const FOOD_TRACKING = ["medicines", "supplements", "bladder_diary", "food_diary", "body_recomp", "fitness", "wearables"];
 
 export const SAFETY_INSTRUCTIONS = `You are the household's lifestyle assistant (food, fitness, routines, groceries, wellbeing).
 Rules:

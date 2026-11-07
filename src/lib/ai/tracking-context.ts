@@ -14,8 +14,9 @@ import { TIMING_LABEL } from "@/modules/supplements/meta";
  * Recent tracking data (Phase 1 modules) for AI suggestions. Each section is
  * included only if the module is on and the asker can see the subject's data.
  */
-export async function buildTrackingContext(session: AppSession, subjectId: string) {
-  const can = (key: string) => session.isModuleEnabled(key) && session.accessTo(key, subjectId) !== "none";
+/** `only`: the features (module keys) whose data this request needs; the rest is left out to save tokens. */
+export async function buildTrackingContext(session: AppSession, subjectId: string, only?: string[]) {
+  const can = (key: string) => (!only || only.includes(key)) && session.isModuleEnabled(key) && session.accessTo(key, subjectId) !== "none";
   const tz = session.profile.timezone;
   const today = todayIn(tz);
   const days14 = lastNDays(today, 14);

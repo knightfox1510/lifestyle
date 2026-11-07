@@ -2,17 +2,33 @@
 import { MEASURE_HINTS, STAPLES } from "@/modules/nutrition/staples";
 import { DISHES } from "@/modules/nutrition/dishes";
 import { measureRulesForAi } from "@/modules/nutrition/measures";
+import { mentions, relevantFoods } from "@/modules/nutrition/relevant";
 
-export function mealCalcSystemPrompt(household: { foods: string[]; recipes: string[] }) {
-  // The long fixed lists come first and the household's own lists last: Gemini reuses (and bills at
-  // about a tenth) a prompt start it has seen recently, so the same ~5k-token start is cheap on every meal.
+/**
+ * `text` (a typed meal, no photo): list only the staples and dishes its words
+ * point to, with every other staple as a bare key: about a third of the
+ * tokens. A photo gets the full lists, since there are no words to go on.
+ */
+export function mealCalcSystemPrompt(household: { foods: string[]; recipes: string[] }, opts: { text?: string } = {}) {
+  const rel = opts.text ? relevantFoods(opts.text) : null;
+  const foods = opts.text ? household.foods.filter((f) => mentions(opts.text!, f)) : household.foods;
+  const recipes = opts.text ? household.recipes.filter((r) => mentions(opts.text!, r)) : household.recipes;
+  const staples = rel
+    ? `Built-in staples that fit this meal (key: name): ${STAPLES.filter((s) => rel.staples.has(s.key)).map((s) => `${s.key}: ${s.name}`).join("; ")}\nOther built-in staple keys: ${STAPLES.filter((s) => !rel.staples.has(s.key)).map((s) => s.key).join(", ")}`
+    : `Built-in staples (key: name): ${STAPLES.map((s) => `${s.key}: ${s.name}`).join("; ")}`;
+  const dishes = rel
+    ? rel.dishes.length
+      ? `Built-in Indian dishes that may match (key: name — standard serving): ${rel.dishes.map((d) => `${d.key}: ${d.name} — ${d.serving}`).join("; ")}`
+      : "No built-in dish matches these words: break dishes down into ingredients."
+    : `Built-in Indian dishes (key: name — standard serving): ${DISHES.map((d) => `${d.key}: ${d.name} — ${d.serving}`).join("; ")}`;
+  // Fixed parts first, the household's own lists last: Gemini bills a prompt start it has seen recently at about a tenth.
   const context = [
-    `Built-in staples (key: name): ${STAPLES.map((s) => `${s.key}: ${s.name}`).join("; ")}`,
-    `Built-in Indian dishes (key: name — standard serving): ${DISHES.map((d) => `${d.key}: ${d.name} — ${d.serving}`).join("; ")}`,
+    staples,
+    dishes,
     MEASURE_HINTS,
-    measureRulesForAi(),
-    household.foods.length ? `Household's own foods: ${household.foods.join("; ")}` : "",
-    household.recipes.length ? `Household's saved recipes (calculated nutrition): ${household.recipes.join("; ")}` : "",
+    measureRulesForAi(rel?.staples),
+    foods.length ? `Household's own foods: ${foods.join("; ")}` : "",
+    recipes.length ? `Household's saved recipes (calculated nutrition): ${recipes.join("; ")}` : "",
   ]
     .filter(Boolean)
     .join("\n\n");

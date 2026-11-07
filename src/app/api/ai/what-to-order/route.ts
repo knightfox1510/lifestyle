@@ -3,7 +3,7 @@ import { getSession } from "@/lib/session";
 import { AiError } from "@/lib/ai/gemini";
 import { aiHandler, runJson } from "@/lib/ai/run";
 import { orderSuggestionSchema } from "@/lib/ai/phase2-schemas";
-import { SAFETY_INSTRUCTIONS, buildAiContext } from "@/lib/ai/context";
+import { SAFETY_INSTRUCTIONS, FOOD_TRACKING, buildAiContext } from "@/lib/ai/context";
 import { personFacts } from "@/lib/ai/person-facts";
 import { addDays, localDate, startOfLocalDayIso, todayIn } from "@/lib/dates";
 import { totals } from "@/modules/food/meta";
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
 
     const personBlocks = await Promise.all(
       people.map(async (p) => {
-        const [ctx, facts] = await Promise.all([buildAiContext(session, { subjectId: p.user_id, useMedicalHistory: input.useMedicalHistory, brief: true }), personFacts(session, p.user_id)]);
+        const [ctx, facts] = await Promise.all([buildAiContext(session, { subjectId: p.user_id, useMedicalHistory: input.useMedicalHistory, brief: true, only: FOOD_TRACKING }), personFacts(session, p.user_id)]);
         let eaten = "";
         if (session.isModuleEnabled("food_diary") && session.accessTo("food_diary", p.user_id) !== "none") {
           const { data } = await session.supabase.from("food_entries").select("eaten_at, calories, protein_g, carbs_g, fat_g, fiber_g").eq("owner_id", p.user_id).gte("eaten_at", startOfLocalDayIso(today));

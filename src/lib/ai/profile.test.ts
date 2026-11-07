@@ -16,5 +16,7 @@ describe("AI cost profile", () => {
     // Half the input cached: 5k full + 5k at 10%.
     expect(estimateUsd({ model: "gemini-flash-latest", input_tokens: 10_000, cached_tokens: 5000 })).toBeCloseTo(0.00275, 6);
     expect(estimateUsd({ model: "gemini-pro-latest", input_tokens: 1000, search_queries: 2 })).toBeCloseTo(0.002 + 0.028, 6);
+    // Batch mode is half price.
+    expect(estimateUsd({ model: "gemini-flash-latest", input_tokens: 10_000, batch: true })).toBeCloseTo(0.0025, 6);
   });
 });

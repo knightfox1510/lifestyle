@@ -7,6 +7,7 @@ import { SAFETY_INSTRUCTIONS, buildAiContext } from "@/lib/ai/context";
 import { addDays, dayOfWeek, todayIn } from "@/lib/dates";
 import { loadDays, waterSettings } from "@/lib/today";
 import { dayScore } from "@/modules/engagement/rings";
+import { plainDigest } from "@/modules/engagement/plain-digest";
 
 export function weekStart(today: string) {
   return addDays(today, -((dayOfWeek(today) + 6) % 7));
@@ -39,18 +40,22 @@ async function householdUpcoming(session: AppSession, today: string) {
     .join("\n");
 }
 
-/** Generates (or regenerates) this week's digest for the session user and stores it. */
-export async function generateDigest(session: AppSession): Promise<{ content: string; weekStart: string }> {
+/**
+ * Everything a week's summary is built from: the week's goals and score, what
+ * the household has coming up, and (for the AI version) the request to send.
+ */
+export async function digestInputs(session: AppSession, opts: { ai: boolean }) {
   const today = todayIn(session.profile.timezone);
   const ws = weekStart(today);
-  await assertQuota(session);
   const shown = (m: string) => session.isShown(m);
   const water = await waterSettings(session.supabase, session.userId);
   const [ctx, upcoming, days] = await Promise.all([
-    buildAiContext(session, { subjectId: session.userId, useMedicalHistory: session.profile.ai_use_medical_history, brief: true }),
+    opts.ai ? buildAiContext(session, { subjectId: session.userId, useMedicalHistory: session.profile.ai_use_medical_history, brief: true }) : Promise.resolve(null),
     householdUpcoming(session, today),
     loadDays(session.supabase, session.userId, { tz: session.profile.timezone, today, days: 14, enabled: { medicines: shown("medicines"), food: shown("food_diary"), checkin: shown("checkin"), supplements: shown("supplements") }, waterTarget: water.target, supplementTimes: session.profile.supplement_times }),
   ]);
+  const plain = () => plainDigest(days.statuses.slice(-7), days.statuses.slice(-14, -7), upcoming ? upcoming.split("\n") : []);
+  if (!ctx) return { ws, plain, request: null, usedHealth: false };
   // The same score as the Health page, so the text and the screen agree.
   const scores = (list: typeof days.statuses) => list.filter((d) => d.rings.length).map((d) => ({ date: d.date, score: dayScore(d.rings) }));
   const thisWeek = scores(days.statuses.slice(-7));
@@ -59,7 +64,7 @@ export async function generateDigest(session: AppSession): Promise<{ content: st
   const best = [...thisWeek].sort((a, b) => b.score - a.score)[0];
   const notes = days.statuses.slice(-7).filter((d) => d.note).map((d) => `${d.date}: ${d.note}`);
   const scoreLine = (notes.length ? `Day notes (context for low or unusual days): ${notes.join("; ")}.\n` : "") + (avg(thisWeek) != null ? `Health score this week: ${avg(thisWeek)}/100${avg(lastWeek) != null ? ` (last week ${avg(lastWeek)})` : ""}; days with every goal done: ${days.statuses.slice(-7).filter((d) => d.closed).length}/7${best ? `; best day ${best.date} (${best.score}%)` : ""}.` : "");
-  const res = await generate(session, {
+  const request = {
     contents: `Write ${session.me.display_name}'s weekly summary for the week starting ${ws}. Use only the data provided.
 Format (plain text, no markdown headings, max ~180 words):
 🌟 Wins: 2–3 short bullets (adherence, trends improving, workouts, habits).
@@ -74,13 +79,34 @@ ${scoreLine}
 Household items:
 ${upcoming || "(none)"}`,
     config: { systemInstruction: `${SAFETY_INSTRUCTIONS}\n\n${ctx.text}`, temperature: 0.5 },
-  }, { feature: "weekly_digest" });
-  await recordUsage(session, "weekly_digest", ctx.usedMedical, res);
-  const content = (res.text ?? "").trim();
-  if (!content) throw new AiError("The AI returned an empty summary.", 502);
+  };
+  return { ws, plain, request, usedHealth: ctx.usedMedical };
+}
+
+export async function saveDigest(userId: string, ws: string, content: string) {
   const { error } = await createAdminClient()
     .from("digests")
-    .upsert({ user_id: session.userId, week_start: ws, content, created_at: new Date().toISOString() }, { onConflict: "user_id,week_start" });
+    .upsert({ user_id: userId, week_start: ws, content, created_at: new Date().toISOString() }, { onConflict: "user_id,week_start" });
   if (error) throw new AiError("Couldn't save the summary.", 500);
-  return { content, weekStart: ws };
+}
+
+/**
+ * Writes (or rewrites) this week's summary. Without AI (the default) it's
+ * built from the week's numbers: free and instant. With AI it's written by
+ * Gemini from the same numbers plus a brief health context.
+ */
+export async function generateDigest(session: AppSession, opts: { ai?: boolean } = {}): Promise<{ content: string; weekStart: string }> {
+  const input = await digestInputs(session, { ai: Boolean(opts.ai) });
+  if (!input.request) {
+    const content = input.plain();
+    await saveDigest(session.userId, input.ws, content);
+    return { content, weekStart: input.ws };
+  }
+  await assertQuota(session, "weekly_digest");
+  const res = await generate(session, input.request, { feature: "weekly_digest" });
+  await recordUsage(session, "weekly_digest", input.usedHealth, res);
+  const content = (res.text ?? "").trim();
+  if (!content) throw new AiError("The AI returned an empty summary.", 502);
+  await saveDigest(session.userId, input.ws, content);
+  return { content, weekStart: input.ws };
 }

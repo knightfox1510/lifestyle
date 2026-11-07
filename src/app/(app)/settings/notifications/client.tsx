@@ -99,7 +99,7 @@ export function PushToggle({ vapidKey }: { vapidKey: string }) {
 
 export function PrefsForm({ prefs, waterGoal }: { prefs: NotificationPrefs | null; waterGoal: number | null }) {
   const [state, action] = useActionState(saveNotificationPrefs, null);
-  const p = prefs ?? { medicines: true, fitness: true, expiries: true, renewals: true, maintenance: true, child: true, digest: true, occasions: true, travel: true, water: false, water_target_ml: null, water_interval_min: 120, water_start: "08:00", water_end: "19:30", close_day: true, close_day_time: "21:00", partner_updates: true, daily_hour: 9, quiet_start: null, quiet_end: null };
+  const p = prefs ?? { medicines: true, fitness: true, expiries: true, renewals: true, maintenance: true, child: true, digest: true, digest_ai: false, occasions: true, travel: true, water: false, water_target_ml: null, water_interval_min: 120, water_start: "08:00", water_end: "19:30", close_day: true, close_day_time: "21:00", partner_updates: true, daily_hour: 9, quiet_start: null, quiet_end: null };
   const rows: [keyof typeof p, string, string][] = [
     ["medicines", "Medicine doses", "At each scheduled dose time"],
     ["fitness", "Classes & workouts", "Before each scheduled class"],
@@ -109,7 +109,7 @@ export function PrefsForm({ prefs, waterGoal }: { prefs: NotificationPrefs | nul
     ["child", "Child", "Upcoming vaccinations"],
     ["occasions", "Birthdays & anniversaries", "A few days before, and on the day"],
     ["travel", "Trips", "A week and two days before, with what's left to pack"],
-    ["digest", "Weekly summary", "Sunday evening AI summary of the week"],
+    ["digest", "Weekly summary", "Sunday evening: wins, things to watch and what's coming up"],
   ];
   return (
     <form action={action} className="space-y-4">
@@ -118,6 +118,9 @@ export function PrefsForm({ prefs, waterGoal }: { prefs: NotificationPrefs | nul
         {rows.map(([k, label, hint]) => (
           <Checkbox key={k} name={k} defaultChecked={Boolean(p[k])} label={label} hint={hint} />
         ))}
+        <div className="pl-6">
+          <Checkbox name="digest_ai" defaultChecked={Boolean(p.digest_ai)} label="Write the weekly summary with AI" hint="Off: built from your week's numbers, free and instant. On: written by AI from the same numbers plus a short health summary, sent in Google's half-price batch mode, so it can arrive a little after 6 pm." />
+        </div>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
         <Field label="Daily reminders at">
